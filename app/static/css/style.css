@@ -1,0 +1,214 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body, html {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    font-family: 'IM Fell English', serif;
+}
+
+/* ====================== */
+/*    CANVAS GRID         */
+/* ====================== */
+#gridCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+/* ====================== */
+/*      CONTEÚDO          */
+/* ====================== */
+.content {
+    position: relative;
+    z-index: 10;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+}
+
+/* ====================== */
+/*    TÍTULO PRINCIPAL    */
+/* ====================== */
+#titleText {
+    font-family: 'Merriweather', serif;
+    font-size: 5rem;
+    font-weight: 900;
+    color: #ffffff;
+    letter-spacing: 0.02em;
+    margin-bottom: 25px;
+    opacity: 0;
+    text-shadow: 
+        0 0 15px rgba(155, 89, 182, 0.8),
+        0 0 25px rgba(155, 89, 182, 0.6),
+        0 0 35px rgba(155, 89, 182, 0.4),
+        0 2px 4px rgba(0, 0, 0, 0.5);
+    transition: all 1.2s ease;
+}
+
+#titleText.show {
+    opacity: 1;
+}
+
+#titleText.glow-pulse {
+    animation: glowPulse 2.8s ease-in-out infinite;
+}
+
+#titleText.moveToTop {
+    font-size: 3.2rem;
+    margin-bottom: 20px;
+}
+
+/* Animação de pulsação do brilho */
+@keyframes glowPulse {
+    0%, 100% {
+        text-shadow: 
+            0 0 15px rgba(155, 89, 182, 0.8),
+            0 0 25px rgba(155, 89, 182, 0.6),
+            0 0 35px rgba(155, 89, 182, 0.4),
+            0 2px 4px rgba(0, 0, 0, 0.5);
+    }
+    50% {
+        text-shadow: 
+            0 0 25px rgba(155, 89, 182, 1),
+            0 0 35px rgba(155, 89, 182, 0.9),
+            0 0 45px rgba(155, 89, 182, 0.7),
+            0 0 55px rgba(155, 89, 182, 0.5),
+            0 2px 6px rgba(0, 0, 0, 0.6);
+    }
+}
+
+/* ====================== */
+/*       SUBTÍTULO        */
+/* ====================== */
+#subtitle {
+    font-family: 'Lato', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 300;
+    color: #d4b5e0;
+    margin-bottom: 45px;
+    opacity: 0;
+    letter-spacing: 0.08em;
+    transition: opacity 1s ease;
+    text-transform: lowercase;
+    font-style: italic;
+}
+
+#subtitle.show {
+    opacity: 1;
+}
+
+/* ====================== */
+/*    BOTÃO DE ENTRADA    */
+/* ====================== */
+#enterButton {
+    font-family: 'Merriweather', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 20px 55px;
+    background: linear-gradient(135deg, rgba(155, 89, 182, 0.2), rgba(108, 52, 131, 0.2));
+    border: 2px solid #9b59b6;
+    color: #ffffff;
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    box-shadow: 
+        0 0 25px rgba(155, 89, 182, 0.4),
+        0 4px 15px rgba(0, 0, 0, 0.3),
+        inset 0 0 20px rgba(155, 89, 182, 0.05);
+    position: relative;
+    overflow: hidden;
+}
+
+#enterButton::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.5s ease;
+}
+
+#enterButton:hover::before {
+    left: 100%;
+}
+
+#enterButton.show {
+    opacity: 1;
+}
+
+#enterButton:hover {
+    background: linear-gradient(135deg, rgba(155, 89, 182, 0.35), rgba(108, 52, 131, 0.35));
+    border-color: #c49bdb;
+    box-shadow: 
+        0 0 35px rgba(155, 89, 182, 0.7),
+        0 6px 20px rgba(0, 0, 0, 0.4),
+        inset 0 0 30px rgba(155, 89, 182, 0.15);
+    transform: translateY(-4px);
+}
+
+#enterButton:active {
+    transform: translateY(-2px);
+    box-shadow: 
+        0 0 25px rgba(155, 89, 182, 0.6),
+        0 3px 10px rgba(0, 0, 0, 0.3),
+        inset 0 0 20px rgba(155, 89, 182, 0.2);
+}
+
+/* ====================== */
+/*     RESPONSIVIDADE     */
+/* ====================== */
+@media (max-width: 768px) {
+    #titleText {
+        font-size: 3.5rem;
+    }
+    
+    #titleText.moveToTop {
+        font-size: 2.5rem;
+    }
+    
+    #subtitle {
+        font-size: 1rem;
+        padding: 0 20px;
+    }
+    
+    #enterButton {
+        font-size: 0.9rem;
+        padding: 16px 45px;
+    }
+}
+
+@media (max-width: 480px) {
+    #titleText {
+        font-size: 2.8rem;
+    }
+    
+    #titleText.moveToTop {
+        font-size: 2rem;
+    }
+    
+    #subtitle {
+        font-size: 0.9rem;
+    }
+    
+    #enterButton {
+        font-size: 0.85rem;
+        padding: 14px 35px;
+    }
+}
