@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gerenciador de Mapas - Last Take Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/map_manager.css') }}">
+<script defer src="{{ url_for('static', filename='js/map_manager.js') }}"></script>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+    <div class="header-left">
+        <button class="back-btn" onclick="window.location.href='/dashboard'">← Voltar</button>
+        <h1>🗺️ Gerenciador de Mapas</h1>
+    </div>
+    <div class="header-actions">
+        <button class="btn" onclick="clearMap()">🗑️ Limpar Mapa</button>
+        <button class="btn" onclick="toggleGrid()">⊞ Toggle Grid</button>
+        <button class="btn btn-primary" onclick="saveMap()">💾 Salvar</button>
+    </div>
+</header>
+
+<div class="main-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <!-- Upload Section -->
+        <div class="section">
+            <h3>📁 Carregar Mapa</h3>
+            <div class="upload-area" onclick="document.getElementById('mapUpload').click()">
+                <div style="font-size: 2rem; margin-bottom: 10px;">📤</div>
+                <p>Clique para fazer upload</p>
+                <p style="font-size: 0.8rem; color: #888; margin-top: 5px;">JPG, PNG (Max 10MB)</p>
+                <input type="file" id="mapUpload" accept="image/*" onchange="loadMapImage(event)">
+            </div>
+        </div>
+
+        <!-- Grid Controls -->
+        <div class="section">
+            <h3>⊞ Configuração do Grid</h3>
+            <div class="grid-controls">
+                <div class="control-group">
+                    <label>Tamanho da Célula (px)</label>
+                    <input type="number" id="gridSize" value="50" min="20" max="100" onchange="updateGrid()">
+                </div>
+                <div class="control-group">
+                    <label>Cor do Grid</label>
+                    <input type="color" id="gridColor" value="#9b59b6" onchange="updateGrid()">
+                </div>
+                <div class="control-group">
+                    <label>Opacidade</label>
+                    <input type="range" id="gridOpacity" min="0" max="100" value="50" onchange="updateGrid()">
+                </div>
+            </div>
+        </div>
+
+        <!-- Tokens -->
+        <div class="section">
+            <h3>🎭 Tokens</h3>
+            <button class="btn" style="width: 100%; margin-bottom: 10px;" onclick="addToken()">+ Adicionar Token</button>
+            <div class="token-list" id="tokenList"></div>
+        </div>
+
+        <!-- Share Link -->
+        <div class="section">
+            <h3>🔗 Compartilhar com Jogadores</h3>
+            <div class="share-section">
+                <p style="color: #2ed573; font-size: 0.9rem; margin-bottom: 10px;">
+                    Link de visualização em tempo real
+                </p>
+                <div class="share-link" id="shareLink">
+                    https://rpgmanager.com/view/abc123xyz
+                </div>
+                <button class="btn btn-primary" style="width: 100%;" onclick="copyShareLink()">
+                    📋 Copiar Link
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Canvas Area -->
+    <div class="canvas-container">
+        <canvas id="mapCanvas" width="1200" height="800"></canvas>
+        <canvas id="gridCanvas"></canvas>
+
+        <div class="canvas-overlay">
+            <p><strong>Controles:</strong></p>
+            <p>• Clique: Posicionar token</p>
+            <p>• Arraste: Mover token</p>
+            <p>• Del: Remover selecionado</p>
+            <p>• Scroll: Zoom</p>
+        </div>
+
+        <div class="zoom-controls">
+            <button class="zoom-btn" onclick="zoom(-0.1)">−</button>
+            <button class="zoom-btn" onclick="zoom(0.1)">+</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+</body>
+</html>

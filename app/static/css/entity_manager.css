@@ -1,0 +1,339 @@
+/* ===== RESET ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Lato", sans-serif;
+    background: #0a0a0f;
+    color: white;
+    overflow-x: hidden;
+}
+
+/* ========== BACKGROUND ANIMADO ========== */
+.hex-background {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at center, #1a1a2e 0%, #0a0a0f 100%);
+    z-index: -1;
+    overflow: hidden;
+}
+
+.hex {
+    position: absolute;
+    width: 90px;
+    height: 52px;
+    opacity: 0.18;
+    background: rgba(155, 89, 182, 0.08);
+    clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+    animation: float 6s infinite ease-in-out;
+}
+
+@keyframes float {
+    0% { transform: translateY(0px) scale(1); }
+    50% { transform: translateY(-20px) scale(1.1); }
+    100% { transform: translateY(0px) scale(1); }
+}
+
+/* ========== HEADER ========== */
+.header {
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.95), rgba(16, 16, 30, 0.95));
+    border-bottom: 2px solid rgba(155, 89, 182, 0.3);
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.back-btn {
+    background: rgba(155, 89, 182, 0.2);
+    border: 2px solid rgba(155, 89, 182, 0.4);
+    padding: 8px 16px;
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.back-btn:hover {
+    background: rgba(155, 89, 182, 0.3);
+}
+
+.header h1 {
+    font-family: "Merriweather", serif;
+    font-size: 1.5rem;
+    color: #c49bdb;
+}
+
+.round-counter {
+    padding: 10px 20px;
+    border-radius: 8px;
+    background: rgba(155, 89, 182, 0.2);
+    border: 2px solid #9b59b6;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Generic buttons */
+.btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    border: 2px solid #9b59b6;
+    background: rgba(155, 89, 182, 0.2);
+    cursor: pointer;
+    color: white;
+    transition: 0.2s;
+}
+.btn:hover {
+    background: rgba(155, 89, 182, 0.35);
+}
+
+/* Button variants */
+.btn-primary {
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+}
+.btn-danger {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+.btn-success {
+    background: linear-gradient(135deg, #2ed573, #26de81);
+}
+
+/* CONTENT */
+.container {
+    max-width: 1400px;
+    margin: auto;
+    padding: 30px 20px;
+}
+
+/* Quick actions */
+.quick-actions {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+}
+
+/* ADD FORM */
+.add-form {
+    background: rgba(26, 26, 46, 0.6);
+    border: 2px solid rgba(155, 89, 182, 0.3);
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 30px;
+}
+
+.add-form h3 {
+    color: #c49bdb;
+    margin-bottom: 15px;
+    font-family: "Merriweather", serif;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+/* Inputs */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.form-group label {
+    color: #bbb;
+    font-size: .9rem;
+}
+
+.form-group input,
+.form-group select {
+    padding: 10px;
+    background: rgba(16, 16, 30, 0.8);
+    border: 1px solid rgba(155,89,182,.3);
+    color: white;
+    border-radius: 6px;
+}
+
+/* INITIATIVE LIST */
+.initiative-container {
+    background: rgba(26,26,46,.8);
+    padding: 30px;
+    border-radius: 16px;
+    border: 2px solid rgba(155,89,182,.3);
+}
+
+.initiative-header h2 {
+    color: #c49bdb;
+    font-family: "Merriweather", serif;
+    margin-bottom: 20px;
+}
+
+.combatant-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Combatant */
+.combatant-card {
+    background: rgba(16, 16, 30, 0.8);
+    border: 2px solid rgba(155, 89, 182, 0.3);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    transition: 0.2s;
+}
+
+.combatant-card.active {
+    border-color: #2ed573;
+    background: rgba(46,213,115,0.1);
+}
+
+.combatant-card.dead {
+    opacity: .5;
+    border-color: #e74c3c;
+}
+
+/* Initiative value */
+.combatant-init {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #9b59b6;
+    width: 60px;
+    text-align: center;
+}
+
+/* Name and tags */
+.combatant-name {
+    font-size: 1.3rem;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.type-badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: .7rem;
+    font-weight: bold;
+}
+
+.type-player { background: rgba(46,213,115,.3); color: #2ed573; }
+.type-npc { background: rgba(255,193,7,.3); color: #ffc107; }
+.type-monster { background: rgba(231,76,60,.3); color: #e74c3c; }
+
+/* HP BAR */
+.hp-bar-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.hp-bar {
+    flex: 1;
+    height: 20px;
+    background: rgba(0,0,0,.5);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(155,89,182,.3);
+}
+
+.hp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2ed573, #26de81);
+    transition: width .3s;
+}
+
+.hp-fill.medium { background: linear-gradient(90deg,#ffc107,#ffb700); }
+.hp-fill.low { background: linear-gradient(90deg,#e74c3c,#c0392b); }
+
+.hp-text {
+    min-width: 80px;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* HP buttons */
+.hp-controls {
+    display: flex;
+    gap: 5px;
+}
+
+.hp-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: rgba(155,89,182,.3);
+    border: 1px solid #9b59b6;
+    color: white;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+/* Condition tags */
+.condition-tag {
+    padding: 4px 10px;
+    border: 1px solid #9b59b6;
+    background: rgba(155,89,182,.3);
+    border-radius: 12px;
+    font-size: .8rem;
+}
+
+/* Combatant actions */
+.combatant-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.action-btn {
+    padding: 8px 12px;
+    border: 1px solid #9b59b6;
+    border-radius: 6px;
+    background: rgba(155,89,182,.2);
+    cursor: pointer;
+    color: white;
+}
+.action-btn:hover {
+    background: rgba(155,89,182,.4);
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.8);
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.modal.show {
+    display: flex;
+}
+
+.modal-content {
+    background: rgba(26, 26, 46, 0.95);
+    border: 2px solid #9b59b6;
+    border-radius: 16px;
+    padding: 30px;
+    width: 90%;
+    max-width: 450px;
+}

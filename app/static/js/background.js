@@ -200,12 +200,8 @@ function initTextAnimation() {
     // EVENTO DO BOTÃO
     // ====================
     buttonEl.addEventListener("click", () => {
-        // Aqui você redireciona para a página do manager
-        // Substitua '/manager' pela sua rota real
-        window.location.href = "/manager";
-        
-        // Para testar, pode usar:
-        // alert("Redirecionando para o manager!");
+        // Redireciona para o dashboard
+        window.location.href = "/dashboard";
     });
 }
 

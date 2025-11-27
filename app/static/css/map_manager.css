@@ -1,0 +1,243 @@
+/* ====================== */
+/* MAP MANAGER STYLES     */
+/* ====================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body, html {
+    width: 100%;
+    height: 100vh;
+    font-family: 'Lato', sans-serif;
+    background: #0a0a0f;
+    color: #fff;
+    overflow: hidden;
+}
+
+/* Header */
+.header {
+    background: linear-gradient(135deg, rgba(26,26,46,0.95), rgba(16,16,30,0.95));
+    border-bottom: 2px solid rgba(155,89,182,0.3);
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 20;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.header h1 {
+    font-family: 'Merriweather', serif;
+    font-size: 1.5rem;
+    color: #c49bdb;
+}
+
+.back-btn, .btn {
+    background: rgba(155,89,182,0.2);
+    border: 2px solid #9b59b6;
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    padding: 8px 16px;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+}
+
+.back-btn:hover, .btn:hover {
+    background: rgba(155,89,182,0.35);
+    transform: translateY(-2px);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+}
+
+/* Main layout */
+.main-layout {
+    display: flex;
+    height: calc(100vh - 70px);
+}
+
+/* Sidebar */
+.sidebar {
+    width: 300px;
+    background: rgba(26,26,46,0.8);
+    border-right: 2px solid rgba(155,89,182,0.3);
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.sidebar h3 {
+    color: #c49bdb;
+    margin-bottom: 15px;
+    font-family: 'Merriweather', serif;
+}
+
+.section {
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(155,89,182,0.2);
+}
+
+.upload-area {
+    border: 2px dashed rgba(155,89,182,0.4);
+    border-radius: 8px;
+    padding: 30px;
+    text-align: center;
+    cursor: pointer;
+    background: rgba(155,89,182,0.05);
+    transition: all 0.3s ease;
+}
+
+.upload-area:hover {
+    border-color: #9b59b6;
+    background: rgba(155,89,182,0.1);
+}
+
+.upload-area input {
+    display: none;
+}
+
+.grid-controls, .token-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.control-group label {
+    color: #bbb;
+    font-size: 0.9rem;
+}
+
+.control-group input,
+.control-group select {
+    padding: 8px;
+    background: rgba(16,16,30,0.8);
+    border: 1px solid rgba(155,89,182,0.3);
+    border-radius: 4px;
+    color: #fff;
+    font-size: 0.9rem;
+}
+
+.token-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: rgba(16,16,30,0.6);
+    border: 1px solid rgba(155,89,182,0.3);
+    border-radius: 6px;
+    cursor: grab;
+    transition: all 0.3s ease;
+}
+
+.token-item:hover, .token-item.active {
+    border-color: #9b59b6;
+    background: rgba(155,89,182,0.3);
+}
+
+.token-color {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+}
+
+/* Canvas area */
+.canvas-container {
+    flex: 1;
+    position: relative;
+    background: #1a1a2e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+#mapCanvas, #gridCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+#mapCanvas {
+    z-index: 2;
+    cursor: crosshair;
+}
+
+#gridCanvas {
+    z-index: 1;
+}
+
+/* Overlay & zoom */
+.canvas-overlay {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(16,16,30,0.9);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid rgba(155,89,182,0.3);
+    z-index: 3;
+}
+
+.zoom-controls {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 3;
+}
+
+.zoom-btn {
+    width: 40px;
+    height: 40px;
+    background: rgba(155,89,182,0.8);
+    border: 2px solid #9b59b6;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.zoom-btn:hover {
+    background: #9b59b6;
+    transform: scale(1.1);
+}
+
+/* Toast */
+.toast {
+    position: fixed;
+    top: 100px;
+    right: 30px;
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    color: #fff;
+    padding: 15px 25px;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(155,89,182,0.5);
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}

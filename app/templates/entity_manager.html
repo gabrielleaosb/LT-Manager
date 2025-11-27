@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracker de Combate - RPG Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/entity_manager.css') }}">
+    <script defer src="{{ url_for('static', filename='js/entity_manager.js') }}"></script>
+</head>
+
+<body>
+
+    <!-- BACKGROUND ANIMADO -->
+    <div class="hex-background" id="hexBg"></div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <button class="back-btn" onclick="window.location.href='/dashboard'">← Voltar</button>
+            <h1>⚔️ Tracker de Combate</h1>
+        </div>
+
+        <div class="round-counter">
+            Round: <span id="roundNumber">1</span> | Turno: <span id="turnNumber">1</span>
+        </div>
+
+        <div class="header-actions">
+            <button class="btn btn-danger" onclick="endCombat()">Finalizar Combate</button>
+            <button class="btn btn-success" onclick="nextTurn()">Próximo Turno ▶</button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <button class="btn" onclick="toggleAddForm()">+ Adicionar Combatente</button>
+            <button class="btn" onclick="sortInitiative()">🔄 Ordenar Iniciativa</button>
+            <button class="btn" onclick="rollAllInitiative()">🎲 Rolar Todas Iniciativas</button>
+            <button class="btn" onclick="clearDead()">💀 Remover Mortos</button>
+        </div>
+
+        <!-- Add Combatant Form -->
+        <div class="add-form" id="addForm" style="display: none;">
+            <h3>Adicionar Combatente</h3>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Nome</label>
+                    <input type="text" id="newName" placeholder="Ex: Goblin 1">
+                </div>
+
+                <div class="form-group">
+                    <label>Iniciativa</label>
+                    <input type="number" id="newInit" value="0">
+                </div>
+
+                <div class="form-group">
+                    <label>HP Atual</label>
+                    <input type="number" id="newHpCurrent" value="20">
+                </div>
+
+                <div class="form-group">
+                    <label>HP Máximo</label>
+                    <input type="number" id="newHpMax" value="20">
+                </div>
+
+                <div class="form-group">
+                    <label>Tipo</label>
+                    <select id="newType">
+                        <option value="player">Jogador</option>
+                        <option value="npc">NPC</option>
+                        <option value="monster">Monstro</option>
+                    </select>
+                </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="addCombatant()">Adicionar</button>
+        </div>
+
+        <!-- Initiative List -->
+        <div class="initiative-container">
+            <div class="initiative-header">
+                <h2>Ordem de Iniciativa</h2>
+            </div>
+
+            <div class="combatant-list" id="combatantList"></div>
+        </div>
+    </div>
+
+    <!-- Damage Modal -->
+    <div class="modal" id="damageModal">
+        <div class="modal-content">
+            <h3 id="damageModalTitle">Modificar HP</h3>
+
+            <div class="form-group">
+                <label>Quantidade</label>
+                <input type="number" id="damageAmount" value="0">
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-danger" onclick="applyDamage()">💥 Causar Dano</button>
+                <button class="btn btn-success" onclick="applyHealing()">💚 Curar</button>
+                <button class="btn" onclick="closeModal()">Cancelar</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="entity_manager.js"></script>
+</body>
+</html>

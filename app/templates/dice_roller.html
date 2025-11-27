@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Rolador de Dados - RPG Manager</title>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dice_roller.css') }}">
+<script defer src="{{ url_for('static', filename='js/dice_roller.js') }}"></script>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+
+</head>
+<body>
+    <!-- Canvas para background hexagonal -->
+    <canvas id="gridCanvas"></canvas>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <button class="back-btn" id="backBtn">← Voltar</button>
+            <h1>🎲 Rolador de Dados</h1>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Dice Selector -->
+        <div class="dice-selector">
+            <h2>Selecione o Dado</h2>
+            <div class="dice-grid">
+                <button class="dice-btn" data-sides="4"><div>d4</div><small>1-4</small></button>
+                <button class="dice-btn" data-sides="6"><div>d6</div><small>1-6</small></button>
+                <button class="dice-btn" data-sides="8"><div>d8</div><small>1-8</small></button>
+                <button class="dice-btn" data-sides="10"><div>d10</div><small>1-10</small></button>
+                <button class="dice-btn" data-sides="12"><div>d12</div><small>1-12</small></button>
+                <button class="dice-btn" data-sides="20"><div>d20</div><small>1-20</small></button>
+                <button class="dice-btn" data-sides="100"><div>d100</div><small>1-100</small></button>
+            </div>
+
+            <!-- Custom Roll -->
+            <div class="custom-roll">
+                <h3>Rolagem Personalizada</h3>
+                <div class="custom-form">
+                    <div class="form-group">
+                        <label>Quantidade</label>
+                        <input type="number" id="diceCount" value="1" min="1" max="20">
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo de Dado</label>
+                        <select id="diceType">
+                            <option value="4">d4</option>
+                            <option value="6">d6</option>
+                            <option value="8">d8</option>
+                            <option value="10">d10</option>
+                            <option value="12">d12</option>
+                            <option value="20" selected>d20</option>
+                            <option value="100">d100</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Modificador</label>
+                        <input type="number" id="modifier" value="0" min="-100" max="100">
+                    </div>
+                    <button class="btn" id="customRollBtn">🎲 Rolar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Result Display -->
+        <div class="result-display" id="resultDisplay">
+            <div class="result-label">Resultado</div>
+            <div class="result-value" id="resultValue">—</div>
+            <div class="result-details" id="resultDetails">Selecione um dado para começar</div>
+            <div class="result-breakdown" id="resultBreakdown"></div>
+        </div>
+
+        <!-- History -->
+        <div class="history-section">
+            <div class="history-header">
+                <h2>📋 Histórico de Rolagens</h2>
+                <button class="clear-btn" id="clearHistoryBtn">🗑️ Limpar</button>
+            </div>
+            <div class="history-list" id="historyList">
+                <div class="empty-state">Nenhuma rolagem ainda</div>
+            </div>
+        </div>
+    </div>
+
+<script src="dice_rollet.js" defer></script>
+</body>
+</html>
