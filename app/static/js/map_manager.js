@@ -1,274 +1,580 @@
 // ====================
-// MAP MANAGER JS
+// MAP MANAGER JS COM WEBSOCKET - VERSÃO CORRIGIDA
 // ====================
 
+// Conectar ao SocketIO
+const socket = io();
+const SESSION_ID = document.getElementById('sessionId').value;
+
+// Canvas setup
 const mapCanvas = document.getElementById('mapCanvas');
 const mapCtx = mapCanvas.getContext('2d');
-const gridCanvas = document.getElementById('gridCanvas');
-const gridCtx = gridCanvas.getContext('2d');
+const drawingCanvas = document.getElementById('drawingCanvas');
+const drawCtx = drawingCanvas.getContext('2d');
 
-let w = mapCanvas.width = gridCanvas.width = window.innerWidth;
-let h = mapCanvas.height = gridCanvas.height = window.innerHeight;
+let w = mapCanvas.width = drawingCanvas.width = window.innerWidth - 320;
+let h = mapCanvas.height = drawingCanvas.height = window.innerHeight - 70;
 
+// Estado do mapa
 let mapImage = null;
 let gridSize = parseInt(document.getElementById('gridSize').value);
 let gridColor = document.getElementById('gridColor').value;
-let gridOpacity = document.getElementById('gridOpacity').value/100;
+let gridOpacity = document.getElementById('gridOpacity').value / 100;
 let gridVisible = true;
 
+// Ferramentas
+let currentTool = 'select'; // select, draw, erase
+let drawingColor = '#9b59b6';
+let brushSize = 3;
+let isDrawing = false;
+let drawings = [];
+
+// Tokens
+const TOKEN_RADIUS = 35; // Tokens maiores
+const TOKEN_BORDER = 2; // Borda mais fina
 let tokens = [];
 let selectedToken = null;
 let draggedToken = null;
 let scale = 1;
+let isDraggingToken = false;
 
 // --------------------
-// GRID HEXAGONAL MÍSTICO
+// WEBSOCKET
 // --------------------
-const hexSize = 40;
-const hexagons = [];
-const mouse = { x: null, y: null };
+socket.on('connect', () => {
+    console.log('Conectado ao servidor');
+    socket.emit('join_session', { session_id: SESSION_ID });
+});
 
-// Partículas místicas
-const particles = [];
-const PARTICLE_COUNT = 30;
-for (let i=0;i<PARTICLE_COUNT;i++){
-    particles.push({
-        x: Math.random()*w,
-        y: Math.random()*h,
-        dx:(Math.random()-0.5)*0.5,
-        dy:(Math.random()-0.5)*0.5,
-        r:Math.random()*2+1,
-        opacity:Math.random()*0.5+0.3
+socket.on('token_sync', (data) => {
+    tokens = data.tokens;
+    redrawMap();
+});
+
+socket.on('drawing_sync', (data) => {
+    drawings.push(data.drawing);
+    redrawDrawings();
+});
+
+socket.on('drawings_cleared', () => {
+    drawings = [];
+    redrawDrawings();
+});
+
+socket.on('map_sync', (data) => {
+    if (data.mapData) {
+        const img = new Image();
+        img.onload = function() {
+            mapImage = img;
+            redrawMap();
+        };
+        img.src = data.mapData;
+    }
+});
+
+function emitTokenUpdate() {
+    socket.emit('token_update', {
+        session_id: SESSION_ID,
+        tokens: tokens
     });
 }
 
-function createHexGrid(){
-    hexagons.length=0;
-    const cols = Math.ceil(w/(hexSize*1.5))+2;
-    const rows = Math.ceil(h/(hexSize*Math.sqrt(3)))+2;
-    for(let row=0;row<rows;row++){
-        for(let col=0;col<cols;col++){
-            const x = col*hexSize*1.5;
-            const y = row*hexSize*Math.sqrt(3) + (col%2)*(hexSize*Math.sqrt(3)/2);
-            hexagons.push({x,y,opacity:0.1,glowIntensity:0});
+function emitDrawingUpdate(drawing) {
+    socket.emit('drawing_update', {
+        session_id: SESSION_ID,
+        drawing: drawing
+    });
+}
+
+// --------------------
+// FERRAMENTAS
+// --------------------
+function setTool(tool) {
+    currentTool = tool;
+    document.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Atualizar cursor
+    if (tool === 'draw') {
+        drawingCanvas.style.cursor = 'crosshair';
+        mapCanvas.style.cursor = 'crosshair';
+    } else if (tool === 'erase') {
+        drawingCanvas.style.cursor = 'not-allowed';
+        mapCanvas.style.cursor = 'not-allowed';
+    } else {
+        drawingCanvas.style.cursor = 'default';
+        mapCanvas.style.cursor = 'grab';
+    }
+}
+
+function setDrawingColor(color) {
+    drawingColor = color;
+    document.querySelectorAll('.color-option').forEach(opt => {
+        opt.classList.remove('active');
+    });
+    event.target.classList.add('active');
+}
+
+function setBrushSize(size) {
+    brushSize = parseInt(size);
+}
+
+// --------------------
+// DESENHO LIVRE - CORRIGIDO PARA ZOOM
+// --------------------
+let currentPath = [];
+
+function getCanvasCoordinates(canvas, e) {
+    const rect = canvas.getBoundingClientRect();
+    // Ajustar para o zoom
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+    };
+}
+
+drawingCanvas.addEventListener('mousedown', (e) => {
+    if (currentTool === 'draw') {
+        isDrawing = true;
+        const coords = getCanvasCoordinates(drawingCanvas, e);
+        currentPath = [coords];
+    } else if (currentTool === 'erase') {
+        // Apagar apenas desenhos próximos ao cursor
+        const coords = getCanvasCoordinates(drawingCanvas, e);
+        eraseDrawingsAt(coords.x, coords.y);
+    }
+});
+
+drawingCanvas.addEventListener('mousemove', (e) => {
+    if (isDrawing && currentTool === 'draw') {
+        const coords = getCanvasCoordinates(drawingCanvas, e);
+        currentPath.push(coords);
+        
+        // Desenhar em tempo real
+        drawCtx.strokeStyle = drawingColor;
+        drawCtx.lineWidth = brushSize;
+        drawCtx.lineCap = 'round';
+        drawCtx.lineJoin = 'round';
+        
+        if (currentPath.length > 1) {
+            const prev = currentPath[currentPath.length - 2];
+            const curr = currentPath[currentPath.length - 1];
+            
+            drawCtx.beginPath();
+            drawCtx.moveTo(prev.x, prev.y);
+            drawCtx.lineTo(curr.x, curr.y);
+            drawCtx.stroke();
         }
+    } else if (currentTool === 'erase' && e.buttons === 1) {
+        // Continuar apagando enquanto arrasta
+        const coords = getCanvasCoordinates(drawingCanvas, e);
+        eraseDrawingsAt(coords.x, coords.y);
+    }
+});
+
+drawingCanvas.addEventListener('mouseup', () => {
+    if (isDrawing && currentPath.length > 0) {
+        const drawing = {
+            path: currentPath,
+            color: drawingColor,
+            size: brushSize
+        };
+        drawings.push(drawing);
+        emitDrawingUpdate(drawing);
+        currentPath = [];
+    }
+    isDrawing = false;
+});
+
+drawingCanvas.addEventListener('mouseleave', () => {
+    isDrawing = false;
+});
+
+// Função para apagar desenhos - APENAS DESENHOS, NÃO O MAPA
+function eraseDrawingsAt(x, y) {
+    const eraseRadius = brushSize * 3; // Raio de apagamento
+    let somethingErased = false;
+    
+    drawings = drawings.filter(drawing => {
+        // Verificar se algum ponto do desenho está próximo ao cursor
+        const shouldKeep = !drawing.path.some(point => {
+            const dist = Math.hypot(point.x - x, point.y - y);
+            return dist < eraseRadius;
+        });
+        
+        if (!shouldKeep) somethingErased = true;
+        return shouldKeep;
+    });
+    
+    if (somethingErased) {
+        redrawDrawings();
+        socket.emit('clear_drawings', { session_id: SESSION_ID });
+        // Re-enviar todos os desenhos restantes
+        drawings.forEach(d => emitDrawingUpdate(d));
     }
 }
 
-function drawHexagon(x,y,size,opacity,glow){
-    gridCtx.beginPath();
-    for(let i=0;i<6;i++){
-        const angle = (Math.PI/3)*i;
-        const hx = x + size*Math.cos(angle);
-        const hy = y + size*Math.sin(angle);
-        i===0?gridCtx.moveTo(hx,hy):gridCtx.lineTo(hx,hy);
-    }
-    gridCtx.closePath();
-    if(glow>0){
-        gridCtx.shadowBlur = 20*glow;
-        gridCtx.shadowColor = `rgba(155,89,182,${glow})`;
-    }
-    gridCtx.strokeStyle = `rgba(155,89,182,${opacity})`;
-    gridCtx.lineWidth=1.5;
-    gridCtx.stroke();
-    gridCtx.shadowBlur=0;
-}
-
-// --------------------
-// ANIMAÇÃO DO GRID + PARTICULAS
-// --------------------
-function animateGrid(){
-    // Fundo
-    const gradient = gridCtx.createRadialGradient(w/2,h/2,0,w/2,h/2,w/1.5);
-    gradient.addColorStop(0,"#1a1a2e");
-    gradient.addColorStop(1,"#0a0a0f");
-    gridCtx.fillStyle=gradient;
-    gridCtx.fillRect(0,0,w,h);
-
-    // Hexágonos
-    hexagons.forEach(hex=>{
-        if(mouse.x&&mouse.y){
-            const dist=Math.hypot(hex.x-mouse.x,hex.y-mouse.y);
-            hex.glowIntensity = dist<150?Math.max(0,1-dist/150):hex.glowIntensity*0.95;
-            hex.opacity=0.1+hex.glowIntensity*0.5;
-        } else {
-            hex.glowIntensity*=0.95;
-            hex.opacity=0.1+hex.glowIntensity*0.5;
+function redrawDrawings() {
+    drawCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+    
+    drawings.forEach(drawing => {
+        drawCtx.strokeStyle = drawing.color;
+        drawCtx.lineWidth = drawing.size;
+        drawCtx.lineCap = 'round';
+        drawCtx.lineJoin = 'round';
+        
+        if (drawing.path.length > 1) {
+            drawCtx.beginPath();
+            drawCtx.moveTo(drawing.path[0].x, drawing.path[0].y);
+            
+            for (let i = 1; i < drawing.path.length; i++) {
+                drawCtx.lineTo(drawing.path[i].x, drawing.path[i].y);
+            }
+            
+            drawCtx.stroke();
         }
-        drawHexagon(hex.x,hex.y,hexSize,hex.opacity,hex.glowIntensity);
     });
+}
 
-    // Partículas
-    particles.forEach(p=>{
-        gridCtx.beginPath();
-        gridCtx.arc(p.x,p.y,p.r,0,Math.PI*2);
-        gridCtx.fillStyle=`rgba(155,89,182,${p.opacity})`;
-        gridCtx.shadowBlur=10;
-        gridCtx.shadowColor=`rgba(155,89,182,${p.opacity})`;
-        gridCtx.fill();
-        gridCtx.shadowBlur=0;
-        p.x+=p.dx;
-        p.y+=p.dy;
-        if(p.x<0||p.x>w)p.dx*=-1;
-        if(p.y<0||p.y>h)p.dy*=-1;
-    });
-
-    requestAnimationFrame(animateGrid);
+function clearDrawings() {
+    if (confirm('Limpar todos os desenhos?')) {
+        drawings = [];
+        redrawDrawings();
+        socket.emit('clear_drawings', { session_id: SESSION_ID });
+        showToast('Desenhos limpos!');
+    }
 }
 
 // --------------------
 // MAP & TOKENS
 // --------------------
-function redrawMap(){
-    mapCtx.clearRect(0,0,mapCanvas.width,mapCanvas.height);
-    if(mapImage) mapCtx.drawImage(mapImage,0,0,mapCanvas.width,mapCanvas.height);
+function redrawMap() {
+    mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+    
+    // Desenhar imagem do mapa
+    if (mapImage) {
+        mapCtx.drawImage(mapImage, 0, 0, mapCanvas.width, mapCanvas.height);
+    }
 
-    // Grid
-    if(gridVisible) drawMapGrid();
+    // Desenhar grid
+    if (gridVisible) drawMapGrid();
 
-    // Tokens
-    tokens.forEach(token=>{
-        mapCtx.fillStyle=token.color;
-        mapCtx.strokeStyle="#fff";
-        mapCtx.lineWidth=3;
-        mapCtx.beginPath();
-        mapCtx.arc(token.x,token.y,20,0,Math.PI*2);
-        mapCtx.fill();
-        mapCtx.stroke();
-        mapCtx.fillStyle="#fff";
-        mapCtx.font="bold 12px Lato";
-        mapCtx.textAlign="center";
-        mapCtx.fillText(token.name, token.x, token.y+35);
-
-        if(token===selectedToken){
-            mapCtx.strokeStyle="#ffc107";
-            mapCtx.lineWidth=4;
+    // Desenhar tokens (maiores e com borda fina)
+    tokens.forEach(token => {
+        if (token.image) {
+            const img = new Image();
+            img.src = token.image;
+            mapCtx.save();
             mapCtx.beginPath();
-            mapCtx.arc(token.x,token.y,25,0,Math.PI*2);
+            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+            mapCtx.closePath();
+            mapCtx.clip();
+            mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
+            mapCtx.restore();
+        } else {
+            mapCtx.fillStyle = token.color;
+            mapCtx.beginPath();
+            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+            mapCtx.fill();
+        }
+        
+        // Borda fina
+        mapCtx.strokeStyle = "#fff";
+        mapCtx.lineWidth = TOKEN_BORDER;
+        mapCtx.beginPath();
+        mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+        mapCtx.stroke();
+        
+        // Nome
+        mapCtx.fillStyle = "#fff";
+        mapCtx.font = "bold 13px Lato";
+        mapCtx.textAlign = "center";
+        mapCtx.strokeStyle = "#000";
+        mapCtx.lineWidth = 3;
+        mapCtx.strokeText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
+        mapCtx.fillText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
+
+        // Destaque se selecionado
+        if (token === selectedToken) {
+            mapCtx.strokeStyle = "#ffc107";
+            mapCtx.lineWidth = 3;
+            mapCtx.beginPath();
+            mapCtx.arc(token.x, token.y, TOKEN_RADIUS + 5, 0, Math.PI * 2);
             mapCtx.stroke();
         }
     });
 }
 
-function drawMapGrid(){
-    const color = gridColor;
-    const opacity = gridOpacity;
-    mapCtx.strokeStyle=color;
-    mapCtx.globalAlpha=opacity;
-    mapCtx.lineWidth=1;
-    for(let x=0;x<=mapCanvas.width;x+=gridSize){
+function drawMapGrid() {
+    mapCtx.strokeStyle = gridColor;
+    mapCtx.globalAlpha = gridOpacity;
+    mapCtx.lineWidth = 1;
+    
+    for (let x = 0; x <= mapCanvas.width; x += gridSize) {
         mapCtx.beginPath();
-        mapCtx.moveTo(x,0);
-        mapCtx.lineTo(x,mapCanvas.height);
+        mapCtx.moveTo(x, 0);
+        mapCtx.lineTo(x, mapCanvas.height);
         mapCtx.stroke();
     }
-    for(let y=0;y<=mapCanvas.height;y+=gridSize){
+    
+    for (let y = 0; y <= mapCanvas.height; y += gridSize) {
         mapCtx.beginPath();
-        mapCtx.moveTo(0,y);
-        mapCtx.lineTo(mapCanvas.width,y);
+        mapCtx.moveTo(0, y);
+        mapCtx.lineTo(mapCanvas.width, y);
         mapCtx.stroke();
     }
-    mapCtx.globalAlpha=1;
+    
+    mapCtx.globalAlpha = 1;
 }
 
 // --------------------
 // MAP CONTROLS
 // --------------------
-function loadMapImage(e){
-    const file=e.target.files[0];
-    if(!file)return;
-    const reader=new FileReader();
-    reader.onload=function(ev){
-        const img=new Image();
-        img.onload=function(){mapImage=img;redrawMap();showToast("Mapa carregado!");};
-        img.src=ev.target.result;
-    }
+function loadMapImage(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        const img = new Image();
+        img.onload = function() {
+            mapImage = img;
+            redrawMap();
+            showToast("Mapa carregado!");
+            
+            // Compartilhar com jogadores
+            socket.emit('map_update', {
+                session_id: SESSION_ID,
+                mapData: ev.target.result
+            });
+        };
+        img.src = ev.target.result;
+    };
     reader.readAsDataURL(file);
 }
 
-function updateGrid(){
-    gridSize=parseInt(document.getElementById('gridSize').value);
-    gridColor=document.getElementById('gridColor').value;
-    gridOpacity=document.getElementById('gridOpacity').value/100;
+function updateGrid() {
+    gridSize = parseInt(document.getElementById('gridSize').value);
+    gridColor = document.getElementById('gridColor').value;
+    gridOpacity = document.getElementById('gridOpacity').value / 100;
     redrawMap();
 }
 
-function toggleGrid(){gridVisible=!gridVisible; redrawMap();}
-
-function addToken(){
-    const name = prompt("Nome do token:");
-    if(!name) return;
-    tokens.push({
-        name:name,
-        x:mapCanvas.width/2,
-        y:mapCanvas.height/2,
-        color:'#'+Math.floor(Math.random()*16777215).toString(16)
-    });
+function toggleGrid() {
+    gridVisible = !gridVisible;
     redrawMap();
-    showToast(`Token "${name}" adicionado!`);
 }
 
-function selectToken(el){document.querySelectorAll('.token-item').forEach(i=>i.classList.remove('active')); el.classList.add('active');}
+// --------------------
+// TOKENS
+// --------------------
+function addToken() {
+    document.getElementById('tokenModal').classList.add('show');
+}
 
-mapCanvas.addEventListener('click',(e)=>{
-    const rect=mapCanvas.getBoundingClientRect();
-    const x=e.clientX-rect.left;
-    const y=e.clientY-rect.top;
-    let clicked=false;
-    tokens.forEach(t=>{
-        if(Math.hypot(t.x-x,t.y-y)<=20){selectedToken=t;clicked=true;}
-    });
-    if(!clicked) selectedToken=null;
-    redrawMap();
-});
-
-mapCanvas.addEventListener('mousedown',(e)=>{
-    const rect=mapCanvas.getBoundingClientRect();
-    const x=e.clientX-rect.left;
-    const y=e.clientY-rect.top;
-    tokens.forEach(t=>{
-        if(Math.hypot(t.x-x,t.y-y)<=20) draggedToken=t;
-    });
-});
-mapCanvas.addEventListener('mousemove',(e)=>{
-    if(draggedToken){
-        const rect=mapCanvas.getBoundingClientRect();
-        draggedToken.x=e.clientX-rect.left;
-        draggedToken.y=e.clientY-rect.top;
+function createToken() {
+    const name = document.getElementById('tokenName').value;
+    const imageInput = document.getElementById('tokenImage');
+    
+    if (!name) {
+        alert('Digite um nome para o token');
+        return;
+    }
+    
+    if (imageInput.files.length > 0) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const newToken = {
+                id: Date.now(),
+                name: name,
+                x: mapCanvas.width / 2,
+                y: mapCanvas.height / 2,
+                image: e.target.result
+            };
+            tokens.push(newToken);
+            renderTokenList();
+            redrawMap();
+            emitTokenUpdate();
+            closeTokenModal();
+            showToast(`Token "${name}" adicionado!`);
+        };
+        reader.readAsDataURL(imageInput.files[0]);
+    } else {
+        const newToken = {
+            id: Date.now(),
+            name: name,
+            x: mapCanvas.width / 2,
+            y: mapCanvas.height / 2,
+            color: '#' + Math.floor(Math.random() * 16777215).toString(16)
+        };
+        tokens.push(newToken);
+        renderTokenList();
         redrawMap();
+        emitTokenUpdate();
+        closeTokenModal();
+        showToast(`Token "${name}" adicionado!`);
+    }
+}
+
+function closeTokenModal() {
+    document.getElementById('tokenModal').classList.remove('show');
+    document.getElementById('tokenName').value = '';
+    document.getElementById('tokenImage').value = '';
+}
+
+function renderTokenList() {
+    const list = document.getElementById('tokenList');
+    list.innerHTML = '';
+    
+    tokens.forEach(token => {
+        const item = document.createElement('div');
+        item.className = 'token-item';
+        item.onclick = () => selectTokenFromList(token);
+        
+        if (token.image) {
+            item.innerHTML = `
+                <img src="${token.image}" class="token-preview" alt="${token.name}">
+                <div class="token-info">
+                    <div class="token-name">${token.name}</div>
+                </div>
+                <div class="token-actions">
+                    <button class="token-action-btn delete" onclick="deleteToken(${token.id}); event.stopPropagation();">🗑️</button>
+                </div>
+            `;
+        } else {
+            item.innerHTML = `
+                <div class="token-color" style="background-color: ${token.color}"></div>
+                <div class="token-info">
+                    <div class="token-name">${token.name}</div>
+                </div>
+                <div class="token-actions">
+                    <button class="token-action-btn delete" onclick="deleteToken(${token.id}); event.stopPropagation();">🗑️</button>
+                </div>
+            `;
+        }
+        
+        list.appendChild(item);
+    });
+}
+
+function selectTokenFromList(token) {
+    selectedToken = token;
+    document.querySelectorAll('.token-item').forEach(i => i.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    redrawMap();
+}
+
+function deleteToken(tokenId) {
+    if (confirm('Remover este token?')) {
+        tokens = tokens.filter(t => t.id !== tokenId);
+        selectedToken = null;
+        renderTokenList();
+        redrawMap();
+        emitTokenUpdate();
+        showToast('Token removido!');
+    }
+}
+
+// --------------------
+// INTERAÇÃO COM TOKENS - CORRIGIDO
+// --------------------
+mapCanvas.addEventListener('click', (e) => {
+    if (currentTool !== 'select') return;
+    
+    const coords = getCanvasCoordinates(mapCanvas, e);
+    let clicked = false;
+    
+    tokens.forEach(t => {
+        if (Math.hypot(t.x - coords.x, t.y - coords.y) <= TOKEN_RADIUS) {
+            selectedToken = t;
+            clicked = true;
+        }
+    });
+    
+    if (!clicked) selectedToken = null;
+    redrawMap();
+});
+
+mapCanvas.addEventListener('mousedown', (e) => {
+    if (currentTool !== 'select') return;
+    
+    const coords = getCanvasCoordinates(mapCanvas, e);
+    
+    tokens.forEach(t => {
+        if (Math.hypot(t.x - coords.x, t.y - coords.y) <= TOKEN_RADIUS) {
+            draggedToken = t;
+            isDraggingToken = true;
+            mapCanvas.style.cursor = 'grabbing';
+        }
+    });
+});
+
+mapCanvas.addEventListener('mousemove', (e) => {
+    if (draggedToken && currentTool === 'select' && isDraggingToken) {
+        const coords = getCanvasCoordinates(mapCanvas, e);
+        draggedToken.x = coords.x;
+        draggedToken.y = coords.y;
+        redrawMap();
+    } else if (currentTool === 'select' && !isDraggingToken) {
+        // Mudar cursor quando passar sobre token
+        const coords = getCanvasCoordinates(mapCanvas, e);
+        let overToken = false;
+        
+        tokens.forEach(t => {
+            if (Math.hypot(t.x - coords.x, t.y - coords.y) <= TOKEN_RADIUS) {
+                overToken = true;
+            }
+        });
+        
+        mapCanvas.style.cursor = overToken ? 'grab' : 'default';
     }
 });
-mapCanvas.addEventListener('mouseup',()=>{draggedToken=null;});
 
-document.addEventListener('keydown',(e)=>{
-    if(e.key==='Delete' && selectedToken){
-        tokens=tokens.filter(t=>t!==selectedToken);
-        selectedToken=null;
-        redrawMap();
-        showToast("Token removido!");
+mapCanvas.addEventListener('mouseup', () => {
+    if (draggedToken) {
+        emitTokenUpdate();
+        draggedToken = null;
+        isDraggingToken = false;
+        mapCanvas.style.cursor = 'grab';
     }
 });
 
-function zoom(delta){
-    scale=Math.max(0.5,Math.min(2,scale+delta));
-    mapCanvas.style.transform=`scale(${scale})`;
-    showToast(`Zoom: ${Math.round(scale*100)}%`);
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' && selectedToken) {
+        deleteToken(selectedToken.id);
+    }
+});
+
+// --------------------
+// OUTROS CONTROLES
+// --------------------
+function zoom(delta) {
+    scale = Math.max(0.5, Math.min(2, scale + delta));
+    mapCanvas.style.transform = `scale(${scale})`;
+    drawingCanvas.style.transform = `scale(${scale})`;
+    showToast(`Zoom: ${Math.round(scale * 100)}%`);
 }
 
-function clearMap(){
-    if(confirm("Tem certeza que deseja limpar o mapa?")){
-        mapImage=null;
-        tokens=[];
-        selectedToken=null;
+function clearMap() {
+    if (confirm("Tem certeza que deseja limpar o mapa?")) {
+        mapImage = null;
+        tokens = [];
+        selectedToken = null;
+        drawings = [];
         redrawMap();
+        redrawDrawings();
+        emitTokenUpdate();
+        socket.emit('clear_drawings', { session_id: SESSION_ID });
         showToast("Mapa limpo!");
     }
 }
 
-function saveMap(){showToast("Mapa salvo com sucesso!");}
-
-function copyShareLink(){
-    const link=document.getElementById('shareLink').textContent;
+function copyShareLink() {
+    const link = `${window.location.origin}/player-view/${SESSION_ID}`;
     navigator.clipboard.writeText(link);
     showToast("Link copiado!");
 }
@@ -276,25 +582,25 @@ function copyShareLink(){
 // --------------------
 // TOAST
 // --------------------
-function showToast(msg){
-    const toast=document.getElementById('toast');
-    toast.textContent=msg;
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
     toast.classList.add('show');
-    setTimeout(()=>{toast.classList.remove('show');},3000);
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 3000);
 }
 
 // --------------------
-// MOUSE TRACK PARA GRID
+// REDIMENSIONAMENTO
 // --------------------
-window.addEventListener('mousemove',e=>{mouse.x=e.clientX; mouse.y=e.clientY;});
-window.addEventListener('resize',()=>{
-    w=mapCanvas.width=gridCanvas.width=window.innerWidth;
-    h=mapCanvas.height=gridCanvas.height=window.innerHeight;
-    createHexGrid();
+window.addEventListener('resize', () => {
+    w = mapCanvas.width = drawingCanvas.width = window.innerWidth - 320;
+    h = mapCanvas.height = drawingCanvas.height = window.innerHeight - 70;
     redrawMap();
+    redrawDrawings();
 });
 
 // Inicialização
-createHexGrid();
-animateGrid();
 redrawMap();
+renderTokenList();

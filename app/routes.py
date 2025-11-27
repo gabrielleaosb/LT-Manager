@@ -1,5 +1,6 @@
 from . import app
 from flask import render_template, jsonify, request
+import uuid
 
 @app.route("/")
 def index():
@@ -14,7 +15,9 @@ def dashboard():
 @app.route("/map-manager")
 def map_manager():
     """Gerenciador de Mapas com Grid"""
-    return render_template("map_manager.html")
+    # Gerar ID único para a sessão
+    session_id = str(uuid.uuid4())[:8]
+    return render_template("map_manager.html", session_id=session_id)
 
 @app.route("/entity-manager")
 def combat_tracker():
@@ -26,13 +29,17 @@ def dice_roller():
     """Rolador de Dados"""
     return render_template("dice_roller.html")
 
+@app.route("/notes")
+def notes():
+    """Notas do Mestre"""
+    return render_template("notes.html")
+
 # ===== API ENDPOINTS =====
 
 @app.route("/api/map/state", methods=["GET", "POST"])
 def map_state():
     """API para estado do mapa (para compartilhamento em tempo real)"""
     if request.method == "POST":
-        # Salvar estado do mapa
         data = request.json
         # TODO: Implementar salvamento no banco
         return jsonify({"status": "success", "data": data})
@@ -53,6 +60,19 @@ def dice_history():
     """Histórico de rolagens"""
     # TODO: Buscar do banco
     return jsonify({"status": "success", "history": []})
+
+@app.route("/api/notes/save", methods=["POST"])
+def save_notes():
+    """Salvar notas do mestre"""
+    data = request.json
+    # TODO: Implementar salvamento no banco
+    return jsonify({"status": "success"})
+
+@app.route("/api/notes/get", methods=["GET"])
+def get_notes():
+    """Buscar notas do mestre"""
+    # TODO: Buscar do banco
+    return jsonify({"status": "success", "notes": []})
 
 # Rota para visão do jogador (somente leitura)
 @app.route("/player-view/<session_id>")

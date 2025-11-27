@@ -6,9 +6,12 @@
 <title>Gerenciador de Mapas - Last Take Manager</title>
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/map_manager.css') }}">
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script defer src="{{ url_for('static', filename='js/map_manager.js') }}"></script>
 </head>
 <body>
+
+<input type="hidden" id="sessionId" value="{{ session_id }}">
 
 <!-- Header -->
 <header class="header">
@@ -17,15 +20,52 @@
         <h1>🗺️ Gerenciador de Mapas</h1>
     </div>
     <div class="header-actions">
+        <button class="btn btn-danger" onclick="clearDrawings()">🧹 Limpar Desenhos</button>
         <button class="btn" onclick="clearMap()">🗑️ Limpar Mapa</button>
         <button class="btn" onclick="toggleGrid()">⊞ Toggle Grid</button>
-        <button class="btn btn-primary" onclick="saveMap()">💾 Salvar</button>
     </div>
 </header>
 
 <div class="main-layout">
     <!-- Sidebar -->
     <aside class="sidebar">
+        <!-- Tool Selection -->
+        <div class="section">
+            <h3>🛠️ Ferramentas</h3>
+            <div class="tool-selector">
+                <button class="tool-btn active" onclick="setTool('select')">✋ Selecionar</button>
+                <button class="tool-btn" onclick="setTool('draw')">✏️ Desenhar</button>
+                <button class="tool-btn" onclick="setTool('erase')">🧹 Apagar</button>
+            </div>
+        </div>
+
+        <!-- Drawing Controls -->
+        <div class="section">
+            <h3>🎨 Configurações de Desenho</h3>
+            <div class="drawing-controls">
+                <div class="control-group">
+                    <label>Tamanho do Pincel</label>
+                    <input type="range" id="brushSize" min="1" max="20" value="3" onchange="setBrushSize(this.value)">
+                </div>
+                
+                <div class="control-group">
+                    <label>Cor</label>
+                    <div class="color-palette">
+                        <div class="color-option active" style="background: #9b59b6;" onclick="setDrawingColor('#9b59b6')"></div>
+                        <div class="color-option" style="background: #e74c3c;" onclick="setDrawingColor('#e74c3c')"></div>
+                        <div class="color-option" style="background: #3498db;" onclick="setDrawingColor('#3498db')"></div>
+                        <div class="color-option" style="background: #2ecc71;" onclick="setDrawingColor('#2ecc71')"></div>
+                        <div class="color-option" style="background: #f39c12;" onclick="setDrawingColor('#f39c12')"></div>
+                        <div class="color-option" style="background: #1abc9c;" onclick="setDrawingColor('#1abc9c')"></div>
+                        <div class="color-option" style="background: #e67e22;" onclick="setDrawingColor('#e67e22')"></div>
+                        <div class="color-option" style="background: #ecf0f1;" onclick="setDrawingColor('#ecf0f1')"></div>
+                        <div class="color-option" style="background: #34495e;" onclick="setDrawingColor('#34495e')"></div>
+                        <div class="color-option" style="background: #000000;" onclick="setDrawingColor('#000000')"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Upload Section -->
         <div class="section">
             <h3>📁 Carregar Mapa</h3>
@@ -65,32 +105,27 @@
 
         <!-- Share Link -->
         <div class="section">
-            <h3>🔗 Compartilhar com Jogadores</h3>
-            <div class="share-section">
-                <p style="color: #2ed573; font-size: 0.9rem; margin-bottom: 10px;">
-                    Link de visualização em tempo real
-                </p>
-                <div class="share-link" id="shareLink">
-                    https://rpgmanager.com/view/abc123xyz
-                </div>
-                <button class="btn btn-primary" style="width: 100%;" onclick="copyShareLink()">
-                    📋 Copiar Link
-                </button>
-            </div>
+            <h3>🔗 Compartilhar</h3>
+            <p style="color: #bbb; font-size: 0.85rem; margin-bottom: 10px;">
+                Link para visualização dos jogadores
+            </p>
+            <button class="btn btn-primary" style="width: 100%;" onclick="copyShareLink()">
+                📋 Copiar Link de Compartilhamento
+            </button>
         </div>
     </aside>
 
     <!-- Canvas Area -->
     <div class="canvas-container">
-        <canvas id="mapCanvas" width="1200" height="800"></canvas>
-        <canvas id="gridCanvas"></canvas>
+        <canvas id="mapCanvas"></canvas>
+        <canvas id="drawingCanvas"></canvas>
 
-        <div class="canvas-overlay">
-            <p><strong>Controles:</strong></p>
-            <p>• Clique: Posicionar token</p>
-            <p>• Arraste: Mover token</p>
-            <p>• Del: Remover selecionado</p>
-            <p>• Scroll: Zoom</p>
+        <div class="session-info">
+            <h4>📡 Sessão Ativa</h4>
+            <div class="session-link">
+                <input type="text" readonly value="{{ session_id }}" id="sessionDisplay">
+                <button class="copy-btn" onclick="copyShareLink()">📋 Copiar</button>
+            </div>
         </div>
 
         <div class="zoom-controls">
@@ -100,7 +135,165 @@
     </div>
 </div>
 
+<!-- Botão flutuante de dados -->
+<button class="floating-dice-btn" onclick="toggleDicePanel()" title="Rolar Dados">
+    🎲
+</button>
+
+<!-- Painel de dados flutuante -->
+<div class="dice-panel" id="dicePanel">
+    <div class="dice-panel-header">
+        <h3>🎲 Rolador de Dados</h3>
+        <button class="close-dice-btn" onclick="toggleDicePanel()">✕</button>
+    </div>
+    
+    <div class="dice-panel-content">
+        <!-- Dados rápidos -->
+        <div class="quick-dice">
+            <button class="quick-dice-btn" onclick="quickRoll(4)">d4</button>
+            <button class="quick-dice-btn" onclick="quickRoll(6)">d6</button>
+            <button class="quick-dice-btn" onclick="quickRoll(8)">d8</button>
+            <button class="quick-dice-btn" onclick="quickRoll(10)">d10</button>
+            <button class="quick-dice-btn" onclick="quickRoll(12)">d12</button>
+            <button class="quick-dice-btn highlight" onclick="quickRoll(20)">d20</button>
+        </div>
+        
+        <!-- Rolagem customizada -->
+        <div class="custom-dice-roll">
+            <div class="dice-input-group">
+                <input type="number" id="diceCount" value="1" min="1" max="20" placeholder="Qtd">
+                <span>d</span>
+                <input type="number" id="diceType" value="20" min="2" max="100" placeholder="Tipo">
+                <span>+</span>
+                <input type="number" id="diceModifier" value="0" min="-100" max="100" placeholder="Mod">
+                <button class="roll-btn" onclick="customDiceRoll()">Rolar</button>
+            </div>
+        </div>
+        
+        <!-- Resultado -->
+        <div class="dice-result" id="diceResult">
+            <div class="result-value">—</div>
+            <div class="result-formula"></div>
+        </div>
+        
+        <!-- Histórico mini -->
+        <div class="dice-history-mini" id="diceHistoryMini">
+            <div class="history-title">Últimas rolagens:</div>
+            <div class="history-items"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Token Modal -->
+<div class="modal" id="tokenModal">
+    <div class="modal-content">
+        <h3>Adicionar Token</h3>
+        
+        <div class="control-group">
+            <label>Nome</label>
+            <input type="text" id="tokenName" placeholder="Ex: Guerreiro">
+        </div>
+        
+        <div class="control-group">
+            <label>Imagem (opcional)</label>
+            <input type="file" id="tokenImage" accept="image/*">
+            <p style="font-size: 0.8rem; color: #888; margin-top: 5px;">
+                Se nenhuma imagem for selecionada, será usado uma cor aleatória
+            </p>
+        </div>
+        
+        <div class="modal-actions">
+            <button class="btn" onclick="closeTokenModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="createToken()">Criar Token</button>
+        </div>
+    </div>
+</div>
+
 <div class="toast" id="toast"></div>
+
+<script>
+// Sistema de dados integrado
+let diceHistory = [];
+
+function toggleDicePanel() {
+    const panel = document.getElementById('dicePanel');
+    panel.classList.toggle('open');
+}
+
+function quickRoll(sides) {
+    const result = Math.floor(Math.random() * sides) + 1;
+    const isCrit = sides === 20 && result === 20;
+    const isFail = sides === 20 && result === 1;
+    
+    displayDiceResult(result, `1d${sides}`, isCrit, isFail);
+    addToDiceHistory(`1d${sides}`, result);
+}
+
+function customDiceRoll() {
+    const count = parseInt(document.getElementById('diceCount').value) || 1;
+    const type = parseInt(document.getElementById('diceType').value) || 20;
+    const modifier = parseInt(document.getElementById('diceModifier').value) || 0;
+    
+    let sum = 0;
+    const rolls = [];
+    
+    for (let i = 0; i < count; i++) {
+        const roll = Math.floor(Math.random() * type) + 1;
+        rolls.push(roll);
+        sum += roll;
+    }
+    
+    const total = sum + modifier;
+    const formula = `${count}d${type}${modifier !== 0 ? (modifier > 0 ? '+' + modifier : modifier) : ''}`;
+    const isCrit = type === 20 && count === 1 && rolls[0] === 20;
+    const isFail = type === 20 && count === 1 && rolls[0] === 1;
+    
+    displayDiceResult(total, formula, isCrit, isFail, rolls.join(', '));
+    addToDiceHistory(formula, total);
+}
+
+function displayDiceResult(value, formula, isCrit, isFail, breakdown = '') {
+    const resultDiv = document.getElementById('diceResult');
+    const valueEl = resultDiv.querySelector('.result-value');
+    const formulaEl = resultDiv.querySelector('.result-formula');
+    
+    resultDiv.className = 'dice-result';
+    
+    if (isCrit) {
+        resultDiv.classList.add('critical-success');
+        valueEl.textContent = `${value} ✨`;
+        formulaEl.textContent = `${formula} - CRÍTICO!`;
+    } else if (isFail) {
+        resultDiv.classList.add('critical-failure');
+        valueEl.textContent = `${value} 💀`;
+        formulaEl.textContent = `${formula} - FALHA CRÍTICA!`;
+    } else {
+        valueEl.textContent = value;
+        formulaEl.textContent = breakdown ? `${formula} (${breakdown})` : formula;
+    }
+    
+    // Animação
+    resultDiv.style.animation = 'none';
+    setTimeout(() => {
+        resultDiv.style.animation = 'diceRoll 0.4s ease';
+    }, 10);
+}
+
+function addToDiceHistory(formula, result) {
+    const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    diceHistory.unshift({ formula, result, time });
+    if (diceHistory.length > 5) diceHistory = diceHistory.slice(0, 5);
+    
+    const historyItems = document.querySelector('#diceHistoryMini .history-items');
+    historyItems.innerHTML = diceHistory.map(item => 
+        `<div class="history-item-mini">
+            <span class="history-formula">${item.formula}</span>
+            <span class="history-result">${item.result}</span>
+            <span class="history-time">${item.time}</span>
+        </div>`
+    ).join('');
+}
+</script>
 
 </body>
 </html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visualização do Mapa - Last Take</title>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Lato', sans-serif;
+    background: #0a0a0f;
+    color: #fff;
+    overflow: hidden;
+}
+
+.header {
+    background: linear-gradient(135deg, rgba(26,26,46,0.95), rgba(16,16,30,0.95));
+    border-bottom: 2px solid rgba(155,89,182,0.3);
+    padding: 15px 30px;
+    text-align: center;
+    backdrop-filter: blur(10px);
+}
+
+.header h1 {
+    font-family: 'Merriweather', serif;
+    font-size: 1.5rem;
+    color: #c49bdb;
+}
+
+.status {
+    position: absolute;
+    top: 80px;
+    right: 20px;
+    padding: 10px 20px;
+    background: rgba(26,26,46,0.9);
+    border: 2px solid rgba(155,89,182,0.3);
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.connected {
+    background: #2ed573;
+}
+
+.status-indicator.disconnected {
+    background: #e74c3c;
+    animation: none;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.canvas-container {
+    width: 100vw;
+    height: calc(100vh - 70px);
+    position: relative;
+    background: #1a1a2e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#mapCanvas, #drawingCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+#mapCanvas {
+    z-index: 1;
+}
+
+#drawingCanvas {
+    z-index: 2;
+}
+
+.zoom-controls {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 3;
+}
+
+.zoom-btn {
+    width: 40px;
+    height: 40px;
+    background: rgba(155,89,182,0.8);
+    border: 2px solid #9b59b6;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.zoom-btn:hover {
+    background: #9b59b6;
+    transform: scale(1.1);
+}
+</style>
+</head>
+<body>
+
+<input type="hidden" id="sessionId" value="{{ session_id }}">
+
+<header class="header">
+    <h1>🗺️ Visualização do Mapa - Last Take</h1>
+</header>
+
+<div class="status">
+    <span class="status-indicator disconnected" id="statusIndicator"></span>
+    <span id="statusText">Conectando...</span>
+</div>
+
+<div class="canvas-container">
+    <canvas id="mapCanvas"></canvas>
+    <canvas id="drawingCanvas"></canvas>
+    
+    <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoom(-0.1)">−</button>
+        <button class="zoom-btn" onclick="zoom(0.1)">+</button>
+    </div>
+</div>
+
+<script>
+const socket = io();
+const SESSION_ID = document.getElementById('sessionId').value;
+
+const mapCanvas = document.getElementById('mapCanvas');
+const mapCtx = mapCanvas.getContext('2d');
+const drawingCanvas = document.getElementById('drawingCanvas');
+const drawCtx = drawingCanvas.getContext('2d');
+
+let w = mapCanvas.width = drawingCanvas.width = window.innerWidth;
+let h = mapCanvas.height = drawingCanvas.height = window.innerHeight - 70;
+
+let mapImage = null;
+let tokens = [];
+let drawings = [];
+let scale = 1;
+
+const TOKEN_RADIUS = 35;
+const TOKEN_BORDER = 2;
+
+// Conexão WebSocket
+socket.on('connect', () => {
+    console.log('Conectado ao servidor');
+    socket.emit('join_session', { session_id: SESSION_ID });
+    updateStatus(true);
+});
+
+socket.on('disconnect', () => {
+    console.log('Desconectado do servidor');
+    updateStatus(false);
+});
+
+socket.on('session_joined', (data) => {
+    console.log('Entrou na sessão:', data.session_id);
+});
+
+socket.on('map_sync', (data) => {
+    if (data.mapData) {
+        const img = new Image();
+        img.onload = function() {
+            mapImage = img;
+            redrawMap();
+        };
+        img.src = data.mapData;
+    }
+});
+
+socket.on('token_sync', (data) => {
+    tokens = data.tokens;
+    redrawMap();
+});
+
+socket.on('drawing_sync', (data) => {
+    drawings.push(data.drawing);
+    redrawDrawings();
+});
+
+socket.on('drawings_cleared', () => {
+    drawings = [];
+    redrawDrawings();
+});
+
+function updateStatus(connected) {
+    const indicator = document.getElementById('statusIndicator');
+    const text = document.getElementById('statusText');
+    
+    if (connected) {
+        indicator.className = 'status-indicator connected';
+        text.textContent = 'Conectado';
+    } else {
+        indicator.className = 'status-indicator disconnected';
+        text.textContent = 'Desconectado';
+    }
+}
+
+function redrawMap() {
+    mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+    
+    if (mapImage) {
+        mapCtx.drawImage(mapImage, 0, 0, mapCanvas.width, mapCanvas.height);
+    }
+
+    // Desenhar tokens (maiores com borda fina)
+    tokens.forEach(token => {
+        if (token.image) {
+            const img = new Image();
+            img.src = token.image;
+            mapCtx.save();
+            mapCtx.beginPath();
+            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+            mapCtx.closePath();
+            mapCtx.clip();
+            mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
+            mapCtx.restore();
+        } else {
+            mapCtx.fillStyle = token.color;
+            mapCtx.beginPath();
+            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+            mapCtx.fill();
+        }
+        
+        mapCtx.strokeStyle = "#fff";
+        mapCtx.lineWidth = TOKEN_BORDER;
+        mapCtx.beginPath();
+        mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+        mapCtx.stroke();
+        
+        mapCtx.fillStyle = "#fff";
+        mapCtx.font = "bold 13px Lato";
+        mapCtx.textAlign = "center";
+        mapCtx.strokeStyle = "#000";
+        mapCtx.lineWidth = 3;
+        mapCtx.strokeText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
+        mapCtx.fillText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
+    });
+}
+
+function redrawDrawings() {
+    drawCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+    
+    drawings.forEach(drawing => {
+        drawCtx.strokeStyle = drawing.color;
+        drawCtx.lineWidth = drawing.size;
+        drawCtx.lineCap = 'round';
+        drawCtx.lineJoin = 'round';
+        
+        if (drawing.path.length > 1) {
+            drawCtx.beginPath();
+            drawCtx.moveTo(drawing.path[0].x, drawing.path[0].y);
+            
+            for (let i = 1; i < drawing.path.length; i++) {
+                drawCtx.lineTo(drawing.path[i].x, drawing.path[i].y);
+            }
+            
+            drawCtx.stroke();
+        }
+    });
+}
+
+function zoom(delta) {
+    scale = Math.max(0.5, Math.min(2, scale + delta));
+    mapCanvas.style.transform = `scale(${scale})`;
+    drawingCanvas.style.transform = `scale(${scale})`;
+}
+
+window.addEventListener('resize', () => {
+    w = mapCanvas.width = drawingCanvas.width = window.innerWidth;
+    h = mapCanvas.height = drawingCanvas.height = window.innerHeight - 70;
+    redrawMap();
+    redrawDrawings();
+});
+
+// Inicialização
+redrawMap();
+</script>
+
+</body>
+</html>

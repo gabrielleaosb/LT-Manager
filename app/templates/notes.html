@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notas do Mestre - Last Take Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/notes.css') }}">
+<script defer src="{{ url_for('static', filename='js/background.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/notes.js') }}"></script>
+</head>
+<body>
+
+<!-- Canvas para background hexagonal -->
+<canvas id="gridCanvas"></canvas>
+
+<!-- Header -->
+<header class="header">
+    <div class="header-left">
+        <button class="back-btn" onclick="window.location.href='/dashboard'">← Voltar</button>
+        <h1>📝 Notas do Mestre</h1>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-success" onclick="openNoteModal()">+ Nova Nota</button>
+    </div>
+</header>
+
+<div class="container">
+    <div class="notes-layout">
+        <!-- Sidebar com categorias -->
+        <div class="notes-sidebar">
+            <h3>📂 Categorias</h3>
+            <div class="category-list" id="categoryList">
+                <div class="category-item active" data-category="all">
+                    <span class="category-name">📋 Todas</span>
+                    <span class="note-count" id="count-all">0</span>
+                </div>
+                <div class="category-item" data-category="npcs">
+                    <span class="category-name">👥 NPCs</span>
+                    <span class="note-count" id="count-npcs">0</span>
+                </div>
+                <div class="category-item" data-category="locations">
+                    <span class="category-name">🏰 Locais</span>
+                    <span class="note-count" id="count-locations">0</span>
+                </div>
+                <div class="category-item" data-category="quests">
+                    <span class="category-name">⚔️ Missões</span>
+                    <span class="note-count" id="count-quests">0</span>
+                </div>
+                <div class="category-item" data-category="items">
+                    <span class="category-name">💎 Itens</span>
+                    <span class="note-count" id="count-items">0</span>
+                </div>
+                <div class="category-item" data-category="lore">
+                    <span class="category-name">📖 História</span>
+                    <span class="note-count" id="count-lore">0</span>
+                </div>
+                <div class="category-item" data-category="other">
+                    <span class="category-name">📌 Outros</span>
+                    <span class="note-count" id="count-other">0</span>
+                </div>
+            </div>
+            <button class="add-category-btn" onclick="addCustomCategory()">+ Adicionar Categoria</button>
+        </div>
+
+        <!-- Lista de notas -->
+        <div class="notes-list-container">
+            <div class="notes-header">
+                <h2 id="currentCategoryTitle">📋 Todas as Notas</h2>
+                <input type="text" class="search-box" id="searchBox" placeholder="🔍 Buscar notas...">
+            </div>
+
+            <div class="notes-grid" id="notesGrid">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📝</div>
+                    <p>Nenhuma nota criada ainda</p>
+                    <p style="font-size: 0.9rem; margin-top: 10px; color: #888;">
+                        Clique em "Nova Nota" para começar
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para criar/editar nota -->
+<div class="modal" id="noteModal">
+    <div class="modal-content">
+        <h3 id="modalTitle">Nova Nota</h3>
+        
+        <div class="form-group">
+            <label>Título</label>
+            <input type="text" id="noteTitle" placeholder="Ex: Lord Blackwood">
+        </div>
+        
+        <div class="form-group">
+            <label>Categoria</label>
+            <select id="noteCategory">
+                <option value="npcs">👥 NPCs</option>
+                <option value="locations">🏰 Locais</option>
+                <option value="quests">⚔️ Missões</option>
+                <option value="items">💎 Itens</option>
+                <option value="lore">📖 História</option>
+                <option value="other">📌 Outros</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Conteúdo</label>
+            <textarea id="noteContent" placeholder="Escreva suas anotações aqui..."></textarea>
+        </div>
+        
+        <div class="modal-actions">
+            <button class="btn" onclick="closeNoteModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="saveNote()">Salvar Nota</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+</body>
+</html>

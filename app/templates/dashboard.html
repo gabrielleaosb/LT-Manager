@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
-<script defer src="{{ url_for('static', filename='js/background.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </head>
 <body>
 
@@ -16,7 +16,7 @@
 <canvas id="gridCanvas"></canvas>
 
 <header class="header">
-    <div class="logo">RPG Manager</div>
+    <div class="logo">Last Take Manager</div>
 </header>
 
 <!-- Main Container -->
@@ -24,23 +24,36 @@
     <!-- Welcome -->
     <div class="welcome">
         <h1>Bem-vindo, Mestre</h1>
-        <p>Gerencie suas aventuras épicas com total controle</p>
+        <p>Escolha uma ferramenta para começar</p>
     </div>
 
-    <!-- Quick Access -->
-    <div class="quick-access">
-        <h2>🎯 Acesso Rápido</h2>
-        <div class="quick-buttons">
-             <button class="quick-btn" onclick="window.location.href='/dice-roller'">🎲 Rolar Dados</button>
-                <button class="quick-btn" onclick="window.location.href='/combat-tracker'">⚔️ Iniciar Combate</button>
-                <button class="quick-btn" onclick="window.location.href='/map-manager'">🗺️ Abrir Mapa</button>
-                <button class="quick-btn" onclick="window.location.href='/entity-manager'">👥 Ver Personagens</button>
-                <button class="quick-btn" onclick="window.location.href='/map-manager'">📜 Notas Rápidas</button>
+    <!-- Modules Grid -->
+    <div class="modules-grid">
+        <div class="module-card" data-url="/map-manager">
+            <div class="module-icon">🗺️</div>
+            <h3>Gerenciador de Mapas</h3>
+            <p>Crie e compartilhe mapas interativos</p>
+        </div>
+
+        <div class="module-card" data-url="/entity-manager">
+            <div class="module-icon">⚔️</div>
+            <h3>Tracker de Combate</h3>
+            <p>Gerencie iniciativa e HP</p>
+        </div>
+
+        <div class="module-card" data-url="/dice-roller">
+            <div class="module-icon">🎲</div>
+            <h3>Rolador de Dados</h3>
+            <p>Role dados com histórico completo</p>
+        </div>
+
+        <div class="module-card" data-url="/notes">
+            <div class="module-icon">📝</div>
+            <h3>Notas do Mestre</h3>
+            <p>Organize suas anotações</p>
         </div>
     </div>
-
 </div>
 
-<script src="dashboard.js"></script>
 </body>
 </html>
