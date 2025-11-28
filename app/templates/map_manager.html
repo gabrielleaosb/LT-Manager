@@ -5,9 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gerenciador de Mapas - Last Take Manager</title>
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/map_manager.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/map_manager_enhanced.css') }}">
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-<script defer src="{{ url_for('static', filename='js/map_manager.js') }}"></script>
 </head>
 <body>
 
@@ -17,29 +16,27 @@
 <header class="header">
     <div class="header-left">
         <button class="back-btn" onclick="window.location.href='/dashboard'">← Voltar</button>
-        <h1>🗺️ Gerenciador de Mapas</h1>
+        <h1>🗺️ Gerenciador de Mapas Avançado</h1>
     </div>
     <div class="header-actions">
-        <button class="btn btn-danger" onclick="clearDrawings()">🧹 Limpar Desenhos</button>
-        <button class="btn" onclick="clearMap()">🗑️ Limpar Mapa</button>
-        <button class="btn" onclick="toggleGrid()">⊞ Toggle Grid</button>
+        <button class="btn btn-danger" onclick="clearAll()">🗑️ Limpar Tudo</button>
+        <button class="btn" onclick="clearDrawings()">🧹 Limpar Desenhos</button>
     </div>
 </header>
 
 <div class="main-layout">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-        <!-- Tool Selection -->
+    <!-- Sidebar Esquerda - Ferramentas -->
+    <aside class="sidebar left-sidebar">
         <div class="section">
             <h3>🛠️ Ferramentas</h3>
             <div class="tool-selector">
                 <button class="tool-btn active" onclick="setTool('select')">✋ Selecionar</button>
+                <button class="tool-btn" onclick="setTool('pan')">🤚 Mover Canvas</button>
                 <button class="tool-btn" onclick="setTool('draw')">✏️ Desenhar</button>
                 <button class="tool-btn" onclick="setTool('erase')">🧹 Apagar</button>
             </div>
         </div>
 
-        <!-- Drawing Controls -->
         <div class="section">
             <h3>🎨 Configurações de Desenho</h3>
             <div class="drawing-controls">
@@ -65,126 +62,56 @@
                 </div>
             </div>
         </div>
-
-        <!-- Upload Section -->
         <div class="section">
-            <h3>📁 Carregar Mapa</h3>
-            <div class="upload-area" onclick="document.getElementById('mapUpload').click()">
-                <div style="font-size: 2rem; margin-bottom: 10px;">📤</div>
-                <p>Clique para fazer upload</p>
-                <p style="font-size: 0.8rem; color: #888; margin-top: 5px;">JPG, PNG (Max 10MB)</p>
-                <input type="file" id="mapUpload" accept="image/*" onchange="loadMapImage(event)">
-            </div>
+            <h3>🗺️ Adicionar Elementos</h3>
+            <button class="btn btn-primary" onclick="addMap()">📁 Adicionar Mapa</button>
+            <button class="btn btn-primary" onclick="addEntity()">🖼️ Adicionar Entidade (PNG)</button>
+            <button class="btn btn-primary" onclick="addToken()">🎭 Adicionar Token</button>
         </div>
 
-        <!-- Grid Controls -->
-        <div class="section">
-            <h3>⊞ Configuração do Grid</h3>
-            <div class="grid-controls">
-                <div class="control-group">
-                    <label>Tamanho da Célula (px)</label>
-                    <input type="number" id="gridSize" value="50" min="20" max="100" onchange="updateGrid()">
-                </div>
-                <div class="control-group">
-                    <label>Cor do Grid</label>
-                    <input type="color" id="gridColor" value="#9b59b6" onchange="updateGrid()">
-                </div>
-                <div class="control-group">
-                    <label>Opacidade</label>
-                    <input type="range" id="gridOpacity" min="0" max="100" value="50" onchange="updateGrid()">
-                </div>
-            </div>
-        </div>
-
-        <!-- Tokens -->
         <div class="section">
             <h3>🎭 Tokens</h3>
-            <button class="btn" style="width: 100%; margin-bottom: 10px;" onclick="addToken()">+ Adicionar Token</button>
             <div class="token-list" id="tokenList"></div>
         </div>
 
-        <!-- Share Link -->
         <div class="section">
             <h3>🔗 Compartilhar</h3>
-            <p style="color: #bbb; font-size: 0.85rem; margin-bottom: 10px;">
-                Link para visualização dos jogadores
-            </p>
-            <button class="btn btn-primary" style="width: 100%;" onclick="copyShareLink()">
-                📋 Copiar Link de Compartilhamento
+            <button class="btn btn-success" style="width: 100%;" onclick="copyShareLink()">
+                📋 Copiar Link para Jogadores
             </button>
+            <p style="color: #888; font-size: 0.8rem; margin-top: 8px; text-align: center;">
+                Jogadores podem entrar e você controla suas permissões
+            </p>
         </div>
     </aside>
 
-    <!-- Canvas Area -->
+    <!-- Canvas Central -->
     <div class="canvas-container">
         <canvas id="mapCanvas"></canvas>
         <canvas id="drawingCanvas"></canvas>
-
-        <div class="session-info">
-            <h4>📡 Sessão Ativa</h4>
-            <div class="session-link">
-                <input type="text" readonly value="{{ session_id }}" id="sessionDisplay">
-                <button class="copy-btn" onclick="copyShareLink()">📋 Copiar</button>
-            </div>
-        </div>
-
+        
         <div class="zoom-controls">
             <button class="zoom-btn" onclick="zoom(-0.1)">−</button>
             <button class="zoom-btn" onclick="zoom(0.1)">+</button>
         </div>
-    </div>
-</div>
-
-<!-- Botão flutuante de dados -->
-<button class="floating-dice-btn" onclick="toggleDicePanel()" title="Rolar Dados">
-    🎲
-</button>
-
-<!-- Painel de dados flutuante -->
-<div class="dice-panel" id="dicePanel">
-    <div class="dice-panel-header">
-        <h3>🎲 Rolador de Dados</h3>
-        <button class="close-dice-btn" onclick="toggleDicePanel()">✕</button>
-    </div>
-    
-    <div class="dice-panel-content">
-        <!-- Dados rápidos -->
-        <div class="quick-dice">
-            <button class="quick-dice-btn" onclick="quickRoll(4)">d4</button>
-            <button class="quick-dice-btn" onclick="quickRoll(6)">d6</button>
-            <button class="quick-dice-btn" onclick="quickRoll(8)">d8</button>
-            <button class="quick-dice-btn" onclick="quickRoll(10)">d10</button>
-            <button class="quick-dice-btn" onclick="quickRoll(12)">d12</button>
-            <button class="quick-dice-btn highlight" onclick="quickRoll(20)">d20</button>
-        </div>
         
-        <!-- Rolagem customizada -->
-        <div class="custom-dice-roll">
-            <div class="dice-input-group">
-                <input type="number" id="diceCount" value="1" min="1" max="20" placeholder="Qtd">
-                <span>d</span>
-                <input type="number" id="diceType" value="20" min="2" max="100" placeholder="Tipo">
-                <span>+</span>
-                <input type="number" id="diceModifier" value="0" min="-100" max="100" placeholder="Mod">
-                <button class="roll-btn" onclick="customDiceRoll()">Rolar</button>
+        <div class="help-box">
+            <strong>💡 Dica:</strong> Use "Mover Canvas" para navegar pelo mapa grande
+        </div>
+    </div>
+
+    <!-- Sidebar Direita - Jogadores -->
+    <aside class="sidebar right-sidebar">
+        <div class="section">
+            <h3>👥 Jogadores Online</h3>
+            <div class="players-list" id="playersList">
+                <div class="empty-players">Nenhum jogador conectado</div>
             </div>
         </div>
-        
-        <!-- Resultado -->
-        <div class="dice-result" id="diceResult">
-            <div class="result-value">—</div>
-            <div class="result-formula"></div>
-        </div>
-        
-        <!-- Histórico mini -->
-        <div class="dice-history-mini" id="diceHistoryMini">
-            <div class="history-title">Últimas rolagens:</div>
-            <div class="history-items"></div>
-        </div>
-    </div>
+    </aside>
 </div>
 
-<!-- Token Modal -->
+<!-- Modal de Token -->
 <div class="modal" id="tokenModal">
     <div class="modal-content">
         <h3>Adicionar Token</h3>
@@ -197,9 +124,6 @@
         <div class="control-group">
             <label>Imagem (opcional)</label>
             <input type="file" id="tokenImage" accept="image/*">
-            <p style="font-size: 0.8rem; color: #888; margin-top: 5px;">
-                Se nenhuma imagem for selecionada, será usado uma cor aleatória
-            </p>
         </div>
         
         <div class="modal-actions">
@@ -209,91 +133,27 @@
     </div>
 </div>
 
+<!-- Modal de Permissões de Tokens -->
+<div class="modal" id="tokenPermissionsModal">
+    <div class="modal-content large">
+        <h3 id="tokenPermModalTitle">Permissões de Tokens</h3>
+        <input type="hidden" id="currentPlayerId">
+        
+        <p style="color: #bbb; margin-bottom: 15px;">
+            Selecione quais tokens este jogador pode mover:
+        </p>
+        
+        <div class="token-perm-list" id="tokenPermList"></div>
+        
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="closeTokenPermissionsModal()">Fechar</button>
+        </div>
+    </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
-<script>
-// Sistema de dados integrado
-let diceHistory = [];
-
-function toggleDicePanel() {
-    const panel = document.getElementById('dicePanel');
-    panel.classList.toggle('open');
-}
-
-function quickRoll(sides) {
-    const result = Math.floor(Math.random() * sides) + 1;
-    const isCrit = sides === 20 && result === 20;
-    const isFail = sides === 20 && result === 1;
-    
-    displayDiceResult(result, `1d${sides}`, isCrit, isFail);
-    addToDiceHistory(`1d${sides}`, result);
-}
-
-function customDiceRoll() {
-    const count = parseInt(document.getElementById('diceCount').value) || 1;
-    const type = parseInt(document.getElementById('diceType').value) || 20;
-    const modifier = parseInt(document.getElementById('diceModifier').value) || 0;
-    
-    let sum = 0;
-    const rolls = [];
-    
-    for (let i = 0; i < count; i++) {
-        const roll = Math.floor(Math.random() * type) + 1;
-        rolls.push(roll);
-        sum += roll;
-    }
-    
-    const total = sum + modifier;
-    const formula = `${count}d${type}${modifier !== 0 ? (modifier > 0 ? '+' + modifier : modifier) : ''}`;
-    const isCrit = type === 20 && count === 1 && rolls[0] === 20;
-    const isFail = type === 20 && count === 1 && rolls[0] === 1;
-    
-    displayDiceResult(total, formula, isCrit, isFail, rolls.join(', '));
-    addToDiceHistory(formula, total);
-}
-
-function displayDiceResult(value, formula, isCrit, isFail, breakdown = '') {
-    const resultDiv = document.getElementById('diceResult');
-    const valueEl = resultDiv.querySelector('.result-value');
-    const formulaEl = resultDiv.querySelector('.result-formula');
-    
-    resultDiv.className = 'dice-result';
-    
-    if (isCrit) {
-        resultDiv.classList.add('critical-success');
-        valueEl.textContent = `${value} ✨`;
-        formulaEl.textContent = `${formula} - CRÍTICO!`;
-    } else if (isFail) {
-        resultDiv.classList.add('critical-failure');
-        valueEl.textContent = `${value} 💀`;
-        formulaEl.textContent = `${formula} - FALHA CRÍTICA!`;
-    } else {
-        valueEl.textContent = value;
-        formulaEl.textContent = breakdown ? `${formula} (${breakdown})` : formula;
-    }
-    
-    // Animação
-    resultDiv.style.animation = 'none';
-    setTimeout(() => {
-        resultDiv.style.animation = 'diceRoll 0.4s ease';
-    }, 10);
-}
-
-function addToDiceHistory(formula, result) {
-    const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    diceHistory.unshift({ formula, result, time });
-    if (diceHistory.length > 5) diceHistory = diceHistory.slice(0, 5);
-    
-    const historyItems = document.querySelector('#diceHistoryMini .history-items');
-    historyItems.innerHTML = diceHistory.map(item => 
-        `<div class="history-item-mini">
-            <span class="history-formula">${item.formula}</span>
-            <span class="history-result">${item.result}</span>
-            <span class="history-time">${item.time}</span>
-        </div>`
-    ).join('');
-}
-</script>
+<script defer src="{{ url_for('static', filename='js/map_manager_enhanced.js') }}"></script>
 
 </body>
 </html>

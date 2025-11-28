@@ -57,6 +57,22 @@ html, body { height: 100%; font-family: 'Lato', sans-serif; overflow-x: hidden; 
     text-shadow: 0 0 20px rgba(155,89,182,0.4); 
 }
 
+#titleText {
+    font-family: 'Merriweather', serif;
+    font-size: 5rem;
+    font-weight: 900;
+    color: #ffffff;
+    letter-spacing: 0.02em;
+    margin-bottom: 25px;
+    opacity: 0;
+    text-shadow: 
+        0 0 15px rgba(155, 89, 182, 0.8),
+        0 0 25px rgba(155, 89, 182, 0.6),
+        0 0 35px rgba(155, 89, 182, 0.4),
+        0 2px 4px rgba(0, 0, 0, 0.5);
+    transition: all 1.2s ease;
+}
+
 .welcome p { 
     color: #aaa; 
     font-size: 1.2rem; 

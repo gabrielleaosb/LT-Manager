@@ -20,35 +20,138 @@ body {
     overflow: hidden;
 }
 
+/* Login Modal */
+.login-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.login-overlay.hidden {
+    display: none;
+}
+
+.login-box {
+    background: linear-gradient(135deg, rgba(26,26,46,0.95), rgba(16,16,30,0.95));
+    border: 2px solid #9b59b6;
+    border-radius: 16px;
+    padding: 40px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(155,89,182,0.3);
+}
+
+.login-box h1 {
+    font-family: 'Merriweather', serif;
+    color: #c49bdb;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.login-box p {
+    color: #bbb;
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 0.9rem;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    color: #bbb;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px 15px;
+    background: rgba(16,16,30,0.8);
+    border: 2px solid rgba(155,89,182,0.3);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    transition: border-color 0.3s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #9b59b6;
+}
+
+.login-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.login-btn:hover {
+    transform: translateY(-2px);
+}
+
+.login-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Header */
 .header {
     background: linear-gradient(135deg, rgba(26,26,46,0.95), rgba(16,16,30,0.95));
     border-bottom: 2px solid rgba(155,89,182,0.3);
     padding: 15px 30px;
-    text-align: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     backdrop-filter: blur(10px);
+    z-index: 100;
 }
 
 .header h1 {
     font-family: 'Merriweather', serif;
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     color: #c49bdb;
 }
 
+.header-info {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.player-name {
+    color: #fff;
+    font-weight: bold;
+    padding: 8px 15px;
+    background: rgba(155,89,182,0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(155,89,182,0.4);
+}
+
 .status {
-    position: absolute;
-    top: 80px;
-    right: 20px;
-    padding: 10px 20px;
+    padding: 8px 15px;
     background: rgba(26,26,46,0.9);
     border: 2px solid rgba(155,89,182,0.3);
     border-radius: 8px;
-    backdrop-filter: blur(10px);
 }
 
 .status-indicator {
     display: inline-block;
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     margin-right: 8px;
     animation: pulse 2s infinite;
@@ -68,20 +171,54 @@ body {
     50% { opacity: 0.5; }
 }
 
+/* Permissions Banner */
+.permissions-banner {
+    background: rgba(155,89,182,0.2);
+    border-bottom: 1px solid rgba(155,89,182,0.3);
+    padding: 8px 30px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    font-size: 0.85rem;
+}
+
+.permission-badge {
+    padding: 4px 10px;
+    background: rgba(46,213,115,0.2);
+    border: 1px solid #2ed573;
+    border-radius: 12px;
+    color: #2ed573;
+}
+
+.permission-badge.disabled {
+    background: rgba(231,76,60,0.2);
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+/* Canvas Container */
 .canvas-container {
     width: 100vw;
-    height: calc(100vh - 70px);
+    height: calc(100vh - 130px);
     position: relative;
     background: #1a1a2e;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    overflow: hidden;
+}
+
+.canvas-wrapper {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+.canvas-wrapper.grabbing {
+    cursor: grabbing;
 }
 
 #mapCanvas, #drawingCanvas {
     position: absolute;
-    top: 0;
-    left: 0;
+    image-rendering: crisp-edges;
 }
 
 #mapCanvas {
@@ -90,15 +227,80 @@ body {
 
 #drawingCanvas {
     z-index: 2;
+    pointer-events: none;
 }
 
+#drawingCanvas.drawing-mode {
+    pointer-events: auto;
+    cursor: crosshair;
+}
+
+/* Toolbar (apenas se tiver permissões) */
+.player-toolbar {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(26,26,46,0.95);
+    border: 2px solid rgba(155,89,182,0.3);
+    border-radius: 12px;
+    padding: 15px;
+    backdrop-filter: blur(10px);
+    z-index: 10;
+    display: none;
+}
+
+.player-toolbar.visible {
+    display: block;
+}
+
+.toolbar-section {
+    margin-bottom: 15px;
+}
+
+.toolbar-section:last-child {
+    margin-bottom: 0;
+}
+
+.toolbar-section h3 {
+    color: #c49bdb;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+}
+
+.tool-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.tool-btn {
+    padding: 8px 12px;
+    background: rgba(155,89,182,0.2);
+    border: 2px solid rgba(155,89,182,0.3);
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.3s;
+}
+
+.tool-btn:hover {
+    background: rgba(155,89,182,0.4);
+    border-color: #9b59b6;
+}
+
+.tool-btn.active {
+    background: rgba(155,89,182,0.5);
+    border-color: #9b59b6;
+}
+
+/* Zoom Controls */
 .zoom-controls {
     position: absolute;
     bottom: 20px;
     right: 20px;
     display: flex;
     gap: 10px;
-    z-index: 3;
+    z-index: 10;
 }
 
 .zoom-btn {
@@ -112,11 +314,36 @@ body {
     cursor: pointer;
     transition: all 0.3s ease;
     backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .zoom-btn:hover {
     background: #9b59b6;
     transform: scale(1.1);
+}
+
+/* Toast */
+.toast {
+    position: fixed;
+    top: 90px;
+    right: 30px;
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(155,89,182,0.5);
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
 }
 </style>
 </head>
@@ -124,18 +351,59 @@ body {
 
 <input type="hidden" id="sessionId" value="{{ session_id }}">
 
-<header class="header">
-    <h1>🗺️ Visualização do Mapa - Last Take</h1>
-</header>
-
-<div class="status">
-    <span class="status-indicator disconnected" id="statusIndicator"></span>
-    <span id="statusText">Conectando...</span>
+<!-- Login Overlay -->
+<div class="login-overlay" id="loginOverlay">
+    <div class="login-box">
+        <h1>🗺️ Entrar na Sessão</h1>
+        <p>Digite seu nome para participar</p>
+        
+        <div class="form-group">
+            <label>Seu Nome:</label>
+            <input type="text" id="playerNameInput" placeholder="Ex: Aragorn" maxlength="20" autofocus>
+        </div>
+        
+        <button class="login-btn" id="loginBtn">Entrar na Sessão</button>
+    </div>
 </div>
 
+<!-- Header -->
+<header class="header">
+    <h1>🗺️ Visualização do Mapa</h1>
+    <div class="header-info">
+        <div class="player-name" id="playerNameDisplay">Jogador</div>
+        <div class="status">
+            <span class="status-indicator disconnected" id="statusIndicator"></span>
+            <span id="statusText">Conectando...</span>
+        </div>
+    </div>
+</header>
+
+<!-- Permissions Banner -->
+<div class="permissions-banner" id="permissionsBanner">
+    <span style="color: #bbb;">Suas permissões:</span>
+    <span class="permission-badge disabled" id="permMoveTokens">Mover Tokens</span>
+    <span class="permission-badge disabled" id="permDraw">Desenhar</span>
+    <span class="permission-badge disabled" id="permPing">Pingar Localização</span>
+</div>
+
+<!-- Canvas Container -->
 <div class="canvas-container">
-    <canvas id="mapCanvas"></canvas>
-    <canvas id="drawingCanvas"></canvas>
+    <div class="canvas-wrapper" id="canvasWrapper">
+        <canvas id="mapCanvas"></canvas>
+        <canvas id="drawingCanvas"></canvas>
+    </div>
+    
+    <!-- Player Toolbar (aparece se tiver permissões) -->
+    <div class="player-toolbar" id="playerToolbar">
+        <div class="toolbar-section">
+            <h3>🎨 Desenho</h3>
+            <div class="tool-buttons">
+                <button class="tool-btn active" data-tool="select">✋ Selecionar</button>
+                <button class="tool-btn" data-tool="draw">✏️ Desenhar</button>
+                <button class="tool-btn" data-tool="ping">📍 Pingar</button>
+            </div>
+        </div>
+    </div>
     
     <div class="zoom-controls">
         <button class="zoom-btn" onclick="zoom(-0.1)">−</button>
@@ -143,30 +411,92 @@ body {
     </div>
 </div>
 
+<div class="toast" id="toast"></div>
+
 <script>
 const socket = io();
 const SESSION_ID = document.getElementById('sessionId').value;
 
+// Estado do jogador
+let playerName = '';
+let playerId = null;
+let permissions = {
+    moveTokens: [],  // IDs dos tokens que pode mover
+    draw: false,
+    ping: false
+};
+
+// Canvas
 const mapCanvas = document.getElementById('mapCanvas');
 const mapCtx = mapCanvas.getContext('2d');
 const drawingCanvas = document.getElementById('drawingCanvas');
 const drawCtx = drawingCanvas.getContext('2d');
+const canvasWrapper = document.getElementById('canvasWrapper');
 
-let w = mapCanvas.width = drawingCanvas.width = window.innerWidth;
-let h = mapCanvas.height = drawingCanvas.height = window.innerHeight - 70;
+let w = mapCanvas.width = drawingCanvas.width = 3000;
+let h = mapCanvas.height = drawingCanvas.height = 3000;
 
-let mapImage = null;
+// Estado do mapa
+let maps = [];  // Múltiplos mapas
+let entities = [];  // Entidades (PNGs sem borda)
 let tokens = [];
 let drawings = [];
-let scale = 1;
+let currentScale = 1;
+
+// Pan/Drag do canvas
+let isPanning = false;
+let panX = 0;
+let panY = 0;
+let startPanX = 0;
+let startPanY = 0;
+
+// Ferramentas
+let currentTool = 'select';
+let isDrawing = false;
+let currentPath = [];
 
 const TOKEN_RADIUS = 35;
-const TOKEN_BORDER = 2;
 
-// Conexão WebSocket
+// ==================
+// LOGIN SYSTEM
+// ==================
+document.getElementById('loginBtn').addEventListener('click', () => {
+    const nameInput = document.getElementById('playerNameInput');
+    const name = nameInput.value.trim();
+    
+    if (!name) {
+        alert('Por favor, digite um nome!');
+        return;
+    }
+    
+    playerName = name;
+    playerId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    
+    document.getElementById('playerNameDisplay').textContent = playerName;
+    document.getElementById('loginOverlay').classList.add('hidden');
+    
+    // Conectar ao servidor
+    socket.emit('player_join', {
+        session_id: SESSION_ID,
+        player_id: playerId,
+        player_name: playerName
+    });
+    
+    showToast(`Bem-vindo, ${playerName}!`);
+});
+
+// Enter para fazer login
+document.getElementById('playerNameInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        document.getElementById('loginBtn').click();
+    }
+});
+
+// ==================
+// WEBSOCKET EVENTS
+// ==================
 socket.on('connect', () => {
     console.log('Conectado ao servidor');
-    socket.emit('join_session', { session_id: SESSION_ID });
     updateStatus(true);
 });
 
@@ -175,24 +505,41 @@ socket.on('disconnect', () => {
     updateStatus(false);
 });
 
-socket.on('session_joined', (data) => {
-    console.log('Entrou na sessão:', data.session_id);
+socket.on('player_joined', (data) => {
+    console.log('Jogador entrou:', data.player_name);
+    showToast(`${data.player_name} entrou na sessão`);
 });
 
-socket.on('map_sync', (data) => {
-    if (data.mapData) {
-        const img = new Image();
-        img.onload = function() {
-            mapImage = img;
-            redrawMap();
-        };
-        img.src = data.mapData;
+socket.on('session_state', (data) => {
+    console.log('Estado da sessão recebido:', data);
+    maps = data.maps || [];
+    entities = data.entities || [];
+    tokens = data.tokens || [];
+    drawings = data.drawings || [];
+    redrawAll();
+});
+
+socket.on('permissions_updated', (data) => {
+    if (data.player_id === playerId) {
+        permissions = data.permissions;
+        updatePermissionsUI();
+        showToast('Suas permissões foram atualizadas!');
     }
+});
+
+socket.on('maps_sync', (data) => {
+    maps = data.maps;
+    redrawAll();
+});
+
+socket.on('entities_sync', (data) => {
+    entities = data.entities;
+    redrawAll();
 });
 
 socket.on('token_sync', (data) => {
     tokens = data.tokens;
-    redrawMap();
+    redrawAll();
 });
 
 socket.on('drawing_sync', (data) => {
@@ -203,6 +550,10 @@ socket.on('drawing_sync', (data) => {
 socket.on('drawings_cleared', () => {
     drawings = [];
     redrawDrawings();
+});
+
+socket.on('ping_received', (data) => {
+    showPing(data.x, data.y, data.player_name);
 });
 
 function updateStatus(connected) {
@@ -218,14 +569,66 @@ function updateStatus(connected) {
     }
 }
 
-function redrawMap() {
-    mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+function updatePermissionsUI() {
+    // Atualizar badges de permissões
+    const moveTokensBadge = document.getElementById('permMoveTokens');
+    const drawBadge = document.getElementById('permDraw');
+    const pingBadge = document.getElementById('permPing');
     
-    if (mapImage) {
-        mapCtx.drawImage(mapImage, 0, 0, mapCanvas.width, mapCanvas.height);
+    if (permissions.moveTokens.length > 0) {
+        moveTokensBadge.classList.remove('disabled');
+    } else {
+        moveTokensBadge.classList.add('disabled');
     }
+    
+    if (permissions.draw) {
+        drawBadge.classList.remove('disabled');
+    } else {
+        drawBadge.classList.add('disabled');
+    }
+    
+    if (permissions.ping) {
+        pingBadge.classList.remove('disabled');
+    } else {
+        pingBadge.classList.add('disabled');
+    }
+    
+    // Mostrar toolbar se tiver alguma permissão
+    if (permissions.draw || permissions.ping || permissions.moveTokens.length > 0) {
+        document.getElementById('playerToolbar').classList.add('visible');
+    }
+}
 
-    // Desenhar tokens (maiores com borda fina)
+// ==================
+// RENDER
+// ==================
+function redrawAll() {
+    mapCtx.clearRect(0, 0, w, h);
+    
+    // Desenhar todos os mapas
+    maps.forEach(map => {
+        if (map.image) {
+            const img = new Image();
+            img.src = map.image;
+            img.onload = () => {
+                mapCtx.drawImage(img, map.x, map.y, map.width, map.height);
+                redrawEntitiesAndTokens();
+            };
+        }
+    });
+    
+    redrawEntitiesAndTokens();
+}
+
+function redrawEntitiesAndTokens() {
+    // Desenhar entidades (PNGs sem borda)
+    entities.forEach(entity => {
+        const img = new Image();
+        img.src = entity.image;
+        mapCtx.drawImage(img, entity.x, entity.y, entity.width, entity.height);
+    });
+    
+    // Desenhar tokens (com borda circular)
     tokens.forEach(token => {
         if (token.image) {
             const img = new Image();
@@ -238,14 +641,14 @@ function redrawMap() {
             mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
             mapCtx.restore();
         } else {
-            mapCtx.fillStyle = token.color;
+            mapCtx.fillStyle = token.color || '#9b59b6';
             mapCtx.beginPath();
             mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
             mapCtx.fill();
         }
         
         mapCtx.strokeStyle = "#fff";
-        mapCtx.lineWidth = TOKEN_BORDER;
+        mapCtx.lineWidth = 2;
         mapCtx.beginPath();
         mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
         mapCtx.stroke();
@@ -261,7 +664,7 @@ function redrawMap() {
 }
 
 function redrawDrawings() {
-    drawCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+    drawCtx.clearRect(0, 0, w, h);
     
     drawings.forEach(drawing => {
         drawCtx.strokeStyle = drawing.color;
@@ -282,21 +685,103 @@ function redrawDrawings() {
     });
 }
 
-function zoom(delta) {
-    scale = Math.max(0.5, Math.min(2, scale + delta));
-    mapCanvas.style.transform = `scale(${scale})`;
-    drawingCanvas.style.transform = `scale(${scale})`;
+// ==================
+// PAN/ZOOM
+// ==================
+function applyTransform() {
+    const transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
+    canvasWrapper.style.transform = transform;
 }
 
-window.addEventListener('resize', () => {
-    w = mapCanvas.width = drawingCanvas.width = window.innerWidth;
-    h = mapCanvas.height = drawingCanvas.height = window.innerHeight - 70;
-    redrawMap();
-    redrawDrawings();
+canvasWrapper.addEventListener('mousedown', (e) => {
+    if (currentTool === 'select') {
+        isPanning = true;
+        startPanX = e.clientX - panX;
+        startPanY = e.clientY - panY;
+        canvasWrapper.classList.add('grabbing');
+    }
 });
 
+canvasWrapper.addEventListener('mousemove', (e) => {
+    if (isPanning) {
+        panX = e.clientX - startPanX;
+        panY = e.clientY - startPanY;
+        applyTransform();
+    }
+});
+
+canvasWrapper.addEventListener('mouseup', () => {
+    isPanning = false;
+    canvasWrapper.classList.remove('grabbing');
+});
+
+canvasWrapper.addEventListener('mouseleave', () => {
+    isPanning = false;
+    canvasWrapper.classList.remove('grabbing');
+});
+
+function zoom(delta) {
+    currentScale = Math.max(0.3, Math.min(3, currentScale + delta));
+    applyTransform();
+}
+
+// ==================
+// PING SYSTEM
+// ==================
+function showPing(x, y, playerName) {
+    const ping = document.createElement('div');
+    ping.style.position = 'absolute';
+    ping.style.left = x + 'px';
+    ping.style.top = y + 'px';
+    ping.style.width = '40px';
+    ping.style.height = '40px';
+    ping.style.borderRadius = '50%';
+    ping.style.border = '3px solid #ffc107';
+    ping.style.background = 'rgba(255,193,7,0.3)';
+    ping.style.animation = 'pingPulse 2s ease-out';
+    ping.style.pointerEvents = 'none';
+    ping.style.zIndex = '999';
+    
+    const label = document.createElement('div');
+    label.textContent = playerName;
+    label.style.position = 'absolute';
+    label.style.top = '-25px';
+    label.style.left = '50%';
+    label.style.transform = 'translateX(-50%)';
+    label.style.background = 'rgba(0,0,0,0.8)';
+    label.style.padding = '4px 8px';
+    label.style.borderRadius = '4px';
+    label.style.fontSize = '12px';
+    label.style.whiteSpace = 'nowrap';
+    
+    ping.appendChild(label);
+    canvasWrapper.appendChild(ping);
+    
+    setTimeout(() => ping.remove(), 2000);
+}
+
+// ==================
+// UTILS
+// ==================
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
 // Inicialização
-redrawMap();
+applyTransform();
+
+// CSS para ping animation
+const style = document.createElement('style');
+style.textContent = `
+@keyframes pingPulse {
+    0% { transform: scale(0); opacity: 1; }
+    100% { transform: scale(3); opacity: 0; }
+}
+`;
+document.head.appendChild(style);
 </script>
 
 </body>
