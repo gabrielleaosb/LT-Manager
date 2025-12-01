@@ -1,4 +1,4 @@
-// MAP MANAGER - MESTRE - PARTE 1 - COMPLETO E CORRIGIDO
+// MAP MANAGER - MESTRE - PARTE 1 - INICIALIZAÇÃO E WEBSOCKETS
 const socket = io();
 const SESSION_ID = document.getElementById('sessionId').value;
 
@@ -29,6 +29,8 @@ let players = [];
 let chatContacts = [];
 let currentChatContact = null;
 let currentConversation = [];
+let chatMinimized = true;
+let chatCollapsed = false;
 
 // Controles
 let currentTool = 'select';
@@ -60,7 +62,7 @@ let resizeStartY = 0;
 let resizeStartWidth = 0;
 let resizeStartHeight = 0;
 
-// Pan e Zoom - CORRIGIDO
+// Pan e Zoom
 let isPanning = false;
 let startPanX = 0;
 let startPanY = 0;
@@ -71,8 +73,8 @@ let panY = 0;
 // Cache de imagens
 let loadedImages = new Map();
 
-// Chat
-let chatExpanded = false;
+// Sidebar
+let sidebarCollapsed = false;
 
 // ==================
 // CENTRALIZAÇÃO E TRANSFORM
@@ -111,6 +113,23 @@ canvasWrapper.addEventListener('wheel', (e) => {
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
     zoom(delta);
 });
+
+// ==================
+// SIDEBAR TOGGLE
+// ==================
+function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed;
+    const sidebar = document.querySelector('.tools-sidebar');
+    const toggle = document.querySelector('.sidebar-toggle');
+    
+    if (sidebarCollapsed) {
+        sidebar.classList.add('collapsed');
+        toggle.textContent = '▶';
+    } else {
+        sidebar.classList.remove('collapsed');
+        toggle.textContent = '◀';
+    }
+}
 
 // ==================
 // GRID
@@ -187,7 +206,7 @@ function preloadAllImages() {
 }
 
 // ==================
-// WEBSOCKET EVENTS - CORRIGIDO PARA TEMPO REAL
+// WEBSOCKET EVENTS - TEMPO REAL CORRIGIDO
 // ==================
 socket.on('connect', () => {
     console.log('Conectado ao servidor');
@@ -226,18 +245,20 @@ socket.on('player_left', (data) => {
     loadChatContacts();
 });
 
-// TEMPO REAL - Sincronização instantânea
+// TEMPO REAL - Sincronização instantânea CORRIGIDA
 socket.on('maps_sync', (data) => {
     const maps = data.maps || [];
-    images = images.filter(img => !img.id.startsWith('map_'));
-    images = [...images, ...maps];
+    // Preservar entities e substituir apenas maps
+    const entities = images.filter(img => !img.id.startsWith('map_'));
+    images = [...maps, ...entities];
     preloadAllImages();
 });
 
 socket.on('entities_sync', (data) => {
     const entities = data.entities || [];
-    images = images.filter(img => img.id.startsWith('map_'));
-    images = [...images, ...entities];
+    // Preservar maps e substituir apenas entities
+    const maps = images.filter(img => img.id.startsWith('map_'));
+    images = [...maps, ...entities];
     preloadAllImages();
 });
 
@@ -262,6 +283,7 @@ socket.on('drawings_cleared', () => {
 socket.on('chat_contacts_loaded', (data) => {
     chatContacts = data.contacts || [];
     renderChatContacts();
+    updateChatBadge();
 });
 
 socket.on('conversation_loaded', (data) => {
@@ -286,6 +308,7 @@ socket.on('chat_notification', (data) => {
     // Notificação visual
     showToast(`Nova mensagem de ${data.from_name}`);
 });
+
 // MAP MANAGER - PARTE 2 - FERRAMENTAS E RENDER
 
 // ==================
@@ -367,14 +390,10 @@ function redrawAll() {
         const img = loadedImages.get(token.id);
         
         if (token.style === 'square' && img && img.complete && img.naturalWidth > 0) {
-            // Token quadrado com imagem
+            // Token quadrado - SEM BORDA, apenas imagem
             try {
-                mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
-                
-                // Borda
-                mapCtx.strokeStyle = "#fff";
-                mapCtx.lineWidth = 2;
-                mapCtx.strokeRect(token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
+                const tokenSize = TOKEN_RADIUS * 1.8;
+                mapCtx.drawImage(img, token.x - tokenSize/2, token.y - tokenSize/2, tokenSize, tokenSize);
             } catch (e) {
                 console.error('Erro ao desenhar token quadrado:', e);
             }
@@ -412,22 +431,29 @@ function redrawAll() {
             mapCtx.stroke();
         }
         
-        // Nome
+        // Nome - pequeno e embaixo
         mapCtx.fillStyle = "#fff";
-        mapCtx.font = "bold 13px Lato";
+        mapCtx.font = "bold 11px Lato";
         mapCtx.textAlign = "center";
         mapCtx.strokeStyle = "#000";
-        mapCtx.lineWidth = 3;
-        mapCtx.strokeText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
-        mapCtx.fillText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
+        mapCtx.lineWidth = 2.5;
+        
+        const nameY = token.style === 'square' ? token.y + TOKEN_RADIUS * 1.8 / 2 + 15 : token.y + TOKEN_RADIUS + 15;
+        mapCtx.strokeText(token.name, token.x, nameY);
+        mapCtx.fillText(token.name, token.x, nameY);
 
         // Highlight
         if (selectedItem === token && selectedType === 'token') {
             mapCtx.strokeStyle = "#ffc107";
             mapCtx.lineWidth = 4;
             mapCtx.beginPath();
-            mapCtx.arc(token.x, token.y, TOKEN_RADIUS + 5, 0, Math.PI * 2);
-            mapCtx.stroke();
+            if (token.style === 'square') {
+                const tokenSize = TOKEN_RADIUS * 1.8;
+                mapCtx.strokeRect(token.x - tokenSize/2 - 5, token.y - tokenSize/2 - 5, tokenSize + 10, tokenSize + 10);
+            } else {
+                mapCtx.arc(token.x, token.y, TOKEN_RADIUS + 5, 0, Math.PI * 2);
+                mapCtx.stroke();
+            }
         }
     });
 }
@@ -472,9 +498,18 @@ function findItemAt(x, y) {
     // Verificar tokens primeiro
     for (let i = tokens.length - 1; i >= 0; i--) {
         const token = tokens[i];
-        const dist = Math.hypot(token.x - x, token.y - y);
-        if (dist <= TOKEN_RADIUS) {
-            return { item: token, type: 'token' };
+        
+        if (token.style === 'square') {
+            const tokenSize = TOKEN_RADIUS * 1.8;
+            if (x >= token.x - tokenSize/2 && x <= token.x + tokenSize/2 &&
+                y >= token.y - tokenSize/2 && y <= token.y + tokenSize/2) {
+                return { item: token, type: 'token' };
+            }
+        } else {
+            const dist = Math.hypot(token.x - x, token.y - y);
+            if (dist <= TOKEN_RADIUS) {
+                return { item: token, type: 'token' };
+            }
         }
     }
     
@@ -535,8 +570,14 @@ canvasWrapper.addEventListener('mousedown', (e) => {
             draggingItem = found.item;
             mouseDown = true;
             
-            dragOffsetX = pos.x - found.item.x;
-            dragOffsetY = pos.y - found.item.y;
+            if (found.type === 'token' && found.item.style === 'square') {
+                const tokenSize = TOKEN_RADIUS * 1.8;
+                dragOffsetX = pos.x - found.item.x;
+                dragOffsetY = pos.y - found.item.y;
+            } else {
+                dragOffsetX = pos.x - found.item.x;
+                dragOffsetY = pos.y - found.item.y;
+            }
             
             canvasWrapper.style.cursor = 'grabbing';
         } else {
@@ -656,6 +697,7 @@ canvasWrapper.addEventListener('mouseleave', () => {
         mouseDown = false;
     }
 });
+
 // MAP MANAGER - PARTE 3 - DESENHO E ADICIONAR ITENS
 
 // ==================
@@ -1100,22 +1142,38 @@ function deleteItemById(itemId, type) {
         showToast('Item removido!');
     }
 }
-// MAP MANAGER - PARTE 4 - CHAT WHATSAPP STYLE
+
+// MAP MANAGER - PARTE 4 - CHAT E UTILITÁRIOS
 
 // ==================
-// CHAT WHATSAPP
+// CHAT WHATSAPP - REDESENHADO E COMPACTO
 // ==================
-function toggleChat() {
-    chatExpanded = !chatExpanded;
-    const chatBottom = document.getElementById('chatBottom');
+function toggleChatMinimize() {
+    chatMinimized = !chatMinimized;
+    const chatContainer = document.getElementById('chatContainer');
     
-    if (chatExpanded) {
-        chatBottom.classList.remove('minimized');
-        chatBottom.classList.add('expanded');
-        loadChatContacts();
+    if (chatMinimized) {
+        chatContainer.classList.add('minimized');
+        chatContainer.classList.remove('collapsed');
     } else {
-        chatBottom.classList.remove('expanded');
-        chatBottom.classList.add('minimized');
+        chatContainer.classList.remove('minimized');
+        chatContainer.classList.remove('collapsed');
+        loadChatContacts();
+    }
+}
+
+function toggleChatCollapse() {
+    chatCollapsed = !chatCollapsed;
+    const chatContainer = document.getElementById('chatContainer');
+    
+    if (chatCollapsed) {
+        chatContainer.classList.add('collapsed');
+        chatContainer.classList.remove('minimized');
+    } else {
+        chatContainer.classList.remove('collapsed');
+        if (chatMinimized) {
+            chatContainer.classList.add('minimized');
+        }
     }
 }
 
@@ -1133,7 +1191,7 @@ function renderChatContacts() {
     contactsList.innerHTML = '';
     
     if (chatContacts.length === 0) {
-        contactsList.innerHTML = '<div class="empty-state">Nenhum jogador conectado</div>';
+        contactsList.innerHTML = '<div class="empty-state" style="padding: 15px; font-size: 0.75rem;">Nenhum jogador</div>';
         return;
     }
     
@@ -1146,21 +1204,28 @@ function renderChatContacts() {
         
         item.onclick = () => openConversation(contact.id);
         
-        const lastMsg = contact.last_message ? 
-            (contact.last_message.message.substring(0, 30) + (contact.last_message.message.length > 30 ? '...' : '')) :
-            'Nenhuma mensagem ainda';
-        
         item.innerHTML = `
             <div class="contact-avatar">${contact.name.charAt(0).toUpperCase()}</div>
-            <div class="contact-info">
-                <div class="contact-name">${contact.name}</div>
-                <div class="contact-last-message">${lastMsg}</div>
-            </div>
+            <div class="contact-name">${contact.name}</div>
             ${contact.unread > 0 ? `<span class="contact-badge">${contact.unread}</span>` : ''}
         `;
         
         contactsList.appendChild(item);
     });
+}
+
+function updateChatBadge() {
+    const totalUnread = chatContacts.reduce((sum, c) => sum + (c.unread || 0), 0);
+    const badge = document.getElementById('chatBadge');
+    
+    if (badge) {
+        if (totalUnread > 0) {
+            badge.textContent = totalUnread;
+            badge.style.display = 'block';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
 }
 
 function openConversation(contactId) {
@@ -1196,7 +1261,7 @@ function renderConversation() {
     messagesContainer.innerHTML = '';
     
     if (currentConversation.length === 0) {
-        messagesContainer.innerHTML = '<div class="empty-state">Nenhuma mensagem ainda. Inicie a conversa!</div>';
+        messagesContainer.innerHTML = '<div class="empty-state" style="padding: 15px;">Nenhuma mensagem ainda</div>';
         return;
     }
     
@@ -1489,12 +1554,6 @@ function clearAll() {
 // INICIALIZAÇÃO
 // ==================
 document.addEventListener('DOMContentLoaded', () => {
-    // Chat minimizado
-    const chatBottom = document.getElementById('chatBottom');
-    if (chatBottom) {
-        chatBottom.classList.add('minimized');
-    }
-    
     // Fechar painéis ao clicar fora
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.floating-panel') && !e.target.closest('.floating-btn')) {
