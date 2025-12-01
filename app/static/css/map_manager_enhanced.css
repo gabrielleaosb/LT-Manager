@@ -1,3 +1,4 @@
+/* MAP MANAGER CSS - PARTE 1: BASE E LAYOUT */
 * {
     margin: 0;
     padding: 0;
@@ -13,9 +14,7 @@ body, html {
     overflow: hidden;
 }
 
-/* ==================
-   HEADER COMPACTO
-================== */
+/* HEADER */
 .header {
     background: linear-gradient(135deg, rgba(26,26,46,0.95), rgba(16,16,30,0.95));
     border-bottom: 2px solid rgba(155,89,182,0.3);
@@ -65,34 +64,83 @@ body, html {
     gap: 8px;
 }
 
-/* ==================
-   CANVAS FULLSCREEN
-================== */
+/* LAYOUT PRINCIPAL */
+.main-layout {
+    display: flex;
+    height: calc(100vh - 60px - 50px); /* header + chat minimizado */
+}
+
+/* SIDEBAR ESQUERDA FIXA - FERRAMENTAS */
+.tools-sidebar {
+    width: 320px;
+    background: linear-gradient(135deg, rgba(26,26,46,0.95), rgba(16,16,30,0.95));
+    border-right: 2px solid rgba(155,89,182,0.3);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    z-index: 90;
+}
+
+.sidebar-header {
+    padding: 15px 20px;
+    background: rgba(155,89,182,0.2);
+    border-bottom: 2px solid rgba(155,89,182,0.3);
+    font-weight: bold;
+    color: #c49bdb;
+    font-family: 'Merriweather', serif;
+    font-size: 1.1rem;
+}
+
+.sidebar-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+/* CANVAS CONTAINER */
 .canvas-container {
-    width: 100%;
-    height: calc(100vh - 60px);
+    flex: 1;
     position: relative;
     background: #1a1a2e;
     overflow: hidden;
+}
+
+.canvas-wrapper {
+    position: absolute;
+    width: 2500px;
+    height: 2500px;
+    cursor: grab;
+    transform-origin: 0 0;
+    left: 50%;
+    top: 50%;
+    margin-left: -1250px;
+    margin-top: -1250px;
+}
+
+.canvas-wrapper.grabbing {
+    cursor: grabbing;
 }
 
 #mapCanvas, #gridCanvas, #drawingCanvas {
     position: absolute;
     top: 0;
     left: 0;
+    width: 2500px;
+    height: 2500px;
     image-rendering: crisp-edges;
 }
 
-#gridCanvas {
+#mapCanvas {
     z-index: 1;
 }
 
-#mapCanvas {
-    z-index: 2;
+#gridCanvas {
+    z-index: 3;
+    pointer-events: none;
 }
 
 #drawingCanvas {
-    z-index: 3;
+    z-index: 2;
     pointer-events: none;
 }
 
@@ -100,9 +148,7 @@ body, html {
     pointer-events: auto;
 }
 
-/* ==================
-   BOTÕES FLUTUANTES
-================== */
+/* BOTÕES FLUTUANTES */
 .floating-buttons {
     position: fixed;
     right: 20px;
@@ -135,20 +181,13 @@ body, html {
     box-shadow: 0 6px 20px rgba(155,89,182,0.6);
 }
 
-.floating-btn.active {
-    background: linear-gradient(135deg, #2ed573, #26de81);
-    border-color: #2ed573;
-}
-
-/* ==================
-   PAINÉIS FLUTUANTES
-================== */
+/* PAINÉIS FLUTUANTES */
 .floating-panel {
     position: fixed;
     right: 100px;
     top: 80px;
     width: 380px;
-    max-height: calc(100vh - 120px);
+    max-height: calc(100vh - 200px);
     background: rgba(26,26,46,0.98);
     border: 2px solid #9b59b6;
     border-radius: 16px;
@@ -217,9 +256,7 @@ body, html {
     padding: 20px;
 }
 
-/* ==================
-   PAINEL DE FERRAMENTAS
-================== */
+/* SEÇÕES DE FERRAMENTAS */
 .tools-section {
     margin-bottom: 20px;
     padding-bottom: 15px;
@@ -343,8 +380,8 @@ body, html {
     box-shadow: 0 0 10px rgba(255,255,255,0.5);
 }
 
-/* Token List */
-.token-list {
+/* Token/Image List */
+.item-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -352,7 +389,7 @@ body, html {
     overflow-y: auto;
 }
 
-.token-item {
+.item-card {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -364,34 +401,38 @@ body, html {
     transition: all 0.3s ease;
 }
 
-.token-item:hover, .token-item.active {
+.item-card:hover, .item-card.active {
     border-color: #9b59b6;
     background: rgba(155,89,182,0.3);
 }
 
-.token-preview, .token-color {
+.item-preview, .item-color {
     width: 35px;
     height: 35px;
-    border-radius: 50%;
+    border-radius: 6px;
     border: 2px solid #fff;
     object-fit: cover;
 }
 
-.token-info {
+.item-color {
+    border-radius: 50%;
+}
+
+.item-info {
     flex: 1;
 }
 
-.token-name {
+.item-name {
     font-weight: bold;
     font-size: 0.9rem;
 }
 
-.token-actions {
+.item-actions {
     display: flex;
     gap: 5px;
 }
 
-.token-action-btn {
+.item-action-btn {
     padding: 4px 8px;
     background: rgba(231,76,60,0.3);
     border: 1px solid #e74c3c;
@@ -401,71 +442,79 @@ body, html {
     font-size: 0.8rem;
 }
 
-.token-action-btn:hover {
+.item-action-btn:hover {
     background: rgba(231,76,60,0.5);
 }
 
-/* ==================
-   PAINEL DE JOGADORES
-================== */
-.players-list {
+/* CHAT INFERIOR */
+.chat-bottom {
+    position: fixed;
+    bottom: 0;
+    left: 320px;
+    right: 0;
+    background: linear-gradient(135deg, rgba(26,26,46,0.98), rgba(16,16,30,0.98));
+    border-top: 2px solid rgba(155,89,182,0.3);
+    z-index: 300;
+    transition: all 0.3s ease;
+}
+
+.chat-bottom.minimized {
+    height: 50px;
+}
+
+.chat-bottom.expanded {
+    height: 350px;
+}
+
+.chat-toggle {
+    padding: 12px 20px;
+    background: rgba(155,89,182,0.2);
+    border-bottom: 1px solid rgba(155,89,182,0.2);
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.player-item {
-    background: rgba(16,16,30,0.6);
-    border: 2px solid rgba(155,89,182,0.3);
-    border-radius: 10px;
-    padding: 12px;
-}
-
-.player-name {
-    font-size: 1rem;
-    font-weight: bold;
-    color: #c49bdb;
-    margin-bottom: 8px;
-}
-
-.player-perms {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.perm-btn {
-    padding: 8px 12px;
-    background: rgba(231,76,60,0.2);
-    border: 2px solid #e74c3c;
-    border-radius: 6px;
-    color: #e74c3c;
+    justify-content: space-between;
+    align-items: center;
     cursor: pointer;
-    font-size: 0.85rem;
-    transition: all 0.3s;
-    text-align: left;
+    transition: background 0.3s;
 }
 
-.perm-btn:hover {
-    background: rgba(231,76,60,0.3);
+.chat-toggle:hover {
+    background: rgba(155,89,182,0.3);
 }
 
-.perm-btn.active {
-    background: rgba(46,213,115,0.2);
-    border-color: #2ed573;
-    color: #2ed573;
+.chat-toggle h3 {
+    color: #c49bdb;
+    font-size: 1rem;
+    font-family: 'Merriweather', serif;
 }
 
-/* ==================
-   PAINEL DE CHAT
-================== */
+.chat-arrow {
+    font-size: 1.2rem;
+    transition: transform 0.3s;
+}
+
+.chat-bottom.expanded .chat-arrow {
+    transform: rotate(180deg);
+}
+
+.chat-content {
+    display: none;
+    height: calc(100% - 50px);
+    padding: 15px 20px;
+    overflow-y: auto;
+}
+
+.chat-bottom.expanded .chat-content {
+    display: flex;
+    flex-direction: column;
+}
+
 .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 15px;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: 400px;
-    overflow-y: auto;
-    margin-bottom: 15px;
 }
 
 .chat-message {
@@ -550,9 +599,56 @@ body, html {
     box-shadow: 0 4px 12px rgba(155,89,182,0.4);
 }
 
-/* ==================
-   PAINEL DE DADOS
-================== */
+/* JOGADORES */
+.players-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.player-item {
+    background: rgba(16,16,30,0.6);
+    border: 2px solid rgba(155,89,182,0.3);
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.player-name {
+    font-size: 1rem;
+    font-weight: bold;
+    color: #c49bdb;
+    margin-bottom: 8px;
+}
+
+.player-perms {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.perm-btn {
+    padding: 8px 12px;
+    background: rgba(231,76,60,0.2);
+    border: 2px solid #e74c3c;
+    border-radius: 6px;
+    color: #e74c3c;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.3s;
+    text-align: left;
+}
+
+.perm-btn:hover {
+    background: rgba(231,76,60,0.3);
+}
+
+.perm-btn.active {
+    background: rgba(46,213,115,0.2);
+    border-color: #2ed573;
+    color: #2ed573;
+}
+
+/* DADOS */
 .dice-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -618,62 +714,7 @@ body, html {
     background: linear-gradient(135deg, rgba(231,76,60,0.1), rgba(192,57,43,0.05));
 }
 
-.custom-dice-form {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.form-row {
-    display: flex;
-    gap: 10px;
-}
-
-.form-row input, .form-row select {
-    flex: 1;
-    padding: 8px;
-    background: rgba(16,16,30,0.8);
-    border: 1px solid rgba(155,89,182,0.3);
-    border-radius: 6px;
-    color: #fff;
-    font-size: 0.9rem;
-}
-
-/* ==================
-   ZOOM CONTROLS
-================== */
-.zoom-controls {
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    display: flex;
-    gap: 10px;
-    z-index: 10;
-}
-
-.zoom-btn {
-    width: 50px;
-    height: 50px;
-    background: rgba(155,89,182,0.9);
-    border: 2px solid #9b59b6;
-    border-radius: 50%;
-    color: #fff;
-    font-size: 1.5rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.zoom-btn:hover {
-    background: #9b59b6;
-    transform: scale(1.1);
-}
-
-/* ==================
-   MODAL
-================== */
+/* MODAL */
 .modal {
     display: none;
     position: fixed;
@@ -732,66 +773,11 @@ body, html {
     justify-content: flex-end;
 }
 
-/* Token Permissions */
-.token-perm-list {
-    max-height: 400px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.token-perm-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px;
-    background: rgba(16,16,30,0.6);
-    border: 1px solid rgba(155,89,182,0.3);
-    border-radius: 8px;
-}
-
-.token-perm-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.token-perm-preview, .token-perm-color {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    border: 2px solid #fff;
-    object-fit: cover;
-}
-
-.checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-}
-
-.checkbox-label input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
-}
-
-/* ==================
-   UTILS
-================== */
+/* UTILS */
 .empty-state {
     text-align: center;
     padding: 30px;
     color: #666;
-    font-style: italic;
-}
-
-.empty-players {
-    color: #666;
-    text-align: center;
-    padding: 20px;
     font-style: italic;
 }
 

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Visualização do Mapa - Last Take</title>
-<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family:Lato:wght@300;400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -65,11 +65,29 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
 
 /* Canvas Container */
 .canvas-container { flex: 1; position: relative; background: #1a1a2e; overflow: hidden; }
-.canvas-wrapper { position: absolute; width: 100%; height: 100%; cursor: grab; }
+.canvas-wrapper {
+    position: absolute;
+    width: 2500px;
+    height: 2500px;
+    cursor: grab;
+    transform-origin: 0 0;
+    left: 50%;
+    top: 50%;
+    margin-left: -1250px;
+    margin-top: -1250px;
+}
 .canvas-wrapper.grabbing { cursor: grabbing; }
-#mapCanvas, #drawingCanvas { position: absolute; image-rendering: crisp-edges; }
+#mapCanvas, #gridCanvas, #drawingCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 2500px;
+    height: 2500px;
+    image-rendering: crisp-edges;
+}
 #mapCanvas { z-index: 1; }
 #drawingCanvas { z-index: 2; pointer-events: none; }
+#gridCanvas { z-index: 3; pointer-events: none; }
 
 /* Chat Sidebar */
 .chat-sidebar {
@@ -94,7 +112,6 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
     display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem;
 }
 .chat-message-header strong { color: #9b59b6; }
-.chat-message-header em { color: #ffc107; font-style: normal; }
 .chat-timestamp { color: #666; font-size: 0.75rem; }
 .chat-message-text { color: #ddd; font-size: 0.9rem; line-height: 1.4; }
 .chat-input-area {
@@ -119,20 +136,8 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
 }
 .chat-send-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(155,89,182,0.4); }
 
-/* Zoom Controls */
-.zoom-controls {
-    position: absolute; bottom: 20px; right: 20px;
-    display: flex; gap: 10px; z-index: 10;
-}
-.zoom-btn {
-    width: 40px; height: 40px; background: rgba(155,89,182,0.8);
-    border: 2px solid #9b59b6; border-radius: 50%; color: #fff;
-    font-size: 1.2rem; cursor: pointer; transition: all 0.3s ease;
-    display: flex; align-items: center; justify-content: center;
-}
-.zoom-btn:hover { background: #9b59b6; transform: scale(1.1); }
+.empty-state { text-align: center; padding: 40px; color: #666; font-style: italic; }
 
-/* Toast */
 .toast {
     position: fixed; top: 90px; right: 30px;
     background: linear-gradient(135deg, #9b59b6, #8e44ad);
@@ -142,8 +147,6 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
     transition: all 0.3s ease; z-index: 1000; pointer-events: none;
 }
 .toast.show { opacity: 1; transform: translateY(0); }
-
-.empty-state { text-align: center; padding: 40px; color: #666; font-style: italic; }
 
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: rgba(16,16,30,0.5); }
@@ -188,17 +191,13 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
         <div class="canvas-wrapper" id="canvasWrapper">
             <canvas id="mapCanvas"></canvas>
             <canvas id="drawingCanvas"></canvas>
-        </div>
-        
-        <div class="zoom-controls">
-            <button class="zoom-btn" onclick="zoom(-0.1)">−</button>
-            <button class="zoom-btn" onclick="zoom(0.1)">+</button>
+            <canvas id="gridCanvas"></canvas>
         </div>
     </div>
 
     <!-- Chat Sidebar -->
     <div class="chat-sidebar">
-        <div class="chat-header">💬 Chat</div>
+        <div class="chat-header">💬 Chat Privado</div>
         <div class="chat-messages" id="chatMessages">
             <div class="empty-state">Nenhuma mensagem ainda</div>
         </div>
@@ -211,7 +210,7 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
                 <button class="chat-send-btn" onclick="sendChatMessage()">Enviar</button>
             </div>
             <p style="color: #888; font-size: 0.75rem; margin-top: 8px; text-align: center;">
-                💡 Apenas você e o destinatário verão mensagens privadas
+                💡 Apenas você e o destinatário verão suas mensagens
             </p>
         </div>
     </div>
@@ -223,21 +222,26 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
 const socket = io();
 const SESSION_ID = document.getElementById('sessionId').value;
 
+const CANVAS_WIDTH = 2500;
+const CANVAS_HEIGHT = 2500;
+
 let playerName = '';
 let playerId = null;
-let permissions = { moveTokens: [], draw: false, ping: false };
+let permissions = { moveTokens: [], draw: false };
 let allPlayers = [];
 let chatMessages = [];
 
 // Canvas
 const mapCanvas = document.getElementById('mapCanvas');
 const mapCtx = mapCanvas.getContext('2d');
+const gridCanvas = document.getElementById('gridCanvas');
+const gridCtx = gridCanvas.getContext('2d');
 const drawingCanvas = document.getElementById('drawingCanvas');
 const drawCtx = drawingCanvas.getContext('2d');
 const canvasWrapper = document.getElementById('canvasWrapper');
 
-let w = mapCanvas.width = drawingCanvas.width = 5000;
-let h = mapCanvas.height = drawingCanvas.height = 5000;
+mapCanvas.width = gridCanvas.width = drawingCanvas.width = CANVAS_WIDTH;
+mapCanvas.height = gridCanvas.height = drawingCanvas.height = CANVAS_HEIGHT;
 
 let maps = [];
 let entities = [];
@@ -246,13 +250,47 @@ let drawings = [];
 let currentScale = 1;
 
 let isPanning = false;
-let panX = -1500;
-let panY = -1500;
+let panX = 0;
+let panY = 0;
 let startPanX = 0;
 let startPanY = 0;
 
+// Movimentação de tokens permitidos
+let draggingToken = null;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+
 const TOKEN_RADIUS = 35;
 let loadedImages = {};
+
+// Grid settings
+let gridEnabled = true;
+let gridSize = 50;
+let gridColor = 'rgba(155, 89, 182, 0.3)';
+
+// ========== GRID ==========
+function drawGrid() {
+    gridCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    if (!gridEnabled) return;
+    
+    gridCtx.strokeStyle = gridColor;
+    gridCtx.lineWidth = 1;
+    
+    for (let x = 0; x <= CANVAS_WIDTH; x += gridSize) {
+        gridCtx.beginPath();
+        gridCtx.moveTo(x, 0);
+        gridCtx.lineTo(x, CANVAS_HEIGHT);
+        gridCtx.stroke();
+    }
+    
+    for (let y = 0; y <= CANVAS_HEIGHT; y += gridSize) {
+        gridCtx.beginPath();
+        gridCtx.moveTo(0, y);
+        gridCtx.lineTo(CANVAS_WIDTH, y);
+        gridCtx.stroke();
+    }
+}
 
 // ========== LOGIN ==========
 document.getElementById('loginBtn').addEventListener('click', () => {
@@ -300,6 +338,7 @@ socket.on('session_state', (data) => {
     tokens = data.tokens || [];
     drawings = data.drawings || [];
     preloadAllImages();
+    drawGrid();
 });
 
 socket.on('permissions_updated', (data) => {
@@ -311,20 +350,17 @@ socket.on('permissions_updated', (data) => {
 
 socket.on('maps_sync', (data) => {
     maps = data.maps;
-    preloadMapImages();
-    redrawAll();
+    preloadAllImages();
 });
 
 socket.on('entities_sync', (data) => {
     entities = data.entities;
-    preloadEntityImages();
-    redrawAll();
+    preloadAllImages();
 });
 
 socket.on('token_sync', (data) => {
     tokens = data.tokens;
-    preloadTokenImages();
-    redrawAll();
+    preloadAllImages();
 });
 
 socket.on('drawing_sync', (data) => {
@@ -343,16 +379,21 @@ socket.on('players_list', (data) => {
 });
 
 socket.on('player_joined', (data) => {
-    showToast(`${data.player_name} entrou na sessão`);
+    if (data.player_id !== playerId) {
+        showToast(`${data.player_name} entrou na sessão`);
+    }
 });
 
+// CHAT - APENAS MENSAGENS PRIVADAS PARA O JOGADOR
 socket.on('chat_history', (data) => {
     chatMessages = data.messages || [];
     renderChatMessages();
 });
 
 socket.on('new_message', (data) => {
-    if (!chatMessages.find(m => m.id === data.id)) {
+    // Apenas adiciona se a mensagem é para este jogador ou enviada por ele
+    if ((data.sender_id === playerId || data.recipient_id === playerId) && 
+        !chatMessages.find(m => m.id === data.id)) {
         chatMessages.push(data);
         renderChatMessages();
         playNotificationSound();
@@ -374,56 +415,31 @@ function updateStatus(connected) {
 
 // ========== IMAGENS ==========
 function preloadAllImages() {
-    preloadMapImages();
-    preloadEntityImages();
-    preloadTokenImages();
-}
-
-function preloadMapImages() {
-    maps.forEach(map => {
-        if (map.image && !loadedImages[map.id]) {
-            const img = new Image();
-            img.onload = () => { loadedImages[map.id] = img; redrawAll(); };
-            img.src = map.image;
+    [...maps, ...entities].forEach(img => {
+        if (img.image && !loadedImages[img.id]) {
+            const i = new Image();
+            i.onload = () => { loadedImages[img.id] = i; redrawAll(); };
+            i.src = img.image;
         }
     });
-}
-
-function preloadEntityImages() {
-    entities.forEach(entity => {
-        if (entity.image && !loadedImages[entity.id]) {
-            const img = new Image();
-            img.onload = () => { loadedImages[entity.id] = img; redrawAll(); };
-            img.src = entity.image;
-        }
-    });
-}
-
-function preloadTokenImages() {
+    
     tokens.forEach(token => {
         if (token.image && !loadedImages[token.id]) {
-            const img = new Image();
-            img.onload = () => { loadedImages[token.id] = img; redrawAll(); };
-            img.src = token.image;
+            const i = new Image();
+            i.onload = () => { loadedImages[token.id] = i; redrawAll(); };
+            i.src = token.image;
         }
     });
 }
 
 // ========== RENDER ==========
 function redrawAll() {
-    mapCtx.clearRect(0, 0, w, h);
+    mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    maps.forEach(map => {
-        const img = loadedImages[map.id];
-        if (img && img.complete) {
-            mapCtx.drawImage(img, map.x, map.y, map.width, map.height);
-        }
-    });
-    
-    entities.forEach(entity => {
-        const img = loadedImages[entity.id];
-        if (img && img.complete) {
-            mapCtx.drawImage(img, entity.x, entity.y, entity.width, entity.height);
+    [...maps, ...entities].forEach(img => {
+        const loadedImg = loadedImages[img.id];
+        if (loadedImg && loadedImg.complete) {
+            mapCtx.drawImage(loadedImg, img.x, img.y, img.width, img.height);
         }
     });
     
@@ -462,7 +478,7 @@ function redrawAll() {
 }
 
 function redrawDrawings() {
-    drawCtx.clearRect(0, 0, w, h);
+    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     drawings.forEach(drawing => {
         drawCtx.strokeStyle = drawing.color;
@@ -481,13 +497,55 @@ function redrawDrawings() {
     });
 }
 
-// ========== PAN/ZOOM ==========
+// ========== PAN/ZOOM COM SCROLL ==========
 function applyTransform() {
-    const transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
-    canvasWrapper.style.transform = transform;
+    canvasWrapper.style.transform = `scale(${currentScale})`;
+}
+
+canvasWrapper.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    currentScale = Math.max(0.3, Math.min(3, currentScale + delta));
+    applyTransform();
+});
+
+// ========== MOUSE - PAN E MOVER TOKENS ==========
+function getMousePos(e) {
+    const rect = canvasWrapper.getBoundingClientRect();
+    const scaleX = CANVAS_WIDTH / rect.width;
+    const scaleY = CANVAS_HEIGHT / rect.height;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    return { x, y };
+}
+
+function findTokenAt(x, y) {
+    for (let i = tokens.length - 1; i >= 0; i--) {
+        const token = tokens[i];
+        const dist = Math.hypot(token.x - x, token.y - y);
+        if (dist <= TOKEN_RADIUS && permissions.moveTokens && permissions.moveTokens.includes(token.id)) {
+            return token;
+        }
+    }
+    return null;
 }
 
 canvasWrapper.addEventListener('mousedown', (e) => {
+    const pos = getMousePos(e);
+    
+    // Tentar pegar token
+    const token = findTokenAt(pos.x, pos.y);
+    if (token) {
+        draggingToken = token;
+        dragOffsetX = pos.x - token.x;
+        dragOffsetY = pos.y - token.y;
+        canvasWrapper.style.cursor = 'grabbing';
+        return;
+    }
+    
+    // Pan
     isPanning = true;
     startPanX = e.clientX - panX;
     startPanY = e.clientY - panY;
@@ -495,32 +553,45 @@ canvasWrapper.addEventListener('mousedown', (e) => {
 });
 
 canvasWrapper.addEventListener('mousemove', (e) => {
+    const pos = getMousePos(e);
+    
+    if (draggingToken) {
+        draggingToken.x = pos.x - dragOffsetX;
+        draggingToken.y = pos.y - dragOffsetY;
+        redrawAll();
+        return;
+    }
+    
     if (isPanning) {
         panX = e.clientX - startPanX;
         panY = e.clientY - startPanY;
-        applyTransform();
     }
 });
 
 canvasWrapper.addEventListener('mouseup', () => {
+    if (draggingToken) {
+        socket.emit('token_update', {
+            session_id: SESSION_ID,
+            tokens: tokens
+        });
+        draggingToken = null;
+    }
+    
     isPanning = false;
     canvasWrapper.classList.remove('grabbing');
+    canvasWrapper.style.cursor = 'grab';
 });
 
 canvasWrapper.addEventListener('mouseleave', () => {
+    draggingToken = null;
     isPanning = false;
     canvasWrapper.classList.remove('grabbing');
 });
-
-function zoom(delta) {
-    currentScale = Math.max(0.3, Math.min(3, currentScale + delta));
-    applyTransform();
-}
 
 // ========== CHAT ==========
 function updateChatRecipients() {
     const select = document.getElementById('chatRecipient');
-    select.innerHTML = '';
+    select.innerHTML = '<option value="">Selecione um destinatário</option>';
     
     allPlayers.filter(p => p.id !== playerId).forEach(player => {
         const option = document.createElement('option');
@@ -543,14 +614,13 @@ function renderChatMessages() {
         const msgDiv = document.createElement('div');
         msgDiv.className = 'chat-message';
         
-        const recipientName = msg.recipient_id ? (allPlayers.find(p => p.id === msg.recipient_id)?.name || 'Você') : 'Todos';
+        const senderName = msg.sender_id === playerId ? 'Você' : msg.sender_name;
+        const recipientName = msg.recipient_id === playerId ? 'Você' : 
+                            (allPlayers.find(p => p.id === msg.recipient_id)?.name || 'Desconhecido');
         
         msgDiv.innerHTML = `
             <div class="chat-message-header">
-                <div>
-                    <strong>${msg.sender_name}</strong> 
-                    ${msg.recipient_id ? `→ <em>${recipientName}</em>` : ''}
-                </div>
+                <strong>${senderName}</strong> → ${recipientName}
                 <span class="chat-timestamp">${new Date(msg.timestamp).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</span>
             </div>
             <div class="chat-message-text">${msg.message}</div>
@@ -567,9 +637,12 @@ function sendChatMessage() {
     const recipientSelect = document.getElementById('chatRecipient');
     
     const message = input.value.trim();
-    if (!message) return;
+    const recipientId = recipientSelect.value;
     
-    const recipientId = recipientSelect.value || null;
+    if (!message || !recipientId) {
+        alert('Selecione um destinatário e digite uma mensagem!');
+        return;
+    }
     
     socket.emit('send_message', {
         session_id: SESSION_ID,
@@ -591,7 +664,6 @@ function playNotificationSound() {
     audio.play().catch(() => {});
 }
 
-// ========== UTILS ==========
 function showToast(msg) {
     const toast = document.getElementById('toast');
     toast.textContent = msg;
@@ -600,6 +672,7 @@ function showToast(msg) {
 }
 
 applyTransform();
+drawGrid();
 </script>
 
 </body>
