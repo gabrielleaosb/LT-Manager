@@ -7,344 +7,148 @@
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <style>
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: 'Lato', sans-serif;
-    background: #0a0a0f;
-    color: #fff;
-    overflow: hidden;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overflow: hidden; }
 
 /* Login Modal */
 .login-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.95);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.95);
+    display: flex; align-items: center; justify-content: center; z-index: 1000;
 }
-
-.login-overlay.hidden {
-    display: none;
-}
-
+.login-overlay.hidden { display: none; }
 .login-box {
     background: linear-gradient(135deg, rgba(26,26,46,0.95), rgba(16,16,30,0.95));
-    border: 2px solid #9b59b6;
-    border-radius: 16px;
-    padding: 40px;
-    max-width: 400px;
-    width: 90%;
-    box-shadow: 0 20px 60px rgba(155,89,182,0.3);
+    border: 2px solid #9b59b6; border-radius: 16px; padding: 40px;
+    max-width: 400px; width: 90%; box-shadow: 0 20px 60px rgba(155,89,182,0.3);
 }
-
-.login-box h1 {
-    font-family: 'Merriweather', serif;
-    color: #c49bdb;
-    margin-bottom: 10px;
-    text-align: center;
-}
-
-.login-box p {
-    color: #bbb;
-    text-align: center;
-    margin-bottom: 30px;
-    font-size: 0.9rem;
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-group label {
-    display: block;
-    color: #bbb;
-    margin-bottom: 8px;
-    font-size: 0.9rem;
-}
-
+.login-box h1 { font-family: 'Merriweather', serif; color: #c49bdb; margin-bottom: 10px; text-align: center; }
+.login-box p { color: #bbb; text-align: center; margin-bottom: 30px; font-size: 0.9rem; }
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; color: #bbb; margin-bottom: 8px; font-size: 0.9rem; }
 .form-group input {
-    width: 100%;
-    padding: 12px 15px;
-    background: rgba(16,16,30,0.8);
-    border: 2px solid rgba(155,89,182,0.3);
-    border-radius: 8px;
-    color: #fff;
-    font-size: 1rem;
-    transition: border-color 0.3s;
+    width: 100%; padding: 12px 15px; background: rgba(16,16,30,0.8);
+    border: 2px solid rgba(155,89,182,0.3); border-radius: 8px;
+    color: #fff; font-size: 1rem; transition: border-color 0.3s;
 }
-
-.form-group input:focus {
-    outline: none;
-    border-color: #9b59b6;
-}
-
+.form-group input:focus { outline: none; border-color: #9b59b6; }
 .login-btn {
-    width: 100%;
-    padding: 12px;
-    background: linear-gradient(135deg, #9b59b6, #8e44ad);
-    border: none;
-    border-radius: 8px;
-    color: #fff;
-    font-size: 1rem;
-    font-weight: bold;
-    cursor: pointer;
-    transition: transform 0.2s;
+    width: 100%; padding: 12px; background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    border: none; border-radius: 8px; color: #fff; font-size: 1rem;
+    font-weight: bold; cursor: pointer; transition: transform 0.2s;
 }
-
-.login-btn:hover {
-    transform: translateY(-2px);
-}
-
-.login-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
+.login-btn:hover { transform: translateY(-2px); }
 
 /* Header */
 .header {
     background: linear-gradient(135deg, rgba(26,26,46,0.95), rgba(16,16,30,0.95));
-    border-bottom: 2px solid rgba(155,89,182,0.3);
-    padding: 15px 30px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    backdrop-filter: blur(10px);
-    z-index: 100;
+    border-bottom: 2px solid rgba(155,89,182,0.3); padding: 15px 30px;
+    display: flex; justify-content: space-between; align-items: center; z-index: 100;
 }
-
-.header h1 {
-    font-family: 'Merriweather', serif;
-    font-size: 1.3rem;
-    color: #c49bdb;
-}
-
-.header-info {
-    display: flex;
-    gap: 20px;
-    align-items: center;
-}
-
+.header h1 { font-family: 'Merriweather', serif; font-size: 1.3rem; color: #c49bdb; }
+.header-info { display: flex; gap: 20px; align-items: center; }
 .player-name {
-    color: #fff;
-    font-weight: bold;
-    padding: 8px 15px;
-    background: rgba(155,89,182,0.2);
-    border-radius: 8px;
+    color: #fff; font-weight: bold; padding: 8px 15px;
+    background: rgba(155,89,182,0.2); border-radius: 8px;
     border: 1px solid rgba(155,89,182,0.4);
 }
-
-.status {
-    padding: 8px 15px;
-    background: rgba(26,26,46,0.9);
-    border: 2px solid rgba(155,89,182,0.3);
-    border-radius: 8px;
-}
-
+.status { padding: 8px 15px; background: rgba(26,26,46,0.9); border: 2px solid rgba(155,89,182,0.3); border-radius: 8px; }
 .status-indicator {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    margin-right: 8px;
-    animation: pulse 2s infinite;
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 8px; animation: pulse 2s infinite;
 }
+.status-indicator.connected { background: #2ed573; }
+.status-indicator.disconnected { background: #e74c3c; animation: none; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-.status-indicator.connected {
-    background: #2ed573;
-}
-
-.status-indicator.disconnected {
-    background: #e74c3c;
-    animation: none;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-/* Permissions Banner */
-.permissions-banner {
-    background: rgba(155,89,182,0.2);
-    border-bottom: 1px solid rgba(155,89,182,0.3);
-    padding: 8px 30px;
-    display: flex;
-    gap: 15px;
-    align-items: center;
-    font-size: 0.85rem;
-}
-
-.permission-badge {
-    padding: 4px 10px;
-    background: rgba(46,213,115,0.2);
-    border: 1px solid #2ed573;
-    border-radius: 12px;
-    color: #2ed573;
-}
-
-.permission-badge.disabled {
-    background: rgba(231,76,60,0.2);
-    border-color: #e74c3c;
-    color: #e74c3c;
-}
+/* Main Layout */
+.main-layout { display: flex; height: calc(100vh - 70px); }
 
 /* Canvas Container */
-.canvas-container {
-    width: 100vw;
-    height: calc(100vh - 130px);
-    position: relative;
-    background: #1a1a2e;
-    overflow: hidden;
-}
+.canvas-container { flex: 1; position: relative; background: #1a1a2e; overflow: hidden; }
+.canvas-wrapper { position: absolute; width: 100%; height: 100%; cursor: grab; }
+.canvas-wrapper.grabbing { cursor: grabbing; }
+#mapCanvas, #drawingCanvas { position: absolute; image-rendering: crisp-edges; }
+#mapCanvas { z-index: 1; }
+#drawingCanvas { z-index: 2; pointer-events: none; }
 
-.canvas-wrapper {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    cursor: grab;
+/* Chat Sidebar */
+.chat-sidebar {
+    width: 350px; background: rgba(26,26,46,0.95);
+    border-left: 2px solid rgba(155,89,182,0.3);
+    display: flex; flex-direction: column;
 }
-
-.canvas-wrapper.grabbing {
-    cursor: grabbing;
+.chat-header {
+    padding: 15px; background: rgba(155,89,182,0.2);
+    border-bottom: 2px solid rgba(155,89,182,0.3);
+    font-weight: bold; color: #c49bdb;
 }
-
-#mapCanvas, #drawingCanvas {
-    position: absolute;
-    image-rendering: crisp-edges;
+.chat-messages {
+    flex: 1; overflow-y: auto; padding: 15px;
+    display: flex; flex-direction: column; gap: 10px;
 }
-
-#mapCanvas {
-    z-index: 1;
+.chat-message {
+    background: rgba(16,16,30,0.8); border: 1px solid rgba(155,89,182,0.2);
+    border-radius: 8px; padding: 10px;
 }
-
-#drawingCanvas {
-    z-index: 2;
-    pointer-events: none;
+.chat-message-header {
+    display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem;
 }
-
-#drawingCanvas.drawing-mode {
-    pointer-events: auto;
-    cursor: crosshair;
+.chat-message-header strong { color: #9b59b6; }
+.chat-message-header em { color: #ffc107; font-style: normal; }
+.chat-timestamp { color: #666; font-size: 0.75rem; }
+.chat-message-text { color: #ddd; font-size: 0.9rem; line-height: 1.4; }
+.chat-input-area {
+    padding: 15px; background: rgba(16,16,30,0.8);
+    border-top: 2px solid rgba(155,89,182,0.3);
 }
-
-/* Toolbar (apenas se tiver permissões) */
-.player-toolbar {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    background: rgba(26,26,46,0.95);
-    border: 2px solid rgba(155,89,182,0.3);
-    border-radius: 12px;
-    padding: 15px;
-    backdrop-filter: blur(10px);
-    z-index: 10;
-    display: none;
+.chat-recipient-select {
+    width: 100%; padding: 10px; margin-bottom: 10px;
+    background: rgba(26,26,46,0.9); border: 1px solid rgba(155,89,182,0.3);
+    border-radius: 6px; color: #fff; font-size: 0.9rem;
 }
-
-.player-toolbar.visible {
-    display: block;
+.chat-input-row { display: flex; gap: 10px; }
+.chat-input {
+    flex: 1; padding: 10px; background: rgba(26,26,46,0.9);
+    border: 1px solid rgba(155,89,182,0.3); border-radius: 6px;
+    color: #fff; font-size: 0.9rem;
 }
-
-.toolbar-section {
-    margin-bottom: 15px;
+.chat-send-btn {
+    padding: 10px 20px; background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    border: none; border-radius: 6px; color: #fff;
+    font-weight: bold; cursor: pointer; transition: all 0.3s;
 }
-
-.toolbar-section:last-child {
-    margin-bottom: 0;
-}
-
-.toolbar-section h3 {
-    color: #c49bdb;
-    font-size: 0.9rem;
-    margin-bottom: 8px;
-}
-
-.tool-buttons {
-    display: flex;
-    gap: 8px;
-}
-
-.tool-btn {
-    padding: 8px 12px;
-    background: rgba(155,89,182,0.2);
-    border: 2px solid rgba(155,89,182,0.3);
-    border-radius: 6px;
-    color: #fff;
-    cursor: pointer;
-    font-size: 0.85rem;
-    transition: all 0.3s;
-}
-
-.tool-btn:hover {
-    background: rgba(155,89,182,0.4);
-    border-color: #9b59b6;
-}
-
-.tool-btn.active {
-    background: rgba(155,89,182,0.5);
-    border-color: #9b59b6;
-}
+.chat-send-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(155,89,182,0.4); }
 
 /* Zoom Controls */
 .zoom-controls {
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    display: flex;
-    gap: 10px;
-    z-index: 10;
+    position: absolute; bottom: 20px; right: 20px;
+    display: flex; gap: 10px; z-index: 10;
 }
-
 .zoom-btn {
-    width: 40px;
-    height: 40px;
-    background: rgba(155,89,182,0.8);
-    border: 2px solid #9b59b6;
-    border-radius: 50%;
-    color: #fff;
-    font-size: 1.2rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 40px; height: 40px; background: rgba(155,89,182,0.8);
+    border: 2px solid #9b59b6; border-radius: 50%; color: #fff;
+    font-size: 1.2rem; cursor: pointer; transition: all 0.3s ease;
+    display: flex; align-items: center; justify-content: center;
 }
-
-.zoom-btn:hover {
-    background: #9b59b6;
-    transform: scale(1.1);
-}
+.zoom-btn:hover { background: #9b59b6; transform: scale(1.1); }
 
 /* Toast */
 .toast {
-    position: fixed;
-    top: 90px;
-    right: 30px;
+    position: fixed; top: 90px; right: 30px;
     background: linear-gradient(135deg, #9b59b6, #8e44ad);
-    color: #fff;
-    padding: 12px 20px;
-    border-radius: 8px;
+    color: #fff; padding: 12px 20px; border-radius: 8px;
     box-shadow: 0 10px 30px rgba(155,89,182,0.5);
-    opacity: 0;
-    transform: translateY(-20px);
-    transition: all 0.3s ease;
-    z-index: 1000;
-    pointer-events: none;
+    opacity: 0; transform: translateY(-20px);
+    transition: all 0.3s ease; z-index: 1000; pointer-events: none;
 }
+.toast.show { opacity: 1; transform: translateY(0); }
 
-.toast.show {
-    opacity: 1;
-    transform: translateY(0);
-}
+.empty-state { text-align: center; padding: 40px; color: #666; font-style: italic; }
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: rgba(16,16,30,0.5); }
+::-webkit-scrollbar-thumb { background: rgba(155,89,182,0.5); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(155,89,182,0.7); }
 </style>
 </head>
 <body>
@@ -378,36 +182,38 @@ body {
     </div>
 </header>
 
-<!-- Permissions Banner -->
-<div class="permissions-banner" id="permissionsBanner">
-    <span style="color: #bbb;">Suas permissões:</span>
-    <span class="permission-badge disabled" id="permMoveTokens">Mover Tokens</span>
-    <span class="permission-badge disabled" id="permDraw">Desenhar</span>
-    <span class="permission-badge disabled" id="permPing">Pingar Localização</span>
-</div>
-
-<!-- Canvas Container -->
-<div class="canvas-container">
-    <div class="canvas-wrapper" id="canvasWrapper">
-        <canvas id="mapCanvas"></canvas>
-        <canvas id="drawingCanvas"></canvas>
-    </div>
-    
-    <!-- Player Toolbar (aparece se tiver permissões) -->
-    <div class="player-toolbar" id="playerToolbar">
-        <div class="toolbar-section">
-            <h3>🎨 Desenho</h3>
-            <div class="tool-buttons">
-                <button class="tool-btn active" data-tool="select">✋ Selecionar</button>
-                <button class="tool-btn" data-tool="draw">✏️ Desenhar</button>
-                <button class="tool-btn" data-tool="ping">📍 Pingar</button>
-            </div>
+<div class="main-layout">
+    <!-- Canvas Container -->
+    <div class="canvas-container">
+        <div class="canvas-wrapper" id="canvasWrapper">
+            <canvas id="mapCanvas"></canvas>
+            <canvas id="drawingCanvas"></canvas>
+        </div>
+        
+        <div class="zoom-controls">
+            <button class="zoom-btn" onclick="zoom(-0.1)">−</button>
+            <button class="zoom-btn" onclick="zoom(0.1)">+</button>
         </div>
     </div>
-    
-    <div class="zoom-controls">
-        <button class="zoom-btn" onclick="zoom(-0.1)">−</button>
-        <button class="zoom-btn" onclick="zoom(0.1)">+</button>
+
+    <!-- Chat Sidebar -->
+    <div class="chat-sidebar">
+        <div class="chat-header">💬 Chat</div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="empty-state">Nenhuma mensagem ainda</div>
+        </div>
+        <div class="chat-input-area">
+            <select class="chat-recipient-select" id="chatRecipient">
+                <option value="">Selecione um destinatário</option>
+            </select>
+            <div class="chat-input-row">
+                <input type="text" class="chat-input" id="chatInput" placeholder="Digite sua mensagem..." maxlength="500">
+                <button class="chat-send-btn" onclick="sendChatMessage()">Enviar</button>
+            </div>
+            <p style="color: #888; font-size: 0.75rem; margin-top: 8px; text-align: center;">
+                💡 Apenas você e o destinatário verão mensagens privadas
+            </p>
+        </div>
     </div>
 </div>
 
@@ -417,14 +223,11 @@ body {
 const socket = io();
 const SESSION_ID = document.getElementById('sessionId').value;
 
-// Estado do jogador
 let playerName = '';
 let playerId = null;
-let permissions = {
-    moveTokens: [],  // IDs dos tokens que pode mover
-    draw: false,
-    ping: false
-};
+let permissions = { moveTokens: [], draw: false, ping: false };
+let allPlayers = [];
+let chatMessages = [];
 
 // Canvas
 const mapCanvas = document.getElementById('mapCanvas');
@@ -433,33 +236,25 @@ const drawingCanvas = document.getElementById('drawingCanvas');
 const drawCtx = drawingCanvas.getContext('2d');
 const canvasWrapper = document.getElementById('canvasWrapper');
 
-let w = mapCanvas.width = drawingCanvas.width = 3000;
-let h = mapCanvas.height = drawingCanvas.height = 3000;
+let w = mapCanvas.width = drawingCanvas.width = 5000;
+let h = mapCanvas.height = drawingCanvas.height = 5000;
 
-// Estado do mapa
-let maps = [];  // Múltiplos mapas
-let entities = [];  // Entidades (PNGs sem borda)
+let maps = [];
+let entities = [];
 let tokens = [];
 let drawings = [];
 let currentScale = 1;
 
-// Pan/Drag do canvas
 let isPanning = false;
-let panX = 0;
-let panY = 0;
+let panX = -1500;
+let panY = -1500;
 let startPanX = 0;
 let startPanY = 0;
 
-// Ferramentas
-let currentTool = 'select';
-let isDrawing = false;
-let currentPath = [];
-
 const TOKEN_RADIUS = 35;
+let loadedImages = {};
 
-// ==================
-// LOGIN SYSTEM
-// ==================
+// ========== LOGIN ==========
 document.getElementById('loginBtn').addEventListener('click', () => {
     const nameInput = document.getElementById('playerNameInput');
     const name = nameInput.value.trim();
@@ -475,7 +270,6 @@ document.getElementById('loginBtn').addEventListener('click', () => {
     document.getElementById('playerNameDisplay').textContent = playerName;
     document.getElementById('loginOverlay').classList.add('hidden');
     
-    // Conectar ao servidor
     socket.emit('player_join', {
         session_id: SESSION_ID,
         player_id: playerId,
@@ -485,60 +279,51 @@ document.getElementById('loginBtn').addEventListener('click', () => {
     showToast(`Bem-vindo, ${playerName}!`);
 });
 
-// Enter para fazer login
 document.getElementById('playerNameInput').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        document.getElementById('loginBtn').click();
-    }
+    if (e.key === 'Enter') document.getElementById('loginBtn').click();
 });
 
-// ==================
-// WEBSOCKET EVENTS
-// ==================
+// ========== WEBSOCKET ==========
 socket.on('connect', () => {
-    console.log('Conectado ao servidor');
+    console.log('Conectado');
     updateStatus(true);
 });
 
 socket.on('disconnect', () => {
-    console.log('Desconectado do servidor');
+    console.log('Desconectado');
     updateStatus(false);
 });
 
-socket.on('player_joined', (data) => {
-    console.log('Jogador entrou:', data.player_name);
-    showToast(`${data.player_name} entrou na sessão`);
-});
-
 socket.on('session_state', (data) => {
-    console.log('Estado da sessão recebido:', data);
     maps = data.maps || [];
     entities = data.entities || [];
     tokens = data.tokens || [];
     drawings = data.drawings || [];
-    redrawAll();
+    preloadAllImages();
 });
 
 socket.on('permissions_updated', (data) => {
     if (data.player_id === playerId) {
         permissions = data.permissions;
-        updatePermissionsUI();
         showToast('Suas permissões foram atualizadas!');
     }
 });
 
 socket.on('maps_sync', (data) => {
     maps = data.maps;
+    preloadMapImages();
     redrawAll();
 });
 
 socket.on('entities_sync', (data) => {
     entities = data.entities;
+    preloadEntityImages();
     redrawAll();
 });
 
 socket.on('token_sync', (data) => {
     tokens = data.tokens;
+    preloadTokenImages();
     redrawAll();
 });
 
@@ -552,8 +337,26 @@ socket.on('drawings_cleared', () => {
     redrawDrawings();
 });
 
-socket.on('ping_received', (data) => {
-    showPing(data.x, data.y, data.player_name);
+socket.on('players_list', (data) => {
+    allPlayers = data.players || [];
+    updateChatRecipients();
+});
+
+socket.on('player_joined', (data) => {
+    showToast(`${data.player_name} entrou na sessão`);
+});
+
+socket.on('chat_history', (data) => {
+    chatMessages = data.messages || [];
+    renderChatMessages();
+});
+
+socket.on('new_message', (data) => {
+    if (!chatMessages.find(m => m.id === data.id)) {
+        chatMessages.push(data);
+        renderChatMessages();
+        playNotificationSound();
+    }
 });
 
 function updateStatus(connected) {
@@ -569,70 +372,65 @@ function updateStatus(connected) {
     }
 }
 
-function updatePermissionsUI() {
-    // Atualizar badges de permissões
-    const moveTokensBadge = document.getElementById('permMoveTokens');
-    const drawBadge = document.getElementById('permDraw');
-    const pingBadge = document.getElementById('permPing');
-    
-    if (permissions.moveTokens.length > 0) {
-        moveTokensBadge.classList.remove('disabled');
-    } else {
-        moveTokensBadge.classList.add('disabled');
-    }
-    
-    if (permissions.draw) {
-        drawBadge.classList.remove('disabled');
-    } else {
-        drawBadge.classList.add('disabled');
-    }
-    
-    if (permissions.ping) {
-        pingBadge.classList.remove('disabled');
-    } else {
-        pingBadge.classList.add('disabled');
-    }
-    
-    // Mostrar toolbar se tiver alguma permissão
-    if (permissions.draw || permissions.ping || permissions.moveTokens.length > 0) {
-        document.getElementById('playerToolbar').classList.add('visible');
-    }
+// ========== IMAGENS ==========
+function preloadAllImages() {
+    preloadMapImages();
+    preloadEntityImages();
+    preloadTokenImages();
 }
 
-// ==================
-// RENDER
-// ==================
+function preloadMapImages() {
+    maps.forEach(map => {
+        if (map.image && !loadedImages[map.id]) {
+            const img = new Image();
+            img.onload = () => { loadedImages[map.id] = img; redrawAll(); };
+            img.src = map.image;
+        }
+    });
+}
+
+function preloadEntityImages() {
+    entities.forEach(entity => {
+        if (entity.image && !loadedImages[entity.id]) {
+            const img = new Image();
+            img.onload = () => { loadedImages[entity.id] = img; redrawAll(); };
+            img.src = entity.image;
+        }
+    });
+}
+
+function preloadTokenImages() {
+    tokens.forEach(token => {
+        if (token.image && !loadedImages[token.id]) {
+            const img = new Image();
+            img.onload = () => { loadedImages[token.id] = img; redrawAll(); };
+            img.src = token.image;
+        }
+    });
+}
+
+// ========== RENDER ==========
 function redrawAll() {
     mapCtx.clearRect(0, 0, w, h);
     
-    // Desenhar todos os mapas
     maps.forEach(map => {
-        if (map.image) {
-            const img = new Image();
-            img.src = map.image;
-            img.onload = () => {
-                mapCtx.drawImage(img, map.x, map.y, map.width, map.height);
-                redrawEntitiesAndTokens();
-            };
+        const img = loadedImages[map.id];
+        if (img && img.complete) {
+            mapCtx.drawImage(img, map.x, map.y, map.width, map.height);
         }
     });
     
-    redrawEntitiesAndTokens();
-}
-
-function redrawEntitiesAndTokens() {
-    // Desenhar entidades (PNGs sem borda)
     entities.forEach(entity => {
-        const img = new Image();
-        img.src = entity.image;
-        mapCtx.drawImage(img, entity.x, entity.y, entity.width, entity.height);
+        const img = loadedImages[entity.id];
+        if (img && img.complete) {
+            mapCtx.drawImage(img, entity.x, entity.y, entity.width, entity.height);
+        }
     });
     
-    // Desenhar tokens (com borda circular)
     tokens.forEach(token => {
-        if (token.image) {
-            const img = new Image();
-            img.src = token.image;
+        const img = loadedImages[token.id];
+        
+        if (img && img.complete) {
             mapCtx.save();
             mapCtx.beginPath();
             mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
@@ -640,8 +438,8 @@ function redrawEntitiesAndTokens() {
             mapCtx.clip();
             mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
             mapCtx.restore();
-        } else {
-            mapCtx.fillStyle = token.color || '#9b59b6';
+        } else if (token.color) {
+            mapCtx.fillStyle = token.color;
             mapCtx.beginPath();
             mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
             mapCtx.fill();
@@ -675,31 +473,25 @@ function redrawDrawings() {
         if (drawing.path.length > 1) {
             drawCtx.beginPath();
             drawCtx.moveTo(drawing.path[0].x, drawing.path[0].y);
-            
             for (let i = 1; i < drawing.path.length; i++) {
                 drawCtx.lineTo(drawing.path[i].x, drawing.path[i].y);
             }
-            
             drawCtx.stroke();
         }
     });
 }
 
-// ==================
-// PAN/ZOOM
-// ==================
+// ========== PAN/ZOOM ==========
 function applyTransform() {
     const transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
     canvasWrapper.style.transform = transform;
 }
 
 canvasWrapper.addEventListener('mousedown', (e) => {
-    if (currentTool === 'select') {
-        isPanning = true;
-        startPanX = e.clientX - panX;
-        startPanY = e.clientY - panY;
-        canvasWrapper.classList.add('grabbing');
-    }
+    isPanning = true;
+    startPanX = e.clientX - panX;
+    startPanY = e.clientY - panY;
+    canvasWrapper.classList.add('grabbing');
 });
 
 canvasWrapper.addEventListener('mousemove', (e) => {
@@ -725,44 +517,81 @@ function zoom(delta) {
     applyTransform();
 }
 
-// ==================
-// PING SYSTEM
-// ==================
-function showPing(x, y, playerName) {
-    const ping = document.createElement('div');
-    ping.style.position = 'absolute';
-    ping.style.left = x + 'px';
-    ping.style.top = y + 'px';
-    ping.style.width = '40px';
-    ping.style.height = '40px';
-    ping.style.borderRadius = '50%';
-    ping.style.border = '3px solid #ffc107';
-    ping.style.background = 'rgba(255,193,7,0.3)';
-    ping.style.animation = 'pingPulse 2s ease-out';
-    ping.style.pointerEvents = 'none';
-    ping.style.zIndex = '999';
+// ========== CHAT ==========
+function updateChatRecipients() {
+    const select = document.getElementById('chatRecipient');
+    select.innerHTML = '';
     
-    const label = document.createElement('div');
-    label.textContent = playerName;
-    label.style.position = 'absolute';
-    label.style.top = '-25px';
-    label.style.left = '50%';
-    label.style.transform = 'translateX(-50%)';
-    label.style.background = 'rgba(0,0,0,0.8)';
-    label.style.padding = '4px 8px';
-    label.style.borderRadius = '4px';
-    label.style.fontSize = '12px';
-    label.style.whiteSpace = 'nowrap';
-    
-    ping.appendChild(label);
-    canvasWrapper.appendChild(ping);
-    
-    setTimeout(() => ping.remove(), 2000);
+    allPlayers.filter(p => p.id !== playerId).forEach(player => {
+        const option = document.createElement('option');
+        option.value = player.id;
+        option.textContent = `💬 ${player.name}`;
+        select.appendChild(option);
+    });
 }
 
-// ==================
-// UTILS
-// ==================
+function renderChatMessages() {
+    const chatBox = document.getElementById('chatMessages');
+    chatBox.innerHTML = '';
+    
+    if (chatMessages.length === 0) {
+        chatBox.innerHTML = '<div class="empty-state">Nenhuma mensagem ainda</div>';
+        return;
+    }
+    
+    chatMessages.forEach(msg => {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'chat-message';
+        
+        const recipientName = msg.recipient_id ? (allPlayers.find(p => p.id === msg.recipient_id)?.name || 'Você') : 'Todos';
+        
+        msgDiv.innerHTML = `
+            <div class="chat-message-header">
+                <div>
+                    <strong>${msg.sender_name}</strong> 
+                    ${msg.recipient_id ? `→ <em>${recipientName}</em>` : ''}
+                </div>
+                <span class="chat-timestamp">${new Date(msg.timestamp).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</span>
+            </div>
+            <div class="chat-message-text">${msg.message}</div>
+        `;
+        
+        chatBox.appendChild(msgDiv);
+    });
+    
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const recipientSelect = document.getElementById('chatRecipient');
+    
+    const message = input.value.trim();
+    if (!message) return;
+    
+    const recipientId = recipientSelect.value || null;
+    
+    socket.emit('send_message', {
+        session_id: SESSION_ID,
+        sender_id: playerId,
+        message: message,
+        recipient_id: recipientId
+    });
+    
+    input.value = '';
+}
+
+document.getElementById('chatInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendChatMessage();
+});
+
+function playNotificationSound() {
+    const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGGa88OScTgwOWK3n77BdGAg+ltf');
+    audio.volume = 0.3;
+    audio.play().catch(() => {});
+}
+
+// ========== UTILS ==========
 function showToast(msg) {
     const toast = document.getElementById('toast');
     toast.textContent = msg;
@@ -770,18 +599,7 @@ function showToast(msg) {
     setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
-// Inicialização
 applyTransform();
-
-// CSS para ping animation
-const style = document.createElement('style');
-style.textContent = `
-@keyframes pingPulse {
-    0% { transform: scale(0); opacity: 1; }
-    100% { transform: scale(3); opacity: 0; }
-}
-`;
-document.head.appendChild(style);
 </script>
 
 </body>

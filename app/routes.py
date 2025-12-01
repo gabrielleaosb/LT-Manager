@@ -15,14 +15,8 @@ def dashboard():
 @app.route("/map-manager")
 def map_manager():
     """Gerenciador de Mapas com Grid"""
-    # Gerar ID único para a sessão
     session_id = str(uuid.uuid4())[:8]
     return render_template("map_manager.html", session_id=session_id)
-
-@app.route("/entity-manager")
-def combat_tracker():
-    """Tracker de Combate"""
-    return render_template("entity_manager.html")
 
 @app.route("/dice-roller")
 def dice_roller():
@@ -41,37 +35,24 @@ def map_state():
     """API para estado do mapa (para compartilhamento em tempo real)"""
     if request.method == "POST":
         data = request.json
-        # TODO: Implementar salvamento no banco
         return jsonify({"status": "success", "data": data})
     else:
-        # Retornar estado atual do mapa
-        # TODO: Buscar do banco
         return jsonify({"status": "success", "data": {}})
-
-@app.route("/api/combat/save", methods=["POST"])
-def save_combat():
-    """Salvar estado do combate"""
-    data = request.json
-    # TODO: Implementar salvamento no banco
-    return jsonify({"status": "success"})
 
 @app.route("/api/dice/history", methods=["GET"])
 def dice_history():
     """Histórico de rolagens"""
-    # TODO: Buscar do banco
     return jsonify({"status": "success", "history": []})
 
 @app.route("/api/notes/save", methods=["POST"])
 def save_notes():
     """Salvar notas do mestre"""
     data = request.json
-    # TODO: Implementar salvamento no banco
     return jsonify({"status": "success"})
 
 @app.route("/api/notes/get", methods=["GET"])
 def get_notes():
     """Buscar notas do mestre"""
-    # TODO: Buscar do banco
     return jsonify({"status": "success", "notes": []})
 
 # Rota para visão do jogador (somente leitura)

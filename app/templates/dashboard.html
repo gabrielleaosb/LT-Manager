@@ -11,12 +11,9 @@
 <script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </head>
 <body>
-<style>]
-    
-</style>
+
 <!-- Canvas para background hexagonal -->
 <canvas id="gridCanvas"></canvas>
-
 
 <!-- Main Container -->
 <div class="container">
@@ -26,17 +23,11 @@
     </div>
 
     <!-- Modules Grid -->
-    <div class="modules-grid">
+    <div class="modules-grid" style="grid-template-columns: repeat(3, 1fr); max-width: 900px;">
         <div class="module-card" data-url="/map-manager">
             <div class="module-icon">🗺️</div>
             <h3>Gerenciador de Mapas</h3>
-            <p>Crie e compartilhe mapas interativos</p>
-        </div>
-
-        <div class="module-card" data-url="/entity-manager">
-            <div class="module-icon">⚔️</div>
-            <h3>Tracker de Combate</h3>
-            <p>Gerencie iniciativa e HP</p>
+            <p>Crie e compartilhe mapas interativos com chat</p>
         </div>
 
         <div class="module-card" data-url="/dice-roller">

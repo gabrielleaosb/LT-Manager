@@ -12,24 +12,57 @@
 
 <input type="hidden" id="sessionId" value="{{ session_id }}">
 
-<!-- Header -->
+<!-- Header Compacto -->
 <header class="header">
     <div class="header-left">
         <button class="back-btn" onclick="window.location.href='/dashboard'">← Voltar</button>
-        <h1>🗺️ Gerenciador de Mapas Avançado</h1>
+        <h1>🗺️ Gerenciador de Mapas</h1>
     </div>
     <div class="header-actions">
+        <button class="btn" onclick="copyShareLink()">🔗 Copiar Link</button>
         <button class="btn btn-danger" onclick="clearAll()">🗑️ Limpar Tudo</button>
-        <button class="btn" onclick="clearDrawings()">🧹 Limpar Desenhos</button>
     </div>
 </header>
 
-<div class="main-layout">
-    <!-- Sidebar Esquerda - Ferramentas -->
-    <aside class="sidebar left-sidebar">
-        <div class="section">
-            <h3>🛠️ Ferramentas</h3>
-            <div class="tool-selector">
+<!-- Canvas Fullscreen -->
+<div class="canvas-container">
+    <canvas id="gridCanvas"></canvas>
+    <canvas id="mapCanvas"></canvas>
+    <canvas id="drawingCanvas"></canvas>
+    
+    <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoom(-0.1)">−</button>
+        <button class="zoom-btn" onclick="zoom(0.1)">+</button>
+    </div>
+</div>
+
+<!-- Botões Flutuantes -->
+<div class="floating-buttons">
+    <button class="floating-btn" onclick="toggleToolsPanel()" title="Ferramentas">
+        🛠️
+    </button>
+    <button class="floating-btn" onclick="togglePlayersPanel()" title="Jogadores">
+        👥
+    </button>
+    <button class="floating-btn" onclick="toggleChatPanel()" title="Chat">
+        💬
+    </button>
+    <button class="floating-btn" onclick="toggleDiceRoller()" title="Dados">
+        🎲
+    </button>
+</div>
+
+<!-- Painel de Ferramentas -->
+<div class="floating-panel" id="toolsPanel">
+    <div class="panel-header">
+        <h3>🛠️ Ferramentas</h3>
+        <button class="panel-close" onclick="toggleToolsPanel()">×</button>
+    </div>
+    <div class="panel-content">
+        <!-- Ferramentas de Seleção -->
+        <div class="tools-section">
+            <h4>Modo de Trabalho</h4>
+            <div class="tool-grid">
                 <button class="tool-btn active" onclick="setTool('select')">✋ Selecionar</button>
                 <button class="tool-btn" onclick="setTool('pan')">🤚 Mover Canvas</button>
                 <button class="tool-btn" onclick="setTool('draw')">✏️ Desenhar</button>
@@ -37,78 +70,142 @@
             </div>
         </div>
 
-        <div class="section">
-            <h3>🎨 Configurações de Desenho</h3>
-            <div class="drawing-controls">
-                <div class="control-group">
-                    <label>Tamanho do Pincel</label>
-                    <input type="range" id="brushSize" min="1" max="20" value="3" onchange="setBrushSize(this.value)">
+        <!-- Grid Settings -->
+        <div class="tools-section">
+            <h4>Configurações da Grid</h4>
+            <div class="grid-controls">
+                <div class="control-row">
+                    <label>
+                        <input type="checkbox" checked onchange="toggleGrid()">
+                        Mostrar Grid
+                    </label>
                 </div>
-                
-                <div class="control-group">
-                    <label>Cor</label>
-                    <div class="color-palette">
-                        <div class="color-option active" style="background: #9b59b6;" onclick="setDrawingColor('#9b59b6')"></div>
-                        <div class="color-option" style="background: #e74c3c;" onclick="setDrawingColor('#e74c3c')"></div>
-                        <div class="color-option" style="background: #3498db;" onclick="setDrawingColor('#3498db')"></div>
-                        <div class="color-option" style="background: #2ecc71;" onclick="setDrawingColor('#2ecc71')"></div>
-                        <div class="color-option" style="background: #f39c12;" onclick="setDrawingColor('#f39c12')"></div>
-                        <div class="color-option" style="background: #1abc9c;" onclick="setDrawingColor('#1abc9c')"></div>
-                        <div class="color-option" style="background: #e67e22;" onclick="setDrawingColor('#e67e22')"></div>
-                        <div class="color-option" style="background: #ecf0f1;" onclick="setDrawingColor('#ecf0f1')"></div>
-                        <div class="color-option" style="background: #34495e;" onclick="setDrawingColor('#34495e')"></div>
-                        <div class="color-option" style="background: #000000;" onclick="setDrawingColor('#000000')"></div>
-                    </div>
+                <div class="control-row">
+                    <label>Tamanho:</label>
+                    <input type="range" min="20" max="100" value="50" step="5" onchange="updateGridSize(this.value)">
+                    <span class="grid-size-value" id="gridSizeValue">50px</span>
                 </div>
             </div>
         </div>
-        <div class="section">
-            <h3>🗺️ Adicionar Elementos</h3>
-            <button class="btn btn-primary" onclick="addMap()">📁 Adicionar Mapa</button>
-            <button class="btn btn-primary" onclick="addEntity()">🖼️ Adicionar Entidade (PNG)</button>
-            <button class="btn btn-primary" onclick="addToken()">🎭 Adicionar Token</button>
+
+        <!-- Desenho -->
+        <div class="tools-section">
+            <h4>Configurações de Desenho</h4>
+            <div class="grid-controls">
+                <div class="control-row">
+                    <label>Tamanho:</label>
+                    <input type="range" min="1" max="20" value="3" onchange="setBrushSize(this.value)">
+                </div>
+            </div>
+            <div class="color-palette" style="margin-top: 10px;">
+                <div class="color-option active" style="background: #9b59b6;" onclick="setDrawingColor('#9b59b6')"></div>
+                <div class="color-option" style="background: #e74c3c;" onclick="setDrawingColor('#e74c3c')"></div>
+                <div class="color-option" style="background: #3498db;" onclick="setDrawingColor('#3498db')"></div>
+                <div class="color-option" style="background: #2ecc71;" onclick="setDrawingColor('#2ecc71')"></div>
+                <div class="color-option" style="background: #f39c12;" onclick="setDrawingColor('#f39c12')"></div>
+                <div class="color-option" style="background: #1abc9c;" onclick="setDrawingColor('#1abc9c')"></div>
+                <div class="color-option" style="background: #e67e22;" onclick="setDrawingColor('#e67e22')"></div>
+                <div class="color-option" style="background: #ecf0f1;" onclick="setDrawingColor('#ecf0f1')"></div>
+                <div class="color-option" style="background: #34495e;" onclick="setDrawingColor('#34495e')"></div>
+                <div class="color-option" style="background: #000000;" onclick="setDrawingColor('#000000')"></div>
+            </div>
+            <button class="action-btn" onclick="clearDrawings()" style="margin-top: 10px;">🧹 Limpar Desenhos</button>
         </div>
 
-        <div class="section">
-            <h3>🎭 Tokens</h3>
-            <div class="token-list" id="tokenList"></div>
+        <!-- Adicionar Elementos -->
+        <div class="tools-section">
+            <h4>Adicionar ao Mapa</h4>
+            <button class="action-btn" onclick="addMap()">📁 Adicionar Mapa</button>
+            <button class="action-btn" onclick="addEntity()">🖼️ Adicionar Entidade</button>
+            <button class="action-btn" onclick="addToken()">🎭 Adicionar Token</button>
         </div>
 
-        <div class="section">
-            <h3>🔗 Compartilhar</h3>
-            <button class="btn btn-success" style="width: 100%;" onclick="copyShareLink()">
-                📋 Copiar Link para Jogadores
-            </button>
-            <p style="color: #888; font-size: 0.8rem; margin-top: 8px; text-align: center;">
-                Jogadores podem entrar e você controla suas permissões
-            </p>
-        </div>
-    </aside>
-
-    <!-- Canvas Central -->
-    <div class="canvas-container">
-        <canvas id="mapCanvas"></canvas>
-        <canvas id="drawingCanvas"></canvas>
-        
-        <div class="zoom-controls">
-            <button class="zoom-btn" onclick="zoom(-0.1)">−</button>
-            <button class="zoom-btn" onclick="zoom(0.1)">+</button>
-        </div>
-        
-        <div class="help-box">
-            <strong>💡 Dica:</strong> Use "Mover Canvas" para navegar pelo mapa grande
+        <!-- Tokens -->
+        <div class="tools-section">
+            <h4>Tokens no Mapa</h4>
+            <div class="token-list" id="tokenList">
+                <div class="empty-state">Nenhum token adicionado</div>
+            </div>
         </div>
     </div>
+</div>
 
-    <!-- Sidebar Direita - Jogadores -->
-    <aside class="sidebar right-sidebar">
-        <div class="section">
-            <h3>👥 Jogadores Online</h3>
-            <div class="players-list" id="playersList">
-                <div class="empty-players">Nenhum jogador conectado</div>
+<!-- Painel de Jogadores -->
+<div class="floating-panel" id="playersPanel">
+    <div class="panel-header">
+        <h3>👥 Jogadores Online</h3>
+        <button class="panel-close" onclick="togglePlayersPanel()">×</button>
+    </div>
+    <div class="panel-content">
+        <div class="players-list" id="playersList">
+            <div class="empty-players">Nenhum jogador conectado</div>
+        </div>
+    </div>
+</div>
+
+<!-- Painel de Chat -->
+<div class="floating-panel" id="chatPanel">
+    <div class="panel-header">
+        <h3>💬 Chat (Mestre vê tudo)</h3>
+        <button class="panel-close" onclick="toggleChatPanel()">×</button>
+    </div>
+    <div class="panel-content">
+        <div class="chat-messages" id="chatMessages">
+            <div class="empty-state">Nenhuma mensagem ainda</div>
+        </div>
+        <div class="chat-input-area">
+            <select class="chat-recipient-select" id="chatRecipient">
+                <option value="all">📢 Visível apenas para mim</option>
+            </select>
+            <div class="chat-input-row">
+                <input type="text" class="chat-input" id="chatInput" placeholder="Digite sua mensagem..." maxlength="500">
+                <button class="chat-send-btn" onclick="sendChatMessage()">Enviar</button>
             </div>
         </div>
-    </aside>
+    </div>
+</div>
+
+<!-- Painel de Dados -->
+<div class="floating-panel" id="dicePanel">
+    <div class="panel-header">
+        <h3>🎲 Rolador de Dados</h3>
+        <button class="panel-close" onclick="toggleDiceRoller()">×</button>
+    </div>
+    <div class="panel-content">
+        <div class="dice-result" id="diceResult">
+            Selecione um dado
+        </div>
+        
+        <div class="dice-grid">
+            <button class="dice-btn" onclick="rollDice(4)">d4</button>
+            <button class="dice-btn" onclick="rollDice(6)">d6</button>
+            <button class="dice-btn" onclick="rollDice(8)">d8</button>
+            <button class="dice-btn" onclick="rollDice(10)">d10</button>
+            <button class="dice-btn" onclick="rollDice(12)">d12</button>
+            <button class="dice-btn" onclick="rollDice(20)">d20</button>
+            <button class="dice-btn" onclick="rollDice(100)">d100</button>
+        </div>
+        
+        <div class="tools-section">
+            <h4>Rolagem Personalizada</h4>
+            <div class="custom-dice-form">
+                <div class="form-row">
+                    <input type="number" id="diceCount" placeholder="Qtd" value="1" min="1" max="20">
+                    <select id="diceType">
+                        <option value="4">d4</option>
+                        <option value="6">d6</option>
+                        <option value="8">d8</option>
+                        <option value="10">d10</option>
+                        <option value="12">d12</option>
+                        <option value="20" selected>d20</option>
+                        <option value="100">d100</option>
+                    </select>
+                    <input type="number" id="diceModifier" placeholder="Mod" value="0" min="-100" max="100">
+                </div>
+                <button class="action-btn" onclick="rollCustomDice()">🎲 Rolar</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Modal de Token -->
@@ -128,14 +225,14 @@
         
         <div class="modal-actions">
             <button class="btn" onclick="closeTokenModal()">Cancelar</button>
-            <button class="btn btn-primary" onclick="createToken()">Criar Token</button>
+            <button class="action-btn" onclick="createToken()">Criar Token</button>
         </div>
     </div>
 </div>
 
 <!-- Modal de Permissões de Tokens -->
 <div class="modal" id="tokenPermissionsModal">
-    <div class="modal-content large">
+    <div class="modal-content" style="max-width: 600px;">
         <h3 id="tokenPermModalTitle">Permissões de Tokens</h3>
         <input type="hidden" id="currentPlayerId">
         
@@ -146,7 +243,7 @@
         <div class="token-perm-list" id="tokenPermList"></div>
         
         <div class="modal-actions">
-            <button class="btn btn-primary" onclick="closeTokenPermissionsModal()">Fechar</button>
+            <button class="action-btn" onclick="closeTokenPermissionsModal()">Fechar</button>
         </div>
     </div>
 </div>
