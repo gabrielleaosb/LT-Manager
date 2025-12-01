@@ -1,4 +1,4 @@
-// PLAYER VIEW - COMPLETO E CORRIGIDO
+// PLAYER VIEW - PARTE 1 - INICIALIZAÇÃO E WEBSOCKETS
 const socket = io();
 const SESSION_ID = document.getElementById('sessionId').value;
 
@@ -8,12 +8,13 @@ const CANVAS_HEIGHT = 2000;
 let playerName = '';
 let playerId = null;
 let permissions = { moveTokens: [], draw: false };
-let allPlayers = [];
 
-// CHAT WHATSAPP
+// CHAT
 let chatContacts = [];
 let currentChatContact = null;
 let currentConversation = [];
+let chatMinimized = false;
+let chatCollapsed = false;
 
 // Canvas
 const mapCanvas = document.getElementById('mapCanvas');
@@ -36,17 +37,17 @@ let currentScale = 1;
 let panX = 0;
 let panY = 0;
 
-// Pan - SEMPRE ATIVO (exceto quando está desenhando)
+// Pan
 let isPanning = false;
 let startPanX = 0;
 let startPanY = 0;
 
-// Movimentação de tokens - APENAS SE TIVER PERMISSÃO
+// Movimentação de tokens
 let draggingToken = null;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
 
-// Desenho - APENAS SE TIVER PERMISSÃO
+// Desenho
 let isDrawing = false;
 let currentPath = [];
 let drawTool = 'draw';
@@ -81,7 +82,6 @@ function zoom(delta) {
     const mouseCanvasX = (centerX - panX) / currentScale;
     const mouseCanvasY = (centerY - panY) / currentScale;
     
-    const oldScale = currentScale;
     currentScale = Math.max(0.3, Math.min(3, currentScale + delta));
     
     panX = centerX - mouseCanvasX * currentScale;
@@ -136,6 +136,8 @@ document.getElementById('loginBtn').addEventListener('click', () => {
     document.getElementById('playerNameDisplay').textContent = playerName;
     document.getElementById('loginOverlay').classList.add('hidden');
     
+    console.log('✅ Jogador fazendo login:', playerName, playerId);
+    
     socket.emit('player_join', {
         session_id: SESSION_ID,
         player_id: playerId,
@@ -151,16 +153,17 @@ document.getElementById('playerNameInput').addEventListener('keypress', (e) => {
 
 // ========== WEBSOCKET ==========
 socket.on('connect', () => {
-    console.log('Conectado');
+    console.log('✅ Conectado');
     updateStatus(true);
 });
 
 socket.on('disconnect', () => {
-    console.log('Desconectado');
+    console.log('❌ Desconectado');
     updateStatus(false);
 });
 
 socket.on('session_state', (data) => {
+    console.log('📦 Estado da sessão recebido:', data);
     maps = data.maps || [];
     entities = data.entities || [];
     tokens = data.tokens || [];
@@ -171,24 +174,28 @@ socket.on('session_state', (data) => {
 
 socket.on('permissions_updated', (data) => {
     if (data.player_id === playerId) {
+        console.log('🔑 Permissões atualizadas:', data.permissions);
         permissions = data.permissions;
         updateDrawingTools();
         showToast('Suas permissões foram atualizadas!');
     }
 });
 
-// TEMPO REAL - Sincronização instantânea
+// SINCRONIZAÇÃO EM TEMPO REAL - CORRIGIDO
 socket.on('maps_sync', (data) => {
+    console.log('📍 MAPS SYNC recebido:', data);
     maps = data.maps || [];
     preloadAllImages();
 });
 
 socket.on('entities_sync', (data) => {
+    console.log('🎭 ENTITIES SYNC recebido:', data);
     entities = data.entities || [];
     preloadAllImages();
 });
 
 socket.on('token_sync', (data) => {
+    console.log('🎯 TOKEN SYNC recebido:', data);
     tokens = data.tokens || [];
     preloadAllImages();
 });
@@ -204,29 +211,34 @@ socket.on('drawings_cleared', () => {
 });
 
 socket.on('players_list', (data) => {
-    allPlayers = data.players || [];
+    console.log('👥 Lista de jogadores recebida:', data);
     loadChatContacts();
 });
 
 socket.on('player_joined', (data) => {
     if (data.player_id !== playerId) {
+        console.log('✅ Outro jogador entrou:', data);
         showToast(`${data.player_name} entrou na sessão`);
     }
     loadChatContacts();
 });
 
-// CHAT WHATSAPP
+// CHAT
 socket.on('chat_contacts_loaded', (data) => {
+    console.log('📋 Contatos carregados:', data);
     chatContacts = data.contacts || [];
     renderChatContacts();
 });
 
 socket.on('conversation_loaded', (data) => {
+    console.log('💬 Conversa carregada:', data);
     currentConversation = data.messages || [];
     renderConversation();
 });
 
 socket.on('new_private_message', (data) => {
+    console.log('💬 Nova mensagem:', data);
+    
     // Se a mensagem é da conversa atual, adiciona
     if (currentChatContact && 
         (data.sender_id === currentChatContact || data.recipient_id === currentChatContact)) {
@@ -234,13 +246,8 @@ socket.on('new_private_message', (data) => {
         renderConversation();
     }
     
-    // Recarregar contatos para atualizar badges
     loadChatContacts();
     playNotificationSound();
-});
-
-socket.on('chat_notification', (data) => {
-    showToast(`Nova mensagem de ${data.from_name}`);
 });
 
 function updateStatus(connected) {
@@ -274,7 +281,8 @@ function preloadAllImages() {
         }
     });
 }
-// PLAYER VIEW - PARTE 2 - RENDER E EVENTOS DE MOUSE
+
+// PLAYER VIEW - PARTE 2 - RENDER, MOUSE E CHAT (FINAL)
 
 // ========== RENDER ==========
 function redrawAll() {
@@ -291,14 +299,12 @@ function redrawAll() {
         const img = loadedImages[token.id];
         
         if (token.style === 'square' && img && img.complete) {
-            // Token quadrado
             mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
             
             mapCtx.strokeStyle = "#fff";
             mapCtx.lineWidth = 2;
             mapCtx.strokeRect(token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
         } else if (img && img.complete) {
-            // Token redondo
             mapCtx.save();
             mapCtx.beginPath();
             mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
@@ -355,7 +361,7 @@ function redrawDrawings() {
     });
 }
 
-// ========== MOUSE - PAN E MOVER TOKENS (CORRIGIDO) ==========
+// ========== MOUSE - PAN E MOVER TOKENS ==========
 function getMousePos(e) {
     const rect = canvasWrapper.getBoundingClientRect();
     const scaleX = CANVAS_WIDTH / rect.width;
@@ -381,12 +387,10 @@ function findTokenAt(x, y) {
 canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
     
-    // Se está no modo de desenho, não fazer nada aqui
     if (permissions.draw && (drawTool === 'draw' || drawTool === 'erase')) {
         return;
     }
     
-    // Tentar pegar token (se tiver permissão)
     const token = findTokenAt(pos.x, pos.y);
     if (token) {
         draggingToken = token;
@@ -396,7 +400,6 @@ canvasWrapper.addEventListener('mousedown', (e) => {
         return;
     }
     
-    // Pan (sempre disponível quando não está desenhando ou movendo token)
     isPanning = true;
     startPanX = e.clientX - panX;
     startPanY = e.clientY - panY;
@@ -406,7 +409,6 @@ canvasWrapper.addEventListener('mousedown', (e) => {
 canvasWrapper.addEventListener('mousemove', (e) => {
     const pos = getMousePos(e);
     
-    // Se está desenhando, não fazer nada aqui
     if (permissions.draw && (drawTool === 'draw' || drawTool === 'erase')) {
         return;
     }
@@ -445,12 +447,11 @@ canvasWrapper.addEventListener('mouseleave', () => {
     canvasWrapper.classList.remove('grabbing');
 });
 
-// ========== DESENHO (SE TIVER PERMISSÃO) - CORRIGIDO ==========
+// ========== DESENHO ==========
 function updateDrawingTools() {
     const tools = document.getElementById('drawingTools');
     if (permissions.draw) {
         tools.classList.add('show');
-        // Quando ganha permissão de desenhar, ativa o modo desenho automaticamente
         setDrawTool('draw');
     } else {
         tools.classList.remove('show');
@@ -587,10 +588,42 @@ function eraseDrawingsAt(x, y) {
         });
     }
 }
-// PLAYER VIEW - PARTE 3 - CHAT WHATSAPP
 
-// ========== CHAT WHATSAPP ==========
+// ========== CHAT - CORRIGIDO ==========
+function toggleChatMinimize() {
+    chatMinimized = !chatMinimized;
+    const chatContainer = document.getElementById('chatContainer');
+    const icon = document.getElementById('chatMinimizeIcon');
+    
+    if (chatMinimized) {
+        chatContainer.classList.add('minimized');
+        chatContainer.classList.remove('collapsed');
+        if (icon) icon.textContent = '▲';
+    } else {
+        chatContainer.classList.remove('minimized');
+        chatContainer.classList.remove('collapsed');
+        if (icon) icon.textContent = '▼';
+        loadChatContacts();
+    }
+}
+
+function toggleChatCollapse() {
+    chatCollapsed = !chatCollapsed;
+    const chatContainer = document.getElementById('chatContainer');
+    
+    if (chatCollapsed) {
+        chatContainer.classList.add('collapsed');
+        chatContainer.classList.remove('minimized');
+    } else {
+        chatContainer.classList.remove('collapsed');
+        if (chatMinimized) {
+            chatContainer.classList.add('minimized');
+        }
+    }
+}
+
 function loadChatContacts() {
+    console.log('📋 Carregando contatos do chat...');
     socket.emit('get_chat_contacts', {
         session_id: SESSION_ID,
         user_id: playerId
@@ -602,6 +635,8 @@ function renderChatContacts() {
     if (!contactsList) return;
     
     contactsList.innerHTML = '';
+    
+    console.log('📋 Renderizando contatos:', chatContacts);
     
     if (chatContacts.length === 0) {
         contactsList.innerHTML = '<div class="empty-state">Nenhum contato disponível</div>';
@@ -617,16 +652,9 @@ function renderChatContacts() {
         
         item.onclick = () => openConversation(contact.id);
         
-        const lastMsg = contact.last_message ? 
-            (contact.last_message.message.substring(0, 30) + (contact.last_message.message.length > 30 ? '...' : '')) :
-            'Nenhuma mensagem ainda';
-        
         item.innerHTML = `
             <div class="contact-avatar">${contact.name.charAt(0).toUpperCase()}</div>
-            <div class="contact-info">
-                <div class="contact-name">${contact.name}</div>
-                <div class="contact-last-message">${lastMsg}</div>
-            </div>
+            <div class="contact-name">${contact.name}</div>
             ${contact.unread > 0 ? `<span class="contact-badge">${contact.unread}</span>` : ''}
         `;
         
@@ -635,24 +663,21 @@ function renderChatContacts() {
 }
 
 function openConversation(contactId) {
+    console.log('💬 Abrindo conversa com:', contactId);
     currentChatContact = contactId;
     
-    // Atualizar UI
     document.querySelectorAll('.contact-item').forEach(item => item.classList.remove('active'));
     event.currentTarget?.classList.add('active');
     
-    // Carregar conversa
     socket.emit('get_conversation', {
         session_id: SESSION_ID,
         user_id: playerId,
         other_user_id: contactId
     });
     
-    // Mostrar área de conversa
     document.getElementById('conversationPlaceholder').style.display = 'none';
     document.getElementById('conversationArea').style.display = 'flex';
     
-    // Atualizar header da conversa
     const contact = chatContacts.find(c => c.id === contactId);
     if (contact) {
         document.getElementById('conversationContactName').textContent = contact.name;
@@ -688,7 +713,6 @@ function renderConversation() {
         messagesContainer.appendChild(bubble);
     });
     
-    // Scroll para o final
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
@@ -700,6 +724,8 @@ function sendChatMessage() {
         return;
     }
     
+    console.log('📤 Enviando mensagem para:', currentChatContact);
+    
     socket.emit('send_private_message', {
         session_id: SESSION_ID,
         sender_id: playerId,
@@ -708,18 +734,6 @@ function sendChatMessage() {
     });
     
     input.value = '';
-    
-    // Adicionar temporariamente à conversa
-    currentConversation.push({
-        id: 'temp_' + Date.now(),
-        sender_id: playerId,
-        sender_name: playerName,
-        recipient_id: currentChatContact,
-        message: message,
-        timestamp: new Date().toISOString()
-    });
-    
-    renderConversation();
 }
 
 // Enter para enviar
