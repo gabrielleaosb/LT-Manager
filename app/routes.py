@@ -2,11 +2,6 @@ from . import app
 from flask import render_template, jsonify, request
 import uuid
 
-@app.route("/")
-def index():
-    """Landing page inicial"""
-    return render_template("index.html")
-
 @app.route("/dashboard")
 def dashboard():
     """Dashboard principal do RPG Manager"""
