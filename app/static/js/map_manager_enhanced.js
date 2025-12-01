@@ -1,5 +1,4 @@
-// MAP MANAGER - PARTE 1: INICIALIZAÇÃO E CONFIGURAÇÃO
-
+// MAP MANAGER - MESTRE - PARTE 1
 const socket = io();
 const SESSION_ID = document.getElementById('sessionId').value;
 
@@ -11,16 +10,17 @@ const gridCtx = gridCanvas.getContext('2d');
 const drawingCanvas = document.getElementById('drawingCanvas');
 const drawCtx = drawingCanvas.getContext('2d');
 const canvasWrapper = document.querySelector('.canvas-wrapper');
+const canvasContainer = document.querySelector('.canvas-container');
 
-// Tamanho do canvas otimizado
-const CANVAS_WIDTH = 2500;
-const CANVAS_HEIGHT = 2500;
+// Tamanho do canvas
+const CANVAS_WIDTH = 2000;
+const CANVAS_HEIGHT = 2000;
 
 mapCanvas.width = gridCanvas.width = drawingCanvas.width = CANVAS_WIDTH;
 mapCanvas.height = gridCanvas.height = drawingCanvas.height = CANVAS_HEIGHT;
 
-// Estado do sistema - UNIFICADO: apenas images (mapas+entidades) e tokens
-let images = [];  // Todas as imagens (não diferencia mais mapa de entidade)
+// Estado
+let images = [];
 let tokens = [];
 let drawings = [];
 let players = [];
@@ -35,36 +35,76 @@ let currentPath = [];
 
 const TOKEN_RADIUS = 35;
 
-// Grid settings
+// Grid
 let gridEnabled = true;
 let gridSize = 50;
 let gridColor = 'rgba(155, 89, 182, 0.3)';
 let gridLineWidth = 1;
 
-// Seleção e arraste
+// Seleção
 let selectedItem = null;
-let selectedType = null; // 'image' ou 'token'
+let selectedType = null;
 let draggingItem = null;
 let mouseDown = false;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
 
-// Pan e Zoom
+// Pan e Zoom - CORRIGIDO
 let isPanning = false;
-let panX = 0;
-let panY = 0;
 let startPanX = 0;
 let startPanY = 0;
 let currentScale = 1;
+let panX = 0;
+let panY = 0;
 
 // Cache de imagens
 let loadedImages = new Map();
 
-// Chat state
+// Chat
 let chatExpanded = false;
 
 // ==================
-// SISTEMA DE GRID (SOBREPÕE AS IMAGENS)
+// CENTRALIZAÇÃO E TRANSFORM
+// ==================
+function centerCanvas() {
+    const containerRect = canvasContainer.getBoundingClientRect();
+    panX = (containerRect.width - CANVAS_WIDTH) / 2;
+    panY = (containerRect.height - CANVAS_HEIGHT) / 2;
+    applyTransform();
+}
+
+function applyTransform() {
+    canvasWrapper.style.transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
+}
+
+function zoom(delta) {
+    const containerRect = canvasContainer.getBoundingClientRect();
+    const centerX = containerRect.width / 2;
+    const centerY = containerRect.height / 2;
+    
+    // Posição do mouse relativa ao canvas
+    const mouseCanvasX = (centerX - panX) / currentScale;
+    const mouseCanvasY = (centerY - panY) / currentScale;
+    
+    const oldScale = currentScale;
+    currentScale = Math.max(0.3, Math.min(3, currentScale + delta));
+    
+    // Ajustar pan para manter o zoom centralizado
+    panX = centerX - mouseCanvasX * currentScale;
+    panY = centerY - mouseCanvasY * currentScale;
+    
+    applyTransform();
+}
+
+// Zoom com scroll
+canvasWrapper.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    zoom(delta);
+});
+
+// ==================
+// GRID
 // ==================
 function drawGrid() {
     gridCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -138,7 +178,7 @@ function preloadAllImages() {
 }
 
 // ==================
-// WEBSOCKET EVENTS
+// WEBSOCKET EVENTS - CORRIGIDO PARA TEMPO REAL
 // ==================
 socket.on('connect', () => {
     console.log('Conectado ao servidor');
@@ -148,7 +188,6 @@ socket.on('connect', () => {
 socket.on('session_state', (data) => {
     console.log('Estado da sessão recebido:', data);
     
-    // Combinar mapas e entidades em uma única lista
     const maps = data.maps || [];
     const entities = data.entities || [];
     images = [...maps, ...entities];
@@ -157,7 +196,7 @@ socket.on('session_state', (data) => {
     drawings = data.drawings || [];
     
     preloadAllImages();
-    drawGrid(); // Desenhar grid depois das imagens
+    drawGrid();
 });
 
 socket.on('players_list', (data) => {
@@ -176,16 +215,17 @@ socket.on('player_left', (data) => {
     socket.emit('get_players', { session_id: SESSION_ID });
 });
 
+// TEMPO REAL - Sincronização instantânea
 socket.on('maps_sync', (data) => {
     const maps = data.maps || [];
-    images = images.filter(img => !maps.find(m => m.id === img.id));
+    images = images.filter(img => !img.id.startsWith('map_'));
     images = [...images, ...maps];
     preloadAllImages();
 });
 
 socket.on('entities_sync', (data) => {
     const entities = data.entities || [];
-    images = images.filter(img => !entities.find(e => e.id === img.id));
+    images = images.filter(img => img.id.startsWith('map_'));
     images = [...images, ...entities];
     preloadAllImages();
 });
@@ -205,12 +245,13 @@ socket.on('drawings_cleared', () => {
     redrawDrawings();
 });
 
+// CHAT - MESTRE VÊ TUDO
 socket.on('chat_history', (data) => {
     chatMessages = data.messages || [];
     renderChatMessages();
 });
 
-socket.on('new_message', (data) => {
+socket.on('master_message_notification', (data) => {
     if (!chatMessages.find(m => m.id === data.id)) {
         chatMessages.push(data);
         renderChatMessages();
@@ -218,7 +259,7 @@ socket.on('new_message', (data) => {
     }
 });
 
-socket.on('master_message_notification', (data) => {
+socket.on('new_message', (data) => {
     if (!chatMessages.find(m => m.id === data.id)) {
         chatMessages.push(data);
         renderChatMessages();
@@ -260,33 +301,12 @@ function setBrushSize(size) {
 }
 
 // ==================
-// PAN E ZOOM COM SCROLL
-// ==================
-function applyTransform() {
-    const transform = `scale(${currentScale})`;
-    canvasWrapper.style.transform = transform;
-}
-
-function zoom(delta) {
-    currentScale = Math.max(0.3, Math.min(3, currentScale + delta));
-    applyTransform();
-    showToast(`Zoom: ${Math.round(currentScale * 100)}%`);
-}
-
-// Zoom com scroll do mouse
-canvasWrapper.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    zoom(delta);
-});
-
-// ==================
 // RENDER
 // ==================
 function redrawAll() {
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // 1. Desenhar todas as imagens (mapas e entidades juntos)
+    // Desenhar todas as imagens
     images.forEach(img => {
         const loadedImg = loadedImages.get(img.id);
         
@@ -302,18 +322,10 @@ function redrawAll() {
             } catch (e) {
                 console.error('Erro ao desenhar imagem:', e);
             }
-        } else if (img.image) {
-            loadImageSafe(img.id, img.image);
-            
-            mapCtx.fillStyle = 'rgba(155, 89, 182, 0.1)';
-            mapCtx.fillRect(img.x, img.y, img.width, img.height);
-            mapCtx.strokeStyle = '#9b59b6';
-            mapCtx.lineWidth = 2;
-            mapCtx.strokeRect(img.x, img.y, img.width, img.height);
         }
     });
     
-    // 2. Desenhar tokens
+    // Desenhar tokens
     tokens.forEach(token => {
         const img = loadedImages.get(token.id);
         
@@ -329,13 +341,6 @@ function redrawAll() {
             } catch (e) {
                 console.error('Erro ao desenhar token:', e);
             }
-        } else if (token.image) {
-            loadImageSafe(token.id, token.image);
-            
-            mapCtx.fillStyle = token.color || '#9b59b6';
-            mapCtx.beginPath();
-            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-            mapCtx.fill();
         } else if (token.color) {
             mapCtx.fillStyle = token.color;
             mapCtx.beginPath();
@@ -343,14 +348,14 @@ function redrawAll() {
             mapCtx.fill();
         }
         
-        // Borda do token
+        // Borda
         mapCtx.strokeStyle = "#fff";
         mapCtx.lineWidth = 2;
         mapCtx.beginPath();
         mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
         mapCtx.stroke();
         
-        // Nome do token
+        // Nome
         mapCtx.fillStyle = "#fff";
         mapCtx.font = "bold 13px Lato";
         mapCtx.textAlign = "center";
@@ -359,7 +364,7 @@ function redrawAll() {
         mapCtx.strokeText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
         mapCtx.fillText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
 
-        // Highlight se selecionado
+        // Highlight
         if (selectedItem === token && selectedType === 'token') {
             mapCtx.strokeStyle = "#ffc107";
             mapCtx.lineWidth = 4;
@@ -392,10 +397,10 @@ function redrawDrawings() {
     });
 }
 
-// MAP MANAGER - PARTE 2: EVENTOS DE MOUSE E DESENHO
+// MAP MANAGER - MESTRE - PARTE 2
 
 // ==================
-// EVENTOS DE MOUSE - CORRIGIDO PARA ZOOM
+// EVENTOS DE MOUSE - CORRIGIDO
 // ==================
 function getMousePos(e) {
     const rect = canvasWrapper.getBoundingClientRect();
@@ -409,7 +414,7 @@ function getMousePos(e) {
 }
 
 function findItemAt(x, y) {
-    // Verificar tokens primeiro (camada superior)
+    // Verificar tokens primeiro
     for (let i = tokens.length - 1; i >= 0; i--) {
         const token = tokens[i];
         const dist = Math.hypot(token.x - x, token.y - y);
@@ -469,6 +474,7 @@ canvasWrapper.addEventListener('mousemove', (e) => {
     if (isPanning && currentTool === 'pan') {
         panX = e.clientX - startPanX;
         panY = e.clientY - startPanY;
+        applyTransform();
         return;
     }
     
@@ -488,9 +494,8 @@ canvasWrapper.addEventListener('mousemove', (e) => {
 
 canvasWrapper.addEventListener('mouseup', () => {
     if (draggingItem && mouseDown) {
-        // Emitir atualização baseado no tipo
+        // Emitir atualização
         if (selectedType === 'image') {
-            // Determinar se é mapa ou entidade pelo ID
             if (draggingItem.id.startsWith('map_')) {
                 socket.emit('update_map', {
                     session_id: SESSION_ID,
@@ -532,7 +537,7 @@ canvasWrapper.addEventListener('mouseleave', () => {
 });
 
 // ==================
-// DESENHO LIVRE - CORRIGIDO PARA ZOOM
+// DESENHO LIVRE - CORRIGIDO (APAGAR APENAS O QUE TOCA)
 // ==================
 function getDrawingPos(e) {
     const rect = drawingCanvas.getBoundingClientRect();
@@ -584,6 +589,7 @@ drawingCanvas.addEventListener('mousemove', (e) => {
 drawingCanvas.addEventListener('mouseup', () => {
     if (isDrawing && currentPath.length > 0) {
         const drawing = {
+            id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
             path: currentPath,
             color: drawingColor,
             size: brushSize
@@ -604,22 +610,28 @@ drawingCanvas.addEventListener('mouseleave', () => {
     isDrawing = false;
 });
 
-// Apagar apenas desenhos que passam por cima
+// APAGAR APENAS O QUE TOCA - CORRIGIDO
 function eraseDrawingsAt(x, y) {
     const eraseRadius = brushSize * 3;
-    const before = drawings.length;
+    let changed = false;
     
     drawings = drawings.filter(drawing => {
-        const shouldKeep = !drawing.path.some(point => {
+        // Verificar se ALGUM ponto do caminho está dentro do raio de apagar
+        const hasPointInRadius = drawing.path.some(point => {
             const dist = Math.hypot(point.x - x, point.y - y);
             return dist < eraseRadius;
         });
-        return shouldKeep;
+        
+        if (hasPointInRadius) {
+            changed = true;
+            return false; // Remove este desenho
+        }
+        return true; // Mantém este desenho
     });
     
-    if (drawings.length < before) {
+    if (changed) {
         redrawDrawings();
-        // Sincronizar estado completo dos desenhos
+        // Sincronizar com todos
         socket.emit('clear_drawings', { session_id: SESSION_ID });
         drawings.forEach(d => {
             socket.emit('drawing_update', {
@@ -640,7 +652,7 @@ function clearDrawings() {
 }
 
 // ==================
-// ADICIONAR IMAGEM (MAPA OU ENTIDADE)
+// ADICIONAR IMAGEM
 // ==================
 function addImage() {
     const input = document.createElement('input');
@@ -659,20 +671,30 @@ function addImage() {
         reader.onload = (ev) => {
             const img = new Image();
             img.onload = () => {
+                // Redimensionar se muito grande
+                let width = img.width;
+                let height = img.height;
+                const maxSize = 800;
+                
+                if (width > maxSize || height > maxSize) {
+                    const scale = maxSize / Math.max(width, height);
+                    width = width * scale;
+                    height = height * scale;
+                }
+                
                 const newImage = {
                     id: 'img_' + Date.now(),
                     name: name,
-                    x: 100,
-                    y: 100,
-                    width: img.width,
-                    height: img.height,
+                    x: CANVAS_WIDTH / 2 - width / 2,
+                    y: CANVAS_HEIGHT / 2 - height / 2,
+                    width: width,
+                    height: height,
                     image: ev.target.result
                 };
                 
                 loadedImages.set(newImage.id, img);
                 images.push(newImage);
                 
-                // Emitir como entidade (pode ser tratado como mapa também)
                 socket.emit('add_entity', {
                     session_id: SESSION_ID,
                     entity: newImage
@@ -718,8 +740,8 @@ function createToken() {
                 const newToken = {
                     id: 'token_' + Date.now(),
                     name: name,
-                    x: 300,
-                    y: 300,
+                    x: CANVAS_WIDTH / 2,
+                    y: CANVAS_HEIGHT / 2,
                     image: e.target.result
                 };
                 
@@ -744,12 +766,12 @@ function createToken() {
         };
         reader.readAsDataURL(imageInput.files[0]);
     } else {
-        // Token colorido sem imagem
+        // Token colorido
         const newToken = {
             id: 'token_' + Date.now(),
             name: name,
-            x: 300,
-            y: 300,
+            x: CANVAS_WIDTH / 2,
+            y: CANVAS_HEIGHT / 2,
             color: '#' + Math.floor(Math.random() * 16777215).toString(16)
         };
         
@@ -786,7 +808,6 @@ function deleteSelected() {
     if (!confirm(confirmMsg)) return;
     
     if (selectedType === 'image') {
-        // Detectar se é mapa ou entidade pelo ID
         if (selectedItem.id.startsWith('map_')) {
             socket.emit('delete_map', {
                 session_id: SESSION_ID,
@@ -823,10 +844,10 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// MAP MANAGER - PARTE 3: CHAT, PERMISSÕES E UI
+// MAP MANAGER - MESTRE - PARTE 3
 
 // ==================
-// CHAT INFERIOR EXPANSÍVEL
+// CHAT - TIPO WHATSAPP (MESTRE VÊ TUDO)
 // ==================
 function toggleChat() {
     const chatBottom = document.getElementById('chatBottom');
@@ -854,15 +875,22 @@ function renderChatMessages() {
     
     chatMessages.forEach(msg => {
         const msgDiv = document.createElement('div');
-        msgDiv.className = 'chat-message';
         
+        // Mensagem privada tem destaque
         const isPrivate = msg.recipient_id !== null;
-        const recipientName = isPrivate ? (players.find(p => p.id === msg.recipient_id)?.name || 'Desconhecido') : '';
+        msgDiv.className = isPrivate ? 'chat-message private-message' : 'chat-message';
+        
+        const senderName = msg.sender_id === 'master' ? 'Você (Mestre)' : msg.sender_name;
+        const recipientName = msg.recipient_id ? 
+            (players.find(p => p.id === msg.recipient_id)?.name || 'Desconhecido') : 
+            'Todos';
         
         msgDiv.innerHTML = `
             <div class="chat-message-header">
-                <strong>${msg.sender_name}</strong> 
-                ${isPrivate ? `→ <em>${recipientName}</em>` : ''}
+                <div>
+                    <strong>${senderName}</strong> 
+                    ${isPrivate ? `→ <span class="chat-message-recipient">${recipientName}</span>` : ''}
+                </div>
                 <span class="chat-timestamp">${new Date(msg.timestamp).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</span>
             </div>
             <div class="chat-message-text">${msg.message}</div>
@@ -897,7 +925,7 @@ function updateChatRecipients() {
     const select = document.getElementById('chatRecipient');
     if (!select) return;
     
-    select.innerHTML = '<option value="all">📢 Apenas para mim</option>';
+    select.innerHTML = '<option value="all">📢 Mensagem para todos</option>';
     
     players.forEach(player => {
         const option = document.createElement('option');
@@ -1056,7 +1084,7 @@ function renderImageList() {
     list.innerHTML = '';
     
     if (images.length === 0) {
-        list.innerHTML = '<div class="empty-state">Nenhuma imagem adicionada</div>';
+        list.innerHTML = '<div class="empty-state">Nenhuma imagem</div>';
         return;
     }
     
@@ -1086,7 +1114,7 @@ function renderTokenList() {
     list.innerHTML = '';
     
     if (tokens.length === 0) {
-        list.innerHTML = '<div class="empty-state">Nenhum token adicionado</div>';
+        list.innerHTML = '<div class="empty-state">Nenhum token</div>';
         return;
     }
     
@@ -1179,7 +1207,7 @@ function deleteItemById(itemId, type) {
 }
 
 // ==================
-// PAINÉIS FLUTUANTES
+// PAINÉIS
 // ==================
 function togglePanel(panelId) {
     const panel = document.getElementById(panelId);
@@ -1263,13 +1291,13 @@ function clearAll() {
 // INICIALIZAÇÃO
 // ==================
 document.addEventListener('DOMContentLoaded', () => {
-    // Inicializar chat minimizado
+    // Chat minimizado
     const chatBottom = document.getElementById('chatBottom');
     if (chatBottom) {
         chatBottom.classList.add('minimized');
     }
     
-    // Event listener para Enter no chat
+    // Enter no chat
     const chatInput = document.getElementById('chatInput');
     if (chatInput) {
         chatInput.addEventListener('keypress', (e) => {
@@ -1285,15 +1313,21 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.floating-panel').forEach(p => p.classList.remove('show'));
         }
     });
+    
+    // Centralizar canvas ao carregar
+    setTimeout(() => {
+        centerCanvas();
+    }, 100);
 });
 
-console.log('Map Manager Parte 3 carregado!');
+// Redimensionamento
+window.addEventListener('resize', () => {
+    centerCanvas();
+});
 
 // Inicializar
 setTool('select');
-applyTransform();
 drawGrid();
 renderImageList();
 renderTokenList();
-
 socket.emit('get_players', { session_id: SESSION_ID });

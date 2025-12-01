@@ -1,4 +1,4 @@
-/* MAP MANAGER CSS - PARTE 1: BASE E LAYOUT */
+/* MAP MANAGER CSS - CORRIGIDO */
 * {
     margin: 0;
     padding: 0;
@@ -67,10 +67,10 @@ body, html {
 /* LAYOUT PRINCIPAL */
 .main-layout {
     display: flex;
-    height: calc(100vh - 60px - 50px); /* header + chat minimizado */
+    height: calc(100vh - 60px - 50px);
 }
 
-/* SIDEBAR ESQUERDA FIXA - FERRAMENTAS */
+/* SIDEBAR ESQUERDA */
 .tools-sidebar {
     width: 320px;
     background: linear-gradient(135deg, rgba(26,26,46,0.95), rgba(16,16,30,0.95));
@@ -97,7 +97,7 @@ body, html {
     overflow-y: auto;
 }
 
-/* CANVAS CONTAINER */
+/* CANVAS CONTAINER - CORRIGIDO */
 .canvas-container {
     flex: 1;
     position: relative;
@@ -107,14 +107,12 @@ body, html {
 
 .canvas-wrapper {
     position: absolute;
-    width: 2500px;
-    height: 2500px;
+    width: 2000px;
+    height: 2000px;
     cursor: grab;
     transform-origin: 0 0;
-    left: 50%;
-    top: 50%;
-    margin-left: -1250px;
-    margin-top: -1250px;
+    left: 0;
+    top: 0;
 }
 
 .canvas-wrapper.grabbing {
@@ -125,8 +123,8 @@ body, html {
     position: absolute;
     top: 0;
     left: 0;
-    width: 2500px;
-    height: 2500px;
+    width: 2000px;
+    height: 2000px;
     image-rendering: crisp-edges;
 }
 
@@ -524,6 +522,11 @@ body, html {
     padding: 10px;
 }
 
+.chat-message.private-message {
+    border-left: 3px solid #ffc107;
+    background: rgba(255, 193, 7, 0.05);
+}
+
 .chat-message-header {
     display: flex;
     justify-content: space-between;
@@ -536,9 +539,10 @@ body, html {
     color: #9b59b6;
 }
 
-.chat-message-header em {
+.chat-message-recipient {
     color: #ffc107;
     font-style: normal;
+    font-size: 0.8rem;
 }
 
 .chat-timestamp {
