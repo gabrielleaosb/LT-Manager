@@ -23,14 +23,10 @@
         <button class="btn btn-danger" onclick="clearAll()">🗑️ Limpar Tudo</button>
     </div>
 </header>
-
-<!-- Layout Principal -->
 <div class="main-layout">
-    <!-- Sidebar Esquerda Fixa - Ferramentas -->
     <div class="tools-sidebar">
         <div class="sidebar-header">🛠️ Ferramentas</div>
         <div class="sidebar-content">
-            <!-- Modo de Trabalho -->
             <div class="tools-section">
                 <h4>Modo de Trabalho</h4>
                 <div class="tool-grid">
@@ -40,8 +36,6 @@
                     <button class="tool-btn" onclick="setTool('erase')">🧹 Apagar</button>
                 </div>
             </div>
-
-            <!-- Grid -->
             <div class="tools-section">
                 <h4>Grid</h4>
                 <div class="grid-controls">
@@ -58,8 +52,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Desenho -->
             <div class="tools-section">
                 <h4>Desenho</h4>
                 <div class="grid-controls">
@@ -82,23 +74,17 @@
                 </div>
                 <button class="action-btn" onclick="clearDrawings()" style="margin-top: 10px;">🧹 Limpar Desenhos</button>
             </div>
-
-            <!-- Adicionar -->
             <div class="tools-section">
                 <h4>Adicionar ao Mapa</h4>
                 <button class="action-btn" onclick="addImage()">🖼️ Adicionar Imagem</button>
                 <button class="action-btn" onclick="addToken()">🎭 Adicionar Token</button>
             </div>
-
-            <!-- Imagens -->
             <div class="tools-section">
                 <h4>Imagens no Mapa</h4>
                 <div class="item-list" id="imageList">
                     <div class="empty-state">Nenhuma imagem</div>
                 </div>
             </div>
-
-            <!-- Tokens -->
             <div class="tools-section">
                 <h4>Tokens no Mapa</h4>
                 <div class="item-list" id="tokenList">
@@ -107,8 +93,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Canvas -->
     <div class="canvas-container">
         <div class="canvas-wrapper" id="canvasWrapper">
             <canvas id="mapCanvas"></canvas>
@@ -117,8 +101,6 @@
         </div>
     </div>
 </div>
-
-<!-- Botões Flutuantes -->
 <div class="floating-buttons">
     <button class="floating-btn" onclick="togglePlayersPanel()" title="Jogadores">
         👥
@@ -127,8 +109,6 @@
         🎲
     </button>
 </div>
-
-<!-- Painel de Jogadores -->
 <div class="floating-panel" id="playersPanel">
     <div class="panel-header">
         <h3>👥 Jogadores</h3>
@@ -140,8 +120,6 @@
         </div>
     </div>
 </div>
-
-<!-- Painel de Dados -->
 <div class="floating-panel" id="dicePanel">
     <div class="panel-header">
         <h3>🎲 Dados</h3>
@@ -161,24 +139,50 @@
         </div>
     </div>
 </div>
-
-<!-- Chat Inferior -->
 <div class="chat-bottom minimized" id="chatBottom">
     <div class="chat-toggle" onclick="toggleChat()">
-        <h3>💬 Chat (Mestre vê tudo)</h3>
+        <h3>💬 Mensagens</h3>
         <span class="chat-arrow">▲</span>
     </div>
-    <div class="chat-content">
-        <div class="chat-messages" id="chatMessages">
-            <div class="empty-state">Nenhuma mensagem</div>
-        </div>
-        <div class="chat-input-area">
-            <select class="chat-recipient-select" id="chatRecipient">
-                <option value="all">📢 Apenas para mim</option>
-            </select>
-            <div class="chat-input-row">
-                <input type="text" class="chat-input" id="chatInput" placeholder="Digite sua mensagem..." maxlength="500">
-                <button class="chat-send-btn" onclick="sendChatMessage()">Enviar</button>
+    
+    <div class="chat-main-content">
+        <div class="chat-layout">
+            <div class="chat-contacts">
+                <div class="contacts-header">
+                    💬 Conversas
+                </div>
+                <div class="contacts-list" id="contactsList">
+                    <div class="empty-state">Nenhum jogador conectado</div>
+                </div>
+            </div>
+            <div class="chat-conversation">
+                <div class="conversation-placeholder" id="conversationPlaceholder">
+                    <div class="conversation-placeholder-icon">💬</div>
+                    <p>Selecione um jogador para iniciar uma conversa</p>
+                </div>
+                <div id="conversationArea" style="display: none; flex-direction: column; height: 100%;">
+                    <div class="conversation-header">
+                        <div class="contact-avatar" id="conversationContactAvatar">?</div>
+                        <div class="conversation-header-info">
+                            <h4 id="conversationContactName">Jogador</h4>
+                            <p>Online</p>
+                        </div>
+                    </div>
+                    
+                    <div class="conversation-messages" id="conversationMessages">
+                    </div>
+                    
+                    <div class="conversation-input-area">
+                        <input type="text" 
+                               class="conversation-input" 
+                               id="conversationInput" 
+                               placeholder="Digite uma mensagem..." 
+                               maxlength="500">
+                        <button class="conversation-send-btn" onclick="sendChatMessage()">
+                            ➤
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -195,8 +199,25 @@
         </div>
         
         <div class="control-group">
+            <label>Estilo do Token</label>
+            <div class="radio-group">
+                <div class="radio-option">
+                    <input type="radio" id="styleRound" name="tokenStyle" value="round" checked>
+                    <label for="styleRound">🔵 Redondo (com borda circular)</label>
+                </div>
+                <div class="radio-option">
+                    <input type="radio" id="styleSquare" name="tokenStyle" value="square">
+                    <label for="styleSquare">⬜ Quadrado (imagem completa)</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-group">
             <label>Imagem (opcional)</label>
             <input type="file" id="tokenImage" accept="image/*">
+            <small style="color: #888; display: block; margin-top: 5px;">
+                Se não selecionar uma imagem, será criado um token colorido
+            </small>
         </div>
         
         <div class="modal-actions">
@@ -206,7 +227,6 @@
     </div>
 </div>
 
-<!-- Modal de Permissões de Tokens -->
 <div class="modal" id="tokenPermissionsModal">
     <div class="modal-content" style="max-width: 600px;">
         <h3 id="tokenPermModalTitle">Permissões de Tokens</h3>

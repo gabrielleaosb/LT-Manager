@@ -15,7 +15,7 @@ def init_session(session_id):
             'drawings': [],
             'players': {},
             'permissions': {},
-            'chat_messages': []  # Novo: histórico de chat
+            'chat_conversations': {}  # {player_id: {messages: [], unread: 0}}
         }
 
 @socketio.on('connect')
@@ -50,7 +50,6 @@ def handle_join_session(data):
     })
     
     emit('players_list', {'players': list(session_state['players'].values())})
-    emit('chat_history', {'messages': session_state['chat_messages']})
     emit('session_joined', {'session_id': session_id})
     print(f'Mestre entrou na sessão: {session_id}')
 
@@ -76,6 +75,10 @@ def handle_player_join(data):
         'ping': True
     }
     
+    # Inicializar conversas do jogador
+    if player_id not in active_sessions[session_id]['chat_conversations']:
+        active_sessions[session_id]['chat_conversations'][player_id] = {}
+    
     session_state = active_sessions[session_id]
     emit('session_state', {
         'maps': session_state['maps'],
@@ -89,7 +92,6 @@ def handle_player_join(data):
         'permissions': active_sessions[session_id]['permissions'][player_id]
     })
     
-    emit('chat_history', {'messages': session_state['chat_messages']})
     emit('player_joined', {'player_id': player_id, 'player_name': player_name}, room=session_id)
     emit('players_list', {'players': list(session_state['players'].values())}, room=session_id)
     
@@ -112,7 +114,8 @@ def handle_add_map(data):
     init_session(session_id)
     active_sessions[session_id]['maps'].append(map_data)
     
-    emit('maps_sync', {'maps': active_sessions[session_id]['maps']}, room=session_id)
+    # BROADCAST PARA TODOS NA SALA (incluindo jogadores)
+    emit('maps_sync', {'maps': active_sessions[session_id]['maps']}, room=session_id, include_self=True)
     print(f'Mapa adicionado na sessão: {session_id}')
 
 @socketio.on('update_map')
@@ -128,7 +131,8 @@ def handle_update_map(data):
             active_sessions[session_id]['maps'][i] = map_data
             break
     
-    emit('maps_sync', {'maps': active_sessions[session_id]['maps']}, room=session_id)
+    # BROADCAST PARA TODOS
+    emit('maps_sync', {'maps': active_sessions[session_id]['maps']}, room=session_id, include_self=True)
 
 @socketio.on('delete_map')
 def handle_delete_map(data):
@@ -138,7 +142,8 @@ def handle_delete_map(data):
     init_session(session_id)
     active_sessions[session_id]['maps'] = [m for m in active_sessions[session_id]['maps'] if m['id'] != map_id]
     
-    emit('maps_sync', {'maps': active_sessions[session_id]['maps']}, room=session_id)
+    # BROADCAST PARA TODOS
+    emit('maps_sync', {'maps': active_sessions[session_id]['maps']}, room=session_id, include_self=True)
     print(f'Mapa removido na sessão: {session_id}')
 
 # ==================
@@ -152,7 +157,8 @@ def handle_add_entity(data):
     init_session(session_id)
     active_sessions[session_id]['entities'].append(entity_data)
     
-    emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, room=session_id)
+    # BROADCAST PARA TODOS
+    emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, room=session_id, include_self=True)
     print(f'Entidade adicionada na sessão: {session_id}')
 
 @socketio.on('update_entity')
@@ -168,7 +174,8 @@ def handle_update_entity(data):
             active_sessions[session_id]['entities'][i] = entity_data
             break
     
-    emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, room=session_id)
+    # BROADCAST PARA TODOS
+    emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, room=session_id, include_self=True)
 
 @socketio.on('delete_entity')
 def handle_delete_entity(data):
@@ -178,7 +185,8 @@ def handle_delete_entity(data):
     init_session(session_id)
     active_sessions[session_id]['entities'] = [e for e in active_sessions[session_id]['entities'] if e['id'] != entity_id]
     
-    emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, room=session_id)
+    # BROADCAST PARA TODOS
+    emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, room=session_id, include_self=True)
     print(f'Entidade removida na sessão: {session_id}')
 
 # ==================
@@ -192,7 +200,8 @@ def handle_token_update(data):
     init_session(session_id)
     active_sessions[session_id]['tokens'] = tokens
     
-    emit('token_sync', {'tokens': tokens}, room=session_id)
+    # BROADCAST PARA TODOS (incluindo quem enviou)
+    emit('token_sync', {'tokens': tokens}, room=session_id, include_self=True)
 
 # ==================
 # DRAWINGS
@@ -205,7 +214,8 @@ def handle_drawing_update(data):
     init_session(session_id)
     active_sessions[session_id]['drawings'].append(drawing)
     
-    emit('drawing_sync', {'drawing': drawing}, room=session_id, include_self=False)
+    # BROADCAST PARA TODOS (incluindo quem enviou)
+    emit('drawing_sync', {'drawing': drawing}, room=session_id, include_self=True)
 
 @socketio.on('clear_drawings')
 def handle_clear_drawings(data):
@@ -214,7 +224,8 @@ def handle_clear_drawings(data):
     init_session(session_id)
     active_sessions[session_id]['drawings'] = []
     
-    emit('drawings_cleared', {}, room=session_id)
+    # BROADCAST PARA TODOS
+    emit('drawings_cleared', {}, room=session_id, include_self=True)
 
 # ==================
 # PERMISSIONS SYSTEM
@@ -256,97 +267,147 @@ def handle_get_players(data):
     emit('players_list', {'players': players_list})
 
 # ==================
-# PING SYSTEM
+# CHAT SYSTEM - ESTILO WHATSAPP
 # ==================
-@socketio.on('send_ping')
-def handle_send_ping(data):
-    session_id = data.get('session_id')
-    player_id = data.get('player_id')
-    x = data.get('x')
-    y = data.get('y')
-    
-    init_session(session_id)
-    
-    if player_id in active_sessions[session_id]['permissions']:
-        if active_sessions[session_id]['permissions'][player_id].get('ping', False):
-            player_name = active_sessions[session_id]['players'][player_id]['name']
-            
-            emit('ping_received', {
-                'x': x,
-                'y': y,
-                'player_id': player_id,
-                'player_name': player_name
-            }, room=session_id)
-            
-            print(f'Ping enviado por {player_name} na sessão {session_id}')
-
-# ==================
-# CHAT SYSTEM
-# ==================
-@socketio.on('send_message')
-def handle_send_message(data):
-    """Envia mensagem no chat (privada ou global)"""
+@socketio.on('send_private_message')
+def handle_send_private_message(data):
+    """Envia mensagem privada entre dois usuários"""
     session_id = data.get('session_id')
     sender_id = data.get('sender_id')
+    recipient_id = data.get('recipient_id')
     message_text = data.get('message')
-    recipient_id = data.get('recipient_id')  # None = mensagem para todos (visível apenas para o mestre)
     
     init_session(session_id)
     
-    if sender_id not in active_sessions[session_id]['players']:
+    # Validar se o remetente está na sessão
+    if sender_id != 'master' and sender_id not in active_sessions[session_id]['players']:
         return
     
-    sender_name = active_sessions[session_id]['players'][sender_id]['name']
+    sender_name = 'Mestre' if sender_id == 'master' else active_sessions[session_id]['players'][sender_id]['name']
     
     message_data = {
-        'id': len(active_sessions[session_id]['chat_messages']) + 1,
+        'id': str(__import__('time').time()) + '_' + str(__import__('random').randint(1000, 9999)),
         'sender_id': sender_id,
         'sender_name': sender_name,
-        'message': message_text,
         'recipient_id': recipient_id,
-        'timestamp': __import__('datetime').datetime.now().isoformat()
+        'message': message_text,
+        'timestamp': __import__('datetime').datetime.now().isoformat(),
+        'read': False
     }
     
-    active_sessions[session_id]['chat_messages'].append(message_data)
+    # Armazenar mensagem na conversa do remetente
+    if sender_id not in active_sessions[session_id]['chat_conversations']:
+        active_sessions[session_id]['chat_conversations'][sender_id] = {}
+    if recipient_id not in active_sessions[session_id]['chat_conversations'][sender_id]:
+        active_sessions[session_id]['chat_conversations'][sender_id][recipient_id] = {'messages': [], 'unread': 0}
     
-    # Se for mensagem privada, enviar apenas para o destinatário e o mestre
-    if recipient_id and recipient_id in active_sessions[session_id]['players']:
-        recipient_socket = active_sessions[session_id]['players'][recipient_id].get('socket_id')
-        sender_socket = active_sessions[session_id]['players'][sender_id].get('socket_id')
-        
-        # Enviar para o destinatário
-        if recipient_socket:
-            emit('new_message', message_data, room=recipient_socket)
-        
-        # Enviar para o remetente (confirmação)
-        if sender_socket:
-            emit('new_message', message_data, room=sender_socket)
+    active_sessions[session_id]['chat_conversations'][sender_id][recipient_id]['messages'].append(message_data)
+    
+    # Armazenar mensagem na conversa do destinatário
+    if recipient_id not in active_sessions[session_id]['chat_conversations']:
+        active_sessions[session_id]['chat_conversations'][recipient_id] = {}
+    if sender_id not in active_sessions[session_id]['chat_conversations'][recipient_id]:
+        active_sessions[session_id]['chat_conversations'][recipient_id][sender_id] = {'messages': [], 'unread': 0}
+    
+    active_sessions[session_id]['chat_conversations'][recipient_id][sender_id]['messages'].append(message_data)
+    active_sessions[session_id]['chat_conversations'][recipient_id][sender_id]['unread'] += 1
+    
+    # Enviar para o remetente
+    if sender_id == 'master':
+        emit('new_private_message', message_data, room=request.sid)
     else:
-        # Mensagem para todos (apenas mestre vê)
-        # Apenas o remetente recebe de volta
-        sender_socket = active_sessions[session_id]['players'][sender_id].get('socket_id')
+        sender_socket = active_sessions[session_id]['players'].get(sender_id, {}).get('socket_id')
         if sender_socket:
-            emit('new_message', message_data, room=sender_socket)
+            emit('new_private_message', message_data, room=sender_socket)
     
-    # O MESTRE SEMPRE VÊ TODAS AS MENSAGENS
-    # Broadcast para todos na sala (mestre está na sala)
-    emit('master_message_notification', message_data, room=session_id)
+    # Enviar para o destinatário
+    if recipient_id == 'master':
+        # Enviar para o mestre (broadcast para a sessão, mas só o mestre está na sessão sem ser jogador)
+        emit('new_private_message', message_data, room=session_id, skip_sid=request.sid)
+    else:
+        recipient_socket = active_sessions[session_id]['players'].get(recipient_id, {}).get('socket_id')
+        if recipient_socket:
+            emit('new_private_message', message_data, room=recipient_socket)
+            # Notificação de nova mensagem
+            emit('chat_notification', {
+                'from_id': sender_id,
+                'from_name': sender_name,
+                'unread_count': active_sessions[session_id]['chat_conversations'][recipient_id][sender_id]['unread']
+            }, room=recipient_socket)
     
-    print(f'Mensagem de {sender_name}: {message_text[:50]}...')
+    print(f'Mensagem privada de {sender_name} para {recipient_id}')
 
-@socketio.on('get_chat_history')
-def handle_get_chat_history(data):
-    """Retorna histórico de chat"""
+@socketio.on('get_conversation')
+def handle_get_conversation(data):
+    """Retorna conversa entre dois usuários"""
     session_id = data.get('session_id')
-    player_id = data.get('player_id')
+    user_id = data.get('user_id')
+    other_user_id = data.get('other_user_id')
     
     init_session(session_id)
     
-    # Filtrar mensagens que o jogador pode ver
-    visible_messages = []
-    for msg in active_sessions[session_id]['chat_messages']:
-        # Jogador pode ver: mensagens enviadas por ele ou recebidas por ele
-        if msg['sender_id'] == player_id or msg['recipient_id'] == player_id:
-            visible_messages.append(msg)
+    messages = []
     
-    emit('chat_history', {'messages': visible_messages})
+    if user_id in active_sessions[session_id]['chat_conversations']:
+        if other_user_id in active_sessions[session_id]['chat_conversations'][user_id]:
+            messages = active_sessions[session_id]['chat_conversations'][user_id][other_user_id]['messages']
+            # Marcar como lido
+            active_sessions[session_id]['chat_conversations'][user_id][other_user_id]['unread'] = 0
+    
+    emit('conversation_loaded', {
+        'messages': messages,
+        'other_user_id': other_user_id
+    })
+
+@socketio.on('get_chat_contacts')
+def handle_get_chat_contacts(data):
+    """Retorna lista de contatos com preview da última mensagem"""
+    session_id = data.get('session_id')
+    user_id = data.get('user_id')
+    
+    init_session(session_id)
+    
+    contacts = []
+    
+    # Adicionar mestre sempre
+    if user_id != 'master':
+        unread = 0
+        last_message = None
+        
+        if user_id in active_sessions[session_id]['chat_conversations']:
+            if 'master' in active_sessions[session_id]['chat_conversations'][user_id]:
+                conv = active_sessions[session_id]['chat_conversations'][user_id]['master']
+                unread = conv['unread']
+                if conv['messages']:
+                    last_message = conv['messages'][-1]
+        
+        contacts.append({
+            'id': 'master',
+            'name': '👑 Mestre',
+            'unread': unread,
+            'last_message': last_message
+        })
+    
+    # Adicionar jogadores
+    for player_id, player_data in active_sessions[session_id]['players'].items():
+        if player_id == user_id:
+            continue
+        
+        unread = 0
+        last_message = None
+        
+        if user_id in active_sessions[session_id]['chat_conversations']:
+            if player_id in active_sessions[session_id]['chat_conversations'][user_id]:
+                conv = active_sessions[session_id]['chat_conversations'][user_id][player_id]
+                unread = conv['unread']
+                if conv['messages']:
+                    last_message = conv['messages'][-1]
+        
+        contacts.append({
+            'id': player_id,
+            'name': player_data['name'],
+            'unread': unread,
+            'last_message': last_message
+        })
+    
+    emit('chat_contacts_loaded', {'contacts': contacts})

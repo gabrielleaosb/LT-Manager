@@ -9,7 +9,11 @@ let playerName = '';
 let playerId = null;
 let permissions = { moveTokens: [], draw: false };
 let allPlayers = [];
-let chatMessages = [];
+
+// CHAT WHATSAPP
+let chatContacts = [];
+let currentChatContact = null;
+let currentConversation = [];
 
 // Canvas
 const mapCanvas = document.getElementById('mapCanvas');
@@ -32,17 +36,17 @@ let currentScale = 1;
 let panX = 0;
 let panY = 0;
 
-// Pan
+// Pan - SEMPRE ATIVO (exceto quando está desenhando)
 let isPanning = false;
 let startPanX = 0;
 let startPanY = 0;
 
-// Movimentação de tokens
+// Movimentação de tokens - APENAS SE TIVER PERMISSÃO
 let draggingToken = null;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
 
-// Desenho
+// Desenho - APENAS SE TIVER PERMISSÃO
 let isDrawing = false;
 let currentPath = [];
 let drawTool = 'draw';
@@ -173,6 +177,7 @@ socket.on('permissions_updated', (data) => {
     }
 });
 
+// TEMPO REAL - Sincronização instantânea
 socket.on('maps_sync', (data) => {
     maps = data.maps || [];
     preloadAllImages();
@@ -200,28 +205,42 @@ socket.on('drawings_cleared', () => {
 
 socket.on('players_list', (data) => {
     allPlayers = data.players || [];
-    updateChatRecipients();
+    loadChatContacts();
 });
 
 socket.on('player_joined', (data) => {
     if (data.player_id !== playerId) {
         showToast(`${data.player_name} entrou na sessão`);
     }
+    loadChatContacts();
 });
 
-// CHAT - APENAS PRIVADAS
-socket.on('chat_history', (data) => {
-    chatMessages = data.messages || [];
-    renderChatMessages();
+// CHAT WHATSAPP
+socket.on('chat_contacts_loaded', (data) => {
+    chatContacts = data.contacts || [];
+    renderChatContacts();
 });
 
-socket.on('new_message', (data) => {
-    if ((data.sender_id === playerId || data.recipient_id === playerId) && 
-        !chatMessages.find(m => m.id === data.id)) {
-        chatMessages.push(data);
-        renderChatMessages();
-        playNotificationSound();
+socket.on('conversation_loaded', (data) => {
+    currentConversation = data.messages || [];
+    renderConversation();
+});
+
+socket.on('new_private_message', (data) => {
+    // Se a mensagem é da conversa atual, adiciona
+    if (currentChatContact && 
+        (data.sender_id === currentChatContact || data.recipient_id === currentChatContact)) {
+        currentConversation.push(data);
+        renderConversation();
     }
+    
+    // Recarregar contatos para atualizar badges
+    loadChatContacts();
+    playNotificationSound();
+});
+
+socket.on('chat_notification', (data) => {
+    showToast(`Nova mensagem de ${data.from_name}`);
 });
 
 function updateStatus(connected) {
@@ -255,6 +274,7 @@ function preloadAllImages() {
         }
     });
 }
+// PLAYER VIEW - PARTE 2 - RENDER E EVENTOS DE MOUSE
 
 // ========== RENDER ==========
 function redrawAll() {
@@ -270,7 +290,15 @@ function redrawAll() {
     tokens.forEach(token => {
         const img = loadedImages[token.id];
         
-        if (img && img.complete) {
+        if (token.style === 'square' && img && img.complete) {
+            // Token quadrado
+            mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
+            
+            mapCtx.strokeStyle = "#fff";
+            mapCtx.lineWidth = 2;
+            mapCtx.strokeRect(token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
+        } else if (img && img.complete) {
+            // Token redondo
             mapCtx.save();
             mapCtx.beginPath();
             mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
@@ -278,18 +306,24 @@ function redrawAll() {
             mapCtx.clip();
             mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
             mapCtx.restore();
+            
+            mapCtx.strokeStyle = "#fff";
+            mapCtx.lineWidth = 2;
+            mapCtx.beginPath();
+            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+            mapCtx.stroke();
         } else if (token.color) {
             mapCtx.fillStyle = token.color;
             mapCtx.beginPath();
             mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
             mapCtx.fill();
+            
+            mapCtx.strokeStyle = "#fff";
+            mapCtx.lineWidth = 2;
+            mapCtx.beginPath();
+            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+            mapCtx.stroke();
         }
-        
-        mapCtx.strokeStyle = "#fff";
-        mapCtx.lineWidth = 2;
-        mapCtx.beginPath();
-        mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-        mapCtx.stroke();
         
         mapCtx.fillStyle = "#fff";
         mapCtx.font = "bold 13px Lato";
@@ -321,7 +355,7 @@ function redrawDrawings() {
     });
 }
 
-// ========== MOUSE - PAN E MOVER TOKENS ==========
+// ========== MOUSE - PAN E MOVER TOKENS (CORRIGIDO) ==========
 function getMousePos(e) {
     const rect = canvasWrapper.getBoundingClientRect();
     const scaleX = CANVAS_WIDTH / rect.width;
@@ -347,7 +381,12 @@ function findTokenAt(x, y) {
 canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
     
-    // Tentar pegar token
+    // Se está no modo de desenho, não fazer nada aqui
+    if (permissions.draw && (drawTool === 'draw' || drawTool === 'erase')) {
+        return;
+    }
+    
+    // Tentar pegar token (se tiver permissão)
     const token = findTokenAt(pos.x, pos.y);
     if (token) {
         draggingToken = token;
@@ -357,7 +396,7 @@ canvasWrapper.addEventListener('mousedown', (e) => {
         return;
     }
     
-    // Pan
+    // Pan (sempre disponível quando não está desenhando ou movendo token)
     isPanning = true;
     startPanX = e.clientX - panX;
     startPanY = e.clientY - panY;
@@ -366,6 +405,11 @@ canvasWrapper.addEventListener('mousedown', (e) => {
 
 canvasWrapper.addEventListener('mousemove', (e) => {
     const pos = getMousePos(e);
+    
+    // Se está desenhando, não fazer nada aqui
+    if (permissions.draw && (drawTool === 'draw' || drawTool === 'erase')) {
+        return;
+    }
     
     if (draggingToken) {
         draggingToken.x = pos.x - dragOffsetX;
@@ -401,15 +445,17 @@ canvasWrapper.addEventListener('mouseleave', () => {
     canvasWrapper.classList.remove('grabbing');
 });
 
-// ========== DESENHO (SE TIVER PERMISSÃO) ==========
+// ========== DESENHO (SE TIVER PERMISSÃO) - CORRIGIDO ==========
 function updateDrawingTools() {
     const tools = document.getElementById('drawingTools');
     if (permissions.draw) {
         tools.classList.add('show');
-        drawingCanvas.classList.add('drawing-mode');
+        // Quando ganha permissão de desenhar, ativa o modo desenho automaticamente
+        setDrawTool('draw');
     } else {
         tools.classList.remove('show');
         drawingCanvas.classList.remove('drawing-mode');
+        canvasWrapper.classList.remove('drawing-mode');
     }
 }
 
@@ -419,9 +465,20 @@ function setDrawTool(tool) {
     event.target.classList.add('active');
     
     if (tool === 'draw') {
+        drawingCanvas.classList.add('drawing-mode');
+        canvasWrapper.classList.add('drawing-mode');
         drawingCanvas.style.cursor = 'crosshair';
-    } else {
+        canvasWrapper.style.cursor = 'crosshair';
+    } else if (tool === 'erase') {
+        drawingCanvas.classList.add('drawing-mode');
+        canvasWrapper.classList.add('drawing-mode');
         drawingCanvas.style.cursor = 'not-allowed';
+        canvasWrapper.style.cursor = 'not-allowed';
+    } else if (tool === 'pan') {
+        drawingCanvas.classList.remove('drawing-mode');
+        canvasWrapper.classList.remove('drawing-mode');
+        drawingCanvas.style.cursor = 'default';
+        canvasWrapper.style.cursor = 'grab';
     }
 }
 
@@ -530,84 +587,151 @@ function eraseDrawingsAt(x, y) {
         });
     }
 }
+// PLAYER VIEW - PARTE 3 - CHAT WHATSAPP
 
-// ========== CHAT ==========
-function updateChatRecipients() {
-    const select = document.getElementById('chatRecipient');
-    select.innerHTML = '<option value="">Selecione um destinatário</option>';
-    
-    // Adicionar Mestre
-    const masterOption = document.createElement('option');
-    masterOption.value = 'master';
-    masterOption.textContent = '👑 Mestre';
-    select.appendChild(masterOption);
-    
-    // Adicionar outros jogadores
-    allPlayers.filter(p => p.id !== playerId).forEach(player => {
-        const option = document.createElement('option');
-        option.value = player.id;
-        option.textContent = `💬 ${player.name}`;
-        select.appendChild(option);
+// ========== CHAT WHATSAPP ==========
+function loadChatContacts() {
+    socket.emit('get_chat_contacts', {
+        session_id: SESSION_ID,
+        user_id: playerId
     });
 }
 
-function renderChatMessages() {
-    const chatBox = document.getElementById('chatMessages');
-    chatBox.innerHTML = '';
+function renderChatContacts() {
+    const contactsList = document.getElementById('contactsList');
+    if (!contactsList) return;
     
-    if (chatMessages.length === 0) {
-        chatBox.innerHTML = '<div class="empty-state">Nenhuma mensagem ainda</div>';
+    contactsList.innerHTML = '';
+    
+    if (chatContacts.length === 0) {
+        contactsList.innerHTML = '<div class="empty-state">Nenhum contato disponível</div>';
         return;
     }
     
-    chatMessages.forEach(msg => {
-        const msgDiv = document.createElement('div');
-        msgDiv.className = 'chat-message private-message';
+    chatContacts.forEach(contact => {
+        const item = document.createElement('div');
+        item.className = 'contact-item';
+        if (currentChatContact === contact.id) {
+            item.classList.add('active');
+        }
         
-        const senderName = msg.sender_id === playerId ? 'Você' : 
-                          msg.sender_id === 'master' ? '👑 Mestre' : msg.sender_name;
-        const recipientName = msg.recipient_id === playerId ? 'Você' : 
-                            msg.recipient_id === 'master' ? '👑 Mestre' :
-                            (allPlayers.find(p => p.id === msg.recipient_id)?.name || 'Desconhecido');
+        item.onclick = () => openConversation(contact.id);
         
-        msgDiv.innerHTML = `
-            <div class="chat-message-header">
-                <strong>${senderName}</strong> → ${recipientName}
-                <span class="chat-timestamp">${new Date(msg.timestamp).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</span>
+        const lastMsg = contact.last_message ? 
+            (contact.last_message.message.substring(0, 30) + (contact.last_message.message.length > 30 ? '...' : '')) :
+            'Nenhuma mensagem ainda';
+        
+        item.innerHTML = `
+            <div class="contact-avatar">${contact.name.charAt(0).toUpperCase()}</div>
+            <div class="contact-info">
+                <div class="contact-name">${contact.name}</div>
+                <div class="contact-last-message">${lastMsg}</div>
             </div>
-            <div class="chat-message-text">${msg.message}</div>
+            ${contact.unread > 0 ? `<span class="contact-badge">${contact.unread}</span>` : ''}
         `;
         
-        chatBox.appendChild(msgDiv);
+        contactsList.appendChild(item);
+    });
+}
+
+function openConversation(contactId) {
+    currentChatContact = contactId;
+    
+    // Atualizar UI
+    document.querySelectorAll('.contact-item').forEach(item => item.classList.remove('active'));
+    event.currentTarget?.classList.add('active');
+    
+    // Carregar conversa
+    socket.emit('get_conversation', {
+        session_id: SESSION_ID,
+        user_id: playerId,
+        other_user_id: contactId
     });
     
-    chatBox.scrollTop = chatBox.scrollHeight;
+    // Mostrar área de conversa
+    document.getElementById('conversationPlaceholder').style.display = 'none';
+    document.getElementById('conversationArea').style.display = 'flex';
+    
+    // Atualizar header da conversa
+    const contact = chatContacts.find(c => c.id === contactId);
+    if (contact) {
+        document.getElementById('conversationContactName').textContent = contact.name;
+        document.getElementById('conversationContactAvatar').textContent = contact.name.charAt(0).toUpperCase();
+    }
+}
+
+function renderConversation() {
+    const messagesContainer = document.getElementById('conversationMessages');
+    if (!messagesContainer) return;
+    
+    messagesContainer.innerHTML = '';
+    
+    if (currentConversation.length === 0) {
+        messagesContainer.innerHTML = '<div class="empty-state">Nenhuma mensagem ainda. Inicie a conversa!</div>';
+        return;
+    }
+    
+    currentConversation.forEach(msg => {
+        const bubble = document.createElement('div');
+        bubble.className = msg.sender_id === playerId ? 'message-bubble sent' : 'message-bubble received';
+        
+        const time = new Date(msg.timestamp).toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        bubble.innerHTML = `
+            <div class="message-text">${msg.message}</div>
+            <div class="message-time">${time}</div>
+        `;
+        
+        messagesContainer.appendChild(bubble);
+    });
+    
+    // Scroll para o final
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function sendChatMessage() {
-    const input = document.getElementById('chatInput');
-    const recipientSelect = document.getElementById('chatRecipient');
-    
+    const input = document.getElementById('conversationInput');
     const message = input.value.trim();
-    const recipientId = recipientSelect.value;
     
-    if (!message || !recipientId) {
-        alert('Selecione um destinatário e digite uma mensagem!');
+    if (!message || !currentChatContact) {
         return;
     }
     
-    socket.emit('send_message', {
+    socket.emit('send_private_message', {
         session_id: SESSION_ID,
         sender_id: playerId,
-        message: message,
-        recipient_id: recipientId
+        recipient_id: currentChatContact,
+        message: message
     });
     
     input.value = '';
+    
+    // Adicionar temporariamente à conversa
+    currentConversation.push({
+        id: 'temp_' + Date.now(),
+        sender_id: playerId,
+        sender_name: playerName,
+        recipient_id: currentChatContact,
+        message: message,
+        timestamp: new Date().toISOString()
+    });
+    
+    renderConversation();
 }
 
-document.getElementById('chatInput').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendChatMessage();
+// Enter para enviar
+document.addEventListener('DOMContentLoaded', () => {
+    const conversationInput = document.getElementById('conversationInput');
+    if (conversationInput) {
+        conversationInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+    }
 });
 
 function playNotificationSound() {

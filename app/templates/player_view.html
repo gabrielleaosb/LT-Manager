@@ -61,7 +61,7 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 /* Main Layout */
-.main-layout { display: flex; height: calc(100vh - 70px); }
+.main-layout { display: flex; height: calc(100vh - 70px - 400px); }
 
 /* Canvas Container */
 .canvas-container { flex: 1; position: relative; background: #1a1a2e; overflow: hidden; }
@@ -75,6 +75,7 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
     top: 0;
 }
 .canvas-wrapper.grabbing { cursor: grabbing; }
+.canvas-wrapper.drawing-mode { cursor: crosshair !important; }
 #mapCanvas, #gridCanvas, #drawingCanvas {
     position: absolute; top: 0; left: 0;
     width: 2000px; height: 2000px;
@@ -118,58 +119,151 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
 }
 .color-option.active { border-color: #fff; transform: scale(1.1); }
 
-/* Chat Sidebar */
+/* Chat Sidebar - Estilo WhatsApp */
 .chat-sidebar {
-    width: 350px; background: rgba(26,26,46,0.95);
+    width: 400px; background: rgba(26,26,46,0.95);
     border-left: 2px solid rgba(155,89,182,0.3);
     display: flex; flex-direction: column;
+    height: 400px;
 }
 .chat-header {
     padding: 15px; background: rgba(155,89,182,0.2);
     border-bottom: 2px solid rgba(155,89,182,0.3);
     font-weight: bold; color: #c49bdb;
 }
-.chat-messages {
-    flex: 1; overflow-y: auto; padding: 15px;
-    display: flex; flex-direction: column; gap: 10px;
-}
-.chat-message {
-    background: rgba(16,16,30,0.8); border: 1px solid rgba(155,89,182,0.2);
-    border-radius: 8px; padding: 10px;
-}
-.chat-message.private-message {
-    border-left: 3px solid #ffc107;
-    background: rgba(255, 193, 7, 0.05);
-}
-.chat-message-header {
-    display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem;
-}
-.chat-message-header strong { color: #9b59b6; }
-.chat-timestamp { color: #666; font-size: 0.75rem; }
-.chat-message-text { color: #ddd; font-size: 0.9rem; line-height: 1.4; }
-.chat-input-area {
-    padding: 15px; background: rgba(16,16,30,0.8);
-    border-top: 2px solid rgba(155,89,182,0.3);
-}
-.chat-recipient-select {
-    width: 100%; padding: 10px; margin-bottom: 10px;
-    background: rgba(26,26,46,0.9); border: 1px solid rgba(155,89,182,0.3);
-    border-radius: 6px; color: #fff; font-size: 0.9rem;
-}
-.chat-input-row { display: flex; gap: 10px; }
-.chat-input {
-    flex: 1; padding: 10px; background: rgba(26,26,46,0.9);
-    border: 1px solid rgba(155,89,182,0.3); border-radius: 6px;
-    color: #fff; font-size: 0.9rem;
-}
-.chat-send-btn {
-    padding: 10px 20px; background: linear-gradient(135deg, #9b59b6, #8e44ad);
-    border: none; border-radius: 6px; color: #fff;
-    font-weight: bold; cursor: pointer; transition: all 0.3s;
-}
-.chat-send-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(155,89,182,0.4); }
+.chat-layout { display: flex; height: 100%; }
 
-.empty-state { text-align: center; padding: 40px; color: #666; font-style: italic; }
+/* Lista de Contatos */
+.chat-contacts {
+    width: 200px; background: rgba(16,16,30,0.9);
+    border-right: 2px solid rgba(155,89,182,0.3);
+    display: flex; flex-direction: column;
+}
+.contacts-header {
+    padding: 10px 15px; background: rgba(155,89,182,0.2);
+    border-bottom: 2px solid rgba(155,89,182,0.3);
+    font-weight: bold; color: #c49bdb; font-size: 0.9rem;
+}
+.contacts-list { flex: 1; overflow-y: auto; }
+.contact-item {
+    padding: 10px 12px; border-bottom: 1px solid rgba(155,89,182,0.1);
+    cursor: pointer; transition: all 0.2s ease;
+    display: flex; align-items: center; gap: 10px; position: relative;
+}
+.contact-item:hover { background: rgba(155,89,182,0.15); }
+.contact-item.active {
+    background: rgba(155,89,182,0.3); border-left: 3px solid #9b59b6;
+}
+.contact-avatar {
+    width: 35px; height: 35px; border-radius: 50%;
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; flex-shrink: 0;
+}
+.contact-info { flex: 1; min-width: 0; }
+.contact-name {
+    font-weight: bold; color: #fff; font-size: 0.85rem;
+    margin-bottom: 2px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
+.contact-last-message {
+    color: #888; font-size: 0.75rem; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
+.contact-badge {
+    position: absolute; top: 8px; right: 8px;
+    background: #e74c3c; color: #fff; border-radius: 10px;
+    padding: 2px 6px; font-size: 0.7rem; font-weight: bold;
+    min-width: 18px; text-align: center;
+}
+/* CONTINUAÇÃO DO CSS - CONVERSA E BODY */
+
+/* Área de Conversa */
+.chat-conversation {
+    flex: 1; display: flex; flex-direction: column;
+    background: rgba(10,10,15,0.95);
+}
+.conversation-header {
+    padding: 12px 15px; background: rgba(155,89,182,0.2);
+    border-bottom: 2px solid rgba(155,89,182,0.3);
+    display: flex; align-items: center; gap: 10px;
+}
+.conversation-header .contact-avatar {
+    width: 35px; height: 35px; font-size: 1rem;
+}
+.conversation-header-info h4 {
+    color: #c49bdb; font-size: 0.95rem; margin-bottom: 2px;
+}
+.conversation-header-info p {
+    color: #888; font-size: 0.7rem;
+}
+.conversation-messages {
+    flex: 1; overflow-y: auto; padding: 15px;
+    display: flex; flex-direction: column; gap: 8px;
+}
+.message-bubble {
+    max-width: 70%; padding: 8px 12px; border-radius: 12px;
+    position: relative; word-wrap: break-word;
+    animation: fadeInMessage 0.3s ease;
+}
+@keyframes fadeInMessage {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.message-bubble.sent {
+    align-self: flex-end;
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    color: #fff; border-bottom-right-radius: 4px;
+}
+.message-bubble.received {
+    align-self: flex-start;
+    background: rgba(46,46,66,0.9);
+    color: #fff; border-bottom-left-radius: 4px;
+}
+.message-text {
+    font-size: 0.85rem; line-height: 1.4; margin-bottom: 4px;
+}
+.message-time {
+    font-size: 0.65rem; color: rgba(255,255,255,0.6); text-align: right;
+}
+.conversation-input-area {
+    padding: 12px 15px; background: rgba(16,16,30,0.9);
+    border-top: 2px solid rgba(155,89,182,0.3);
+    display: flex; gap: 8px; align-items: center;
+}
+.conversation-input {
+    flex: 1; padding: 10px 12px;
+    background: rgba(26,26,46,0.9);
+    border: 2px solid rgba(155,89,182,0.3);
+    border-radius: 20px; color: #fff;
+    font-size: 0.85rem; outline: none;
+    transition: border-color 0.3s;
+}
+.conversation-input:focus { border-color: #9b59b6; }
+.conversation-send-btn {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    border: none; color: #fff; font-size: 1.1rem;
+    cursor: pointer; display: flex; align-items: center;
+    justify-content: center; transition: all 0.3s;
+}
+.conversation-send-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 15px rgba(155,89,182,0.5);
+}
+.conversation-placeholder {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100%; color: #666;
+}
+.conversation-placeholder-icon {
+    font-size: 3rem; margin-bottom: 15px; opacity: 0.5;
+}
+.conversation-placeholder p {
+    font-size: 0.95rem; font-style: italic;
+}
+
+.empty-state { text-align: center; padding: 30px; color: #666; font-style: italic; }
 
 .toast {
     position: fixed; top: 90px; right: 30px;
@@ -181,9 +275,9 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
 }
 .toast.show { opacity: 1; transform: translateY(0); }
 
-::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: rgba(16,16,30,0.5); }
-::-webkit-scrollbar-thumb { background: rgba(155,89,182,0.5); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(155,89,182,0.5); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(155,89,182,0.7); }
 </style>
 </head>
@@ -233,6 +327,7 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
         <h4>🎨 Ferramentas</h4>
         <button class="tool-btn active" onclick="setDrawTool('draw')">✏️ Desenhar</button>
         <button class="tool-btn" onclick="setDrawTool('erase')">🧹 Apagar</button>
+        <button class="tool-btn" onclick="setDrawTool('pan')">🤚 Mover Tela</button>
         <h4 style="margin-top: 5px;">Cores</h4>
         <div class="color-mini">
             <div class="color-option active" style="background: #9b59b6;" onclick="setPlayerColor('#9b59b6')"></div>
@@ -245,24 +340,49 @@ body { font-family: 'Lato', sans-serif; background: #0a0a0f; color: #fff; overfl
             <div class="color-option" style="background: #000000;" onclick="setPlayerColor('#000000')"></div>
         </div>
     </div>
+</div>
 
-    <!-- Chat Sidebar -->
-    <div class="chat-sidebar">
-        <div class="chat-header">💬 Chat Privado</div>
-        <div class="chat-messages" id="chatMessages">
-            <div class="empty-state">Nenhuma mensagem ainda</div>
-        </div>
-        <div class="chat-input-area">
-            <select class="chat-recipient-select" id="chatRecipient">
-                <option value="">Selecione um destinatário</option>
-            </select>
-            <div class="chat-input-row">
-                <input type="text" class="chat-input" id="chatInput" placeholder="Digite sua mensagem..." maxlength="500">
-                <button class="chat-send-btn" onclick="sendChatMessage()">Enviar</button>
+<!-- Chat WhatsApp Style -->
+<div class="chat-sidebar">
+    <div class="chat-header">💬 Mensagens Privadas</div>
+    <div class="chat-layout">
+        <!-- Lista de Contatos -->
+        <div class="chat-contacts">
+            <div class="contacts-header">Conversas</div>
+            <div class="contacts-list" id="contactsList">
+                <div class="empty-state" style="padding: 20px; font-size: 0.8rem;">Nenhum contato</div>
             </div>
-            <p style="color: #888; font-size: 0.75rem; margin-top: 8px; text-align: center;">
-                💡 Apenas você e o destinatário verão suas mensagens
-            </p>
+        </div>
+        
+        <!-- Área de Conversa -->
+        <div class="chat-conversation">
+            <!-- Placeholder -->
+            <div class="conversation-placeholder" id="conversationPlaceholder">
+                <div class="conversation-placeholder-icon">💬</div>
+                <p>Selecione um contato para conversar</p>
+            </div>
+            
+            <!-- Conversa Ativa -->
+            <div id="conversationArea" style="display: none; flex-direction: column; height: 100%;">
+                <div class="conversation-header">
+                    <div class="contact-avatar" id="conversationContactAvatar">?</div>
+                    <div class="conversation-header-info">
+                        <h4 id="conversationContactName">Contato</h4>
+                        <p>Online</p>
+                    </div>
+                </div>
+                
+                <div class="conversation-messages" id="conversationMessages"></div>
+                
+                <div class="conversation-input-area">
+                    <input type="text" 
+                           class="conversation-input" 
+                           id="conversationInput" 
+                           placeholder="Digite uma mensagem..." 
+                           maxlength="500">
+                    <button class="conversation-send-btn" onclick="sendChatMessage()">➤</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>

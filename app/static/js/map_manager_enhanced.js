@@ -1,4 +1,4 @@
-// MAP MANAGER - MESTRE - PARTE 1
+// MAP MANAGER - MESTRE - PARTE 1 - COMPLETO E CORRIGIDO
 const socket = io();
 const SESSION_ID = document.getElementById('sessionId').value;
 
@@ -24,7 +24,11 @@ let images = [];
 let tokens = [];
 let drawings = [];
 let players = [];
-let chatMessages = [];
+
+// CHAT WHATSAPP STYLE
+let chatContacts = [];
+let currentChatContact = null;
+let currentConversation = [];
 
 // Controles
 let currentTool = 'select';
@@ -48,6 +52,13 @@ let draggingItem = null;
 let mouseDown = false;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
+
+// Resize de imagens
+let resizingImage = null;
+let resizeStartX = 0;
+let resizeStartY = 0;
+let resizeStartWidth = 0;
+let resizeStartHeight = 0;
 
 // Pan e Zoom - CORRIGIDO
 let isPanning = false;
@@ -82,14 +93,12 @@ function zoom(delta) {
     const centerX = containerRect.width / 2;
     const centerY = containerRect.height / 2;
     
-    // Posição do mouse relativa ao canvas
     const mouseCanvasX = (centerX - panX) / currentScale;
     const mouseCanvasY = (centerY - panY) / currentScale;
     
     const oldScale = currentScale;
     currentScale = Math.max(0.3, Math.min(3, currentScale + delta));
     
-    // Ajustar pan para manter o zoom centralizado
     panX = centerX - mouseCanvasX * currentScale;
     panY = centerY - mouseCanvasY * currentScale;
     
@@ -202,17 +211,19 @@ socket.on('session_state', (data) => {
 socket.on('players_list', (data) => {
     players = data.players || [];
     renderPlayersList();
-    updateChatRecipients();
+    loadChatContacts();
 });
 
 socket.on('player_joined', (data) => {
     showToast(`${data.player_name} entrou na sessão`);
     socket.emit('get_players', { session_id: SESSION_ID });
+    loadChatContacts();
 });
 
 socket.on('player_left', (data) => {
     showToast(`${data.player_name} saiu da sessão`);
     socket.emit('get_players', { session_id: SESSION_ID });
+    loadChatContacts();
 });
 
 // TEMPO REAL - Sincronização instantânea
@@ -231,7 +242,7 @@ socket.on('entities_sync', (data) => {
 });
 
 socket.on('token_sync', (data) => {
-    tokens = data.tokens;
+    tokens = data.tokens || [];
     preloadAllImages();
 });
 
@@ -245,27 +256,37 @@ socket.on('drawings_cleared', () => {
     redrawDrawings();
 });
 
-// CHAT - MESTRE VÊ TUDO
-socket.on('chat_history', (data) => {
-    chatMessages = data.messages || [];
-    renderChatMessages();
+// ==================
+// CHAT WHATSAPP - WEBSOCKET
+// ==================
+socket.on('chat_contacts_loaded', (data) => {
+    chatContacts = data.contacts || [];
+    renderChatContacts();
 });
 
-socket.on('master_message_notification', (data) => {
-    if (!chatMessages.find(m => m.id === data.id)) {
-        chatMessages.push(data);
-        renderChatMessages();
-        playNotificationSound();
-    }
+socket.on('conversation_loaded', (data) => {
+    currentConversation = data.messages || [];
+    renderConversation();
 });
 
-socket.on('new_message', (data) => {
-    if (!chatMessages.find(m => m.id === data.id)) {
-        chatMessages.push(data);
-        renderChatMessages();
-        playNotificationSound();
+socket.on('new_private_message', (data) => {
+    // Se a mensagem é da conversa atual, adiciona
+    if (currentChatContact && 
+        (data.sender_id === currentChatContact || data.recipient_id === currentChatContact)) {
+        currentConversation.push(data);
+        renderConversation();
     }
+    
+    // Recarregar contatos para atualizar badges
+    loadChatContacts();
+    playNotificationSound();
 });
+
+socket.on('chat_notification', (data) => {
+    // Notificação visual
+    showToast(`Nova mensagem de ${data.from_name}`);
+});
+// MAP MANAGER - PARTE 2 - FERRAMENTAS E RENDER
 
 // ==================
 // FERRAMENTAS
@@ -275,17 +296,21 @@ function setTool(tool) {
     document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
     event.target.classList.add('active');
     
+    // Remover classes de modo
+    canvasWrapper.classList.remove('drawing-mode');
+    drawingCanvas.classList.remove('drawing-mode');
+    
     if (tool === 'draw') {
+        canvasWrapper.classList.add('drawing-mode');
         drawingCanvas.classList.add('drawing-mode');
         canvasWrapper.style.cursor = 'crosshair';
     } else if (tool === 'erase') {
+        canvasWrapper.classList.add('drawing-mode');
         drawingCanvas.classList.add('drawing-mode');
         canvasWrapper.style.cursor = 'not-allowed';
     } else if (tool === 'pan') {
-        drawingCanvas.classList.remove('drawing-mode');
         canvasWrapper.style.cursor = 'grab';
     } else {
-        drawingCanvas.classList.remove('drawing-mode');
         canvasWrapper.style.cursor = 'default';
     }
 }
@@ -318,6 +343,18 @@ function redrawAll() {
                     mapCtx.strokeStyle = '#ffc107';
                     mapCtx.lineWidth = 4;
                     mapCtx.strokeRect(img.x, img.y, img.width, img.height);
+                    
+                    // Desenhar handles de resize nos cantos
+                    const handleSize = 10;
+                    mapCtx.fillStyle = '#9b59b6';
+                    
+                    // Canto inferior direito
+                    mapCtx.fillRect(
+                        img.x + img.width - handleSize/2, 
+                        img.y + img.height - handleSize/2, 
+                        handleSize, 
+                        handleSize
+                    );
                 }
             } catch (e) {
                 console.error('Erro ao desenhar imagem:', e);
@@ -329,7 +366,20 @@ function redrawAll() {
     tokens.forEach(token => {
         const img = loadedImages.get(token.id);
         
-        if (img && img.complete && img.naturalWidth > 0) {
+        if (token.style === 'square' && img && img.complete && img.naturalWidth > 0) {
+            // Token quadrado com imagem
+            try {
+                mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
+                
+                // Borda
+                mapCtx.strokeStyle = "#fff";
+                mapCtx.lineWidth = 2;
+                mapCtx.strokeRect(token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
+            } catch (e) {
+                console.error('Erro ao desenhar token quadrado:', e);
+            }
+        } else if (img && img.complete && img.naturalWidth > 0) {
+            // Token redondo com imagem
             try {
                 mapCtx.save();
                 mapCtx.beginPath();
@@ -338,22 +388,29 @@ function redrawAll() {
                 mapCtx.clip();
                 mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
                 mapCtx.restore();
+                
+                // Borda
+                mapCtx.strokeStyle = "#fff";
+                mapCtx.lineWidth = 2;
+                mapCtx.beginPath();
+                mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                mapCtx.stroke();
             } catch (e) {
                 console.error('Erro ao desenhar token:', e);
             }
         } else if (token.color) {
+            // Token colorido
             mapCtx.fillStyle = token.color;
             mapCtx.beginPath();
             mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
             mapCtx.fill();
+            
+            mapCtx.strokeStyle = "#fff";
+            mapCtx.lineWidth = 2;
+            mapCtx.beginPath();
+            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+            mapCtx.stroke();
         }
-        
-        // Borda
-        mapCtx.strokeStyle = "#fff";
-        mapCtx.lineWidth = 2;
-        mapCtx.beginPath();
-        mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-        mapCtx.stroke();
         
         // Nome
         mapCtx.fillStyle = "#fff";
@@ -397,8 +454,6 @@ function redrawDrawings() {
     });
 }
 
-// MAP MANAGER - MESTRE - PARTE 2
-
 // ==================
 // EVENTOS DE MOUSE - CORRIGIDO
 // ==================
@@ -435,8 +490,22 @@ function findItemAt(x, y) {
     return null;
 }
 
+function isOnResizeHandle(img, x, y) {
+    const handleSize = 20;
+    const handleX = img.x + img.width;
+    const handleY = img.y + img.height;
+    
+    return x >= handleX - handleSize && x <= handleX + handleSize &&
+           y >= handleY - handleSize && y <= handleY + handleSize;
+}
+
 canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
+    
+    // Se está no modo de desenho ou apagar, não fazer nada aqui
+    if (currentTool === 'draw' || currentTool === 'erase') {
+        return;
+    }
     
     if (currentTool === 'pan') {
         isPanning = true;
@@ -448,6 +517,17 @@ canvasWrapper.addEventListener('mousedown', (e) => {
     
     if (currentTool === 'select') {
         const found = findItemAt(pos.x, pos.y);
+        
+        if (found && found.type === 'image' && isOnResizeHandle(found.item, pos.x, pos.y)) {
+            // Iniciar resize
+            resizingImage = found.item;
+            resizeStartX = pos.x;
+            resizeStartY = pos.y;
+            resizeStartWidth = found.item.width;
+            resizeStartHeight = found.item.height;
+            canvasWrapper.style.cursor = 'nwse-resize';
+            return;
+        }
         
         if (found) {
             selectedItem = found.item;
@@ -471,10 +551,26 @@ canvasWrapper.addEventListener('mousedown', (e) => {
 canvasWrapper.addEventListener('mousemove', (e) => {
     const pos = getMousePos(e);
     
+    // Se está desenhando ou apagando, não fazer nada aqui
+    if (currentTool === 'draw' || currentTool === 'erase') {
+        return;
+    }
+    
     if (isPanning && currentTool === 'pan') {
         panX = e.clientX - startPanX;
         panY = e.clientY - startPanY;
         applyTransform();
+        return;
+    }
+    
+    if (resizingImage) {
+        const deltaX = pos.x - resizeStartX;
+        const deltaY = pos.y - resizeStartY;
+        
+        resizingImage.width = Math.max(50, resizeStartWidth + deltaX);
+        resizingImage.height = Math.max(50, resizeStartHeight + deltaY);
+        
+        redrawAll();
         return;
     }
     
@@ -488,11 +584,35 @@ canvasWrapper.addEventListener('mousemove', (e) => {
         redrawAll();
     } else if (currentTool === 'select' && !mouseDown) {
         const found = findItemAt(pos.x, pos.y);
-        canvasWrapper.style.cursor = found ? 'grab' : 'default';
+        if (found && found.type === 'image' && isOnResizeHandle(found.item, pos.x, pos.y)) {
+            canvasWrapper.style.cursor = 'nwse-resize';
+        } else {
+            canvasWrapper.style.cursor = found ? 'grab' : 'default';
+        }
     }
 });
 
 canvasWrapper.addEventListener('mouseup', () => {
+    if (resizingImage) {
+        // Emitir atualização
+        if (resizingImage.id.startsWith('map_')) {
+            socket.emit('update_map', {
+                session_id: SESSION_ID,
+                map_id: resizingImage.id,
+                map: resizingImage
+            });
+        } else {
+            socket.emit('update_entity', {
+                session_id: SESSION_ID,
+                entity_id: resizingImage.id,
+                entity: resizingImage
+            });
+        }
+        resizingImage = null;
+        canvasWrapper.style.cursor = 'default';
+        return;
+    }
+    
     if (draggingItem && mouseDown) {
         // Emitir atualização
         if (selectedType === 'image') {
@@ -530,14 +650,16 @@ canvasWrapper.addEventListener('mouseup', () => {
 
 canvasWrapper.addEventListener('mouseleave', () => {
     isPanning = false;
+    resizingImage = null;
     if (draggingItem && mouseDown) {
         draggingItem = null;
         mouseDown = false;
     }
 });
+// MAP MANAGER - PARTE 3 - DESENHO E ADICIONAR ITENS
 
 // ==================
-// DESENHO LIVRE - CORRIGIDO (APAGAR APENAS O QUE TOCA)
+// DESENHO LIVRE - CORRIGIDO
 // ==================
 function getDrawingPos(e) {
     const rect = drawingCanvas.getBoundingClientRect();
@@ -610,13 +732,12 @@ drawingCanvas.addEventListener('mouseleave', () => {
     isDrawing = false;
 });
 
-// APAGAR APENAS O QUE TOCA - CORRIGIDO
+// APAGAR APENAS O QUE TOCA
 function eraseDrawingsAt(x, y) {
     const eraseRadius = brushSize * 3;
     let changed = false;
     
     drawings = drawings.filter(drawing => {
-        // Verificar se ALGUM ponto do caminho está dentro do raio de apagar
         const hasPointInRadius = drawing.path.some(point => {
             const dist = Math.hypot(point.x - x, point.y - y);
             return dist < eraseRadius;
@@ -624,14 +745,13 @@ function eraseDrawingsAt(x, y) {
         
         if (hasPointInRadius) {
             changed = true;
-            return false; // Remove este desenho
+            return false;
         }
-        return true; // Mantém este desenho
+        return true;
     });
     
     if (changed) {
         redrawDrawings();
-        // Sincronizar com todos
         socket.emit('clear_drawings', { session_id: SESSION_ID });
         drawings.forEach(d => {
             socket.emit('drawing_update', {
@@ -671,15 +791,15 @@ function addImage() {
         reader.onload = (ev) => {
             const img = new Image();
             img.onload = () => {
-                // Redimensionar se muito grande
-                let width = img.width;
-                let height = img.height;
-                const maxSize = 800;
+                // Tamanho padrão médio
+                let width = 400;
+                let height = 400;
                 
-                if (width > maxSize || height > maxSize) {
-                    const scale = maxSize / Math.max(width, height);
-                    width = width * scale;
-                    height = height * scale;
+                // Manter proporção
+                if (img.width > img.height) {
+                    height = (img.height / img.width) * width;
+                } else {
+                    width = (img.width / img.height) * height;
                 }
                 
                 const newImage = {
@@ -715,7 +835,7 @@ function addImage() {
 }
 
 // ==================
-// ADICIONAR TOKEN
+// ADICIONAR TOKEN - CORRIGIDO COM OPÇÃO DE FORMA
 // ==================
 function addToken() {
     document.getElementById('tokenModal').classList.add('show');
@@ -724,6 +844,8 @@ function addToken() {
 function createToken() {
     const name = document.getElementById('tokenName').value.trim();
     const imageInput = document.getElementById('tokenImage');
+    const styleInput = document.querySelector('input[name="tokenStyle"]:checked');
+    const style = styleInput ? styleInput.value : 'round';
     
     if (!name) {
         alert('Digite um nome para o token');
@@ -742,7 +864,8 @@ function createToken() {
                     name: name,
                     x: CANVAS_WIDTH / 2,
                     y: CANVAS_HEIGHT / 2,
-                    image: e.target.result
+                    image: e.target.result,
+                    style: style  // 'round' ou 'square'
                 };
                 
                 loadedImages.set(newToken.id, img);
@@ -772,7 +895,8 @@ function createToken() {
             name: name,
             x: CANVAS_WIDTH / 2,
             y: CANVAS_HEIGHT / 2,
-            color: '#' + Math.floor(Math.random() * 16777215).toString(16)
+            color: '#' + Math.floor(Math.random() * 16777215).toString(16),
+            style: 'round'
         };
         
         tokens.push(newToken);
@@ -844,96 +968,300 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// MAP MANAGER - MESTRE - PARTE 3
+// ==================
+// RENDERIZAR LISTAS
+// ==================
+function renderImageList() {
+    const list = document.getElementById('imageList');
+    if (!list) return;
+    
+    list.innerHTML = '';
+    
+    if (images.length === 0) {
+        list.innerHTML = '<div class="empty-state">Nenhuma imagem</div>';
+        return;
+    }
+    
+    images.forEach(img => {
+        const item = document.createElement('div');
+        item.className = 'item-card';
+        item.onclick = () => selectItem(img, 'image');
+        
+        item.innerHTML = `
+            <img src="${img.image}" class="item-preview" alt="${img.name}">
+            <div class="item-info">
+                <div class="item-name">${img.name}</div>
+            </div>
+            <div class="item-actions">
+                <button class="item-action-btn" onclick="deleteItemById('${img.id}', 'image'); event.stopPropagation();">🗑️</button>
+            </div>
+        `;
+        
+        list.appendChild(item);
+    });
+}
+
+function renderTokenList() {
+    const list = document.getElementById('tokenList');
+    if (!list) return;
+    
+    list.innerHTML = '';
+    
+    if (tokens.length === 0) {
+        list.innerHTML = '<div class="empty-state">Nenhum token</div>';
+        return;
+    }
+    
+    tokens.forEach(token => {
+        const item = document.createElement('div');
+        item.className = 'item-card';
+        item.onclick = () => selectItem(token, 'token');
+        
+        if (token.image) {
+            const imgStyle = token.style === 'square' ? 'border-radius: 6px;' : 'border-radius: 50%;';
+            item.innerHTML = `
+                <img src="${token.image}" class="item-preview" style="${imgStyle}" alt="${token.name}">
+                <div class="item-info">
+                    <div class="item-name">${token.name}</div>
+                </div>
+                <div class="item-actions">
+                    <button class="item-action-btn" onclick="deleteItemById('${token.id}', 'token'); event.stopPropagation();">🗑️</button>
+                </div>
+            `;
+        } else {
+            item.innerHTML = `
+                <div class="item-color" style="background-color: ${token.color}"></div>
+                <div class="item-info">
+                    <div class="item-name">${token.name}</div>
+                </div>
+                <div class="item-actions">
+                    <button class="item-action-btn" onclick="deleteItemById('${token.id}', 'token'); event.stopPropagation();">🗑️</button>
+                </div>
+            `;
+        }
+        
+        list.appendChild(item);
+    });
+}
+
+function selectItem(item, type) {
+    selectedItem = item;
+    selectedType = type;
+    
+    document.querySelectorAll('.item-card').forEach(i => i.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    
+    redrawAll();
+}
+
+function deleteItemById(itemId, type) {
+    if (confirm('Remover este item?')) {
+        if (type === 'image') {
+            const img = images.find(i => i.id === itemId);
+            if (img) {
+                loadedImages.delete(img.id);
+                images = images.filter(i => i.id !== itemId);
+                
+                if (img.id.startsWith('map_')) {
+                    socket.emit('delete_map', {
+                        session_id: SESSION_ID,
+                        map_id: itemId
+                    });
+                } else {
+                    socket.emit('delete_entity', {
+                        session_id: SESSION_ID,
+                        entity_id: itemId
+                    });
+                }
+                
+                renderImageList();
+            }
+        } else if (type === 'token') {
+            const token = tokens.find(t => t.id === itemId);
+            if (token) {
+                loadedImages.delete(token.id);
+                tokens = tokens.filter(t => t.id !== itemId);
+                
+                socket.emit('token_update', {
+                    session_id: SESSION_ID,
+                    tokens: tokens
+                });
+                
+                renderTokenList();
+            }
+        }
+        
+        if (selectedItem && selectedItem.id === itemId) {
+            selectedItem = null;
+            selectedType = null;
+        }
+        
+        redrawAll();
+        showToast('Item removido!');
+    }
+}
+// MAP MANAGER - PARTE 4 - CHAT WHATSAPP STYLE
 
 // ==================
-// CHAT - TIPO WHATSAPP (MESTRE VÊ TUDO)
+// CHAT WHATSAPP
 // ==================
 function toggleChat() {
-    const chatBottom = document.getElementById('chatBottom');
     chatExpanded = !chatExpanded;
+    const chatBottom = document.getElementById('chatBottom');
     
     if (chatExpanded) {
         chatBottom.classList.remove('minimized');
         chatBottom.classList.add('expanded');
+        loadChatContacts();
     } else {
         chatBottom.classList.remove('expanded');
         chatBottom.classList.add('minimized');
     }
 }
 
-function renderChatMessages() {
-    const chatBox = document.getElementById('chatMessages');
-    if (!chatBox) return;
+function loadChatContacts() {
+    socket.emit('get_chat_contacts', {
+        session_id: SESSION_ID,
+        user_id: 'master'
+    });
+}
+
+function renderChatContacts() {
+    const contactsList = document.getElementById('contactsList');
+    if (!contactsList) return;
     
-    chatBox.innerHTML = '';
+    contactsList.innerHTML = '';
     
-    if (chatMessages.length === 0) {
-        chatBox.innerHTML = '<div class="empty-state">Nenhuma mensagem ainda</div>';
+    if (chatContacts.length === 0) {
+        contactsList.innerHTML = '<div class="empty-state">Nenhum jogador conectado</div>';
         return;
     }
     
-    chatMessages.forEach(msg => {
-        const msgDiv = document.createElement('div');
+    chatContacts.forEach(contact => {
+        const item = document.createElement('div');
+        item.className = 'contact-item';
+        if (currentChatContact === contact.id) {
+            item.classList.add('active');
+        }
         
-        // Mensagem privada tem destaque
-        const isPrivate = msg.recipient_id !== null;
-        msgDiv.className = isPrivate ? 'chat-message private-message' : 'chat-message';
+        item.onclick = () => openConversation(contact.id);
         
-        const senderName = msg.sender_id === 'master' ? 'Você (Mestre)' : msg.sender_name;
-        const recipientName = msg.recipient_id ? 
-            (players.find(p => p.id === msg.recipient_id)?.name || 'Desconhecido') : 
-            'Todos';
+        const lastMsg = contact.last_message ? 
+            (contact.last_message.message.substring(0, 30) + (contact.last_message.message.length > 30 ? '...' : '')) :
+            'Nenhuma mensagem ainda';
         
-        msgDiv.innerHTML = `
-            <div class="chat-message-header">
-                <div>
-                    <strong>${senderName}</strong> 
-                    ${isPrivate ? `→ <span class="chat-message-recipient">${recipientName}</span>` : ''}
-                </div>
-                <span class="chat-timestamp">${new Date(msg.timestamp).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</span>
+        item.innerHTML = `
+            <div class="contact-avatar">${contact.name.charAt(0).toUpperCase()}</div>
+            <div class="contact-info">
+                <div class="contact-name">${contact.name}</div>
+                <div class="contact-last-message">${lastMsg}</div>
             </div>
-            <div class="chat-message-text">${msg.message}</div>
+            ${contact.unread > 0 ? `<span class="contact-badge">${contact.unread}</span>` : ''}
         `;
         
-        chatBox.appendChild(msgDiv);
+        contactsList.appendChild(item);
+    });
+}
+
+function openConversation(contactId) {
+    currentChatContact = contactId;
+    
+    // Atualizar UI
+    document.querySelectorAll('.contact-item').forEach(item => item.classList.remove('active'));
+    event.currentTarget?.classList.add('active');
+    
+    // Carregar conversa
+    socket.emit('get_conversation', {
+        session_id: SESSION_ID,
+        user_id: 'master',
+        other_user_id: contactId
     });
     
-    chatBox.scrollTop = chatBox.scrollHeight;
+    // Mostrar área de conversa
+    document.getElementById('conversationPlaceholder').style.display = 'none';
+    document.getElementById('conversationArea').style.display = 'flex';
+    
+    // Atualizar header da conversa
+    const contact = chatContacts.find(c => c.id === contactId);
+    if (contact) {
+        document.getElementById('conversationContactName').textContent = contact.name;
+        document.getElementById('conversationContactAvatar').textContent = contact.name.charAt(0).toUpperCase();
+    }
+}
+
+function renderConversation() {
+    const messagesContainer = document.getElementById('conversationMessages');
+    if (!messagesContainer) return;
+    
+    messagesContainer.innerHTML = '';
+    
+    if (currentConversation.length === 0) {
+        messagesContainer.innerHTML = '<div class="empty-state">Nenhuma mensagem ainda. Inicie a conversa!</div>';
+        return;
+    }
+    
+    currentConversation.forEach(msg => {
+        const bubble = document.createElement('div');
+        bubble.className = msg.sender_id === 'master' ? 'message-bubble sent' : 'message-bubble received';
+        
+        const time = new Date(msg.timestamp).toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        bubble.innerHTML = `
+            <div class="message-text">${msg.message}</div>
+            <div class="message-time">${time}</div>
+        `;
+        
+        messagesContainer.appendChild(bubble);
+    });
+    
+    // Scroll para o final
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function sendChatMessage() {
-    const input = document.getElementById('chatInput');
-    const recipientSelect = document.getElementById('chatRecipient');
-    
+    const input = document.getElementById('conversationInput');
     const message = input.value.trim();
-    if (!message) return;
     
-    const recipientId = recipientSelect.value === 'all' ? null : recipientSelect.value;
+    if (!message || !currentChatContact) {
+        return;
+    }
     
-    socket.emit('send_message', {
+    socket.emit('send_private_message', {
         session_id: SESSION_ID,
         sender_id: 'master',
-        message: message,
-        recipient_id: recipientId
+        recipient_id: currentChatContact,
+        message: message
     });
     
     input.value = '';
+    
+    // Adicionar temporariamente à conversa (será confirmado pelo servidor)
+    currentConversation.push({
+        id: 'temp_' + Date.now(),
+        sender_id: 'master',
+        sender_name: 'Você',
+        recipient_id: currentChatContact,
+        message: message,
+        timestamp: new Date().toISOString()
+    });
+    
+    renderConversation();
 }
 
-function updateChatRecipients() {
-    const select = document.getElementById('chatRecipient');
-    if (!select) return;
-    
-    select.innerHTML = '<option value="all">📢 Mensagem para todos</option>';
-    
-    players.forEach(player => {
-        const option = document.createElement('option');
-        option.value = player.id;
-        option.textContent = `💬 ${player.name} (privado)`;
-        select.appendChild(option);
-    });
-}
+// Enter para enviar
+document.addEventListener('DOMContentLoaded', () => {
+    const conversationInput = document.getElementById('conversationInput');
+    if (conversationInput) {
+        conversationInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+    }
+});
 
 function playNotificationSound() {
     const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGGa88OScTgwOWK3n77BdGAg+ltf');
@@ -1027,10 +1355,12 @@ function renderTokenPermissionsList(player) {
         
         const isAllowed = allowedTokens.includes(token.id);
         
+        const imgStyle = token.style === 'square' ? 'border-radius: 6px;' : 'border-radius: 50%;';
+        
         item.innerHTML = `
             <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
                 ${token.image ? 
-                    `<img src="${token.image}" class="item-preview" style="border-radius: 50%;">` :
+                    `<img src="${token.image}" class="item-preview" style="${imgStyle}">` :
                     `<div class="item-color" style="background: ${token.color}"></div>`
                 }
                 <span>${token.name}</span>
@@ -1072,138 +1402,6 @@ function toggleTokenPermission(playerId, tokenId) {
 
 function closeTokenPermissionsModal() {
     document.getElementById('tokenPermissionsModal').classList.remove('show');
-}
-
-// ==================
-// RENDERIZAR LISTAS
-// ==================
-function renderImageList() {
-    const list = document.getElementById('imageList');
-    if (!list) return;
-    
-    list.innerHTML = '';
-    
-    if (images.length === 0) {
-        list.innerHTML = '<div class="empty-state">Nenhuma imagem</div>';
-        return;
-    }
-    
-    images.forEach(img => {
-        const item = document.createElement('div');
-        item.className = 'item-card';
-        item.onclick = () => selectItem(img, 'image');
-        
-        item.innerHTML = `
-            <img src="${img.image}" class="item-preview" alt="${img.name}">
-            <div class="item-info">
-                <div class="item-name">${img.name}</div>
-            </div>
-            <div class="item-actions">
-                <button class="item-action-btn" onclick="deleteItemById('${img.id}', 'image'); event.stopPropagation();">🗑️</button>
-            </div>
-        `;
-        
-        list.appendChild(item);
-    });
-}
-
-function renderTokenList() {
-    const list = document.getElementById('tokenList');
-    if (!list) return;
-    
-    list.innerHTML = '';
-    
-    if (tokens.length === 0) {
-        list.innerHTML = '<div class="empty-state">Nenhum token</div>';
-        return;
-    }
-    
-    tokens.forEach(token => {
-        const item = document.createElement('div');
-        item.className = 'item-card';
-        item.onclick = () => selectItem(token, 'token');
-        
-        if (token.image) {
-            item.innerHTML = `
-                <img src="${token.image}" class="item-preview" style="border-radius: 50%;" alt="${token.name}">
-                <div class="item-info">
-                    <div class="item-name">${token.name}</div>
-                </div>
-                <div class="item-actions">
-                    <button class="item-action-btn" onclick="deleteItemById('${token.id}', 'token'); event.stopPropagation();">🗑️</button>
-                </div>
-            `;
-        } else {
-            item.innerHTML = `
-                <div class="item-color" style="background-color: ${token.color}"></div>
-                <div class="item-info">
-                    <div class="item-name">${token.name}</div>
-                </div>
-                <div class="item-actions">
-                    <button class="item-action-btn" onclick="deleteItemById('${token.id}', 'token'); event.stopPropagation();">🗑️</button>
-                </div>
-            `;
-        }
-        
-        list.appendChild(item);
-    });
-}
-
-function selectItem(item, type) {
-    selectedItem = item;
-    selectedType = type;
-    
-    document.querySelectorAll('.item-card').forEach(i => i.classList.remove('active'));
-    event.currentTarget.classList.add('active');
-    
-    redrawAll();
-}
-
-function deleteItemById(itemId, type) {
-    if (confirm('Remover este item?')) {
-        if (type === 'image') {
-            const img = images.find(i => i.id === itemId);
-            if (img) {
-                loadedImages.delete(img.id);
-                images = images.filter(i => i.id !== itemId);
-                
-                if (img.id.startsWith('map_')) {
-                    socket.emit('delete_map', {
-                        session_id: SESSION_ID,
-                        map_id: itemId
-                    });
-                } else {
-                    socket.emit('delete_entity', {
-                        session_id: SESSION_ID,
-                        entity_id: itemId
-                    });
-                }
-                
-                renderImageList();
-            }
-        } else if (type === 'token') {
-            const token = tokens.find(t => t.id === itemId);
-            if (token) {
-                loadedImages.delete(token.id);
-                tokens = tokens.filter(t => t.id !== itemId);
-                
-                socket.emit('token_update', {
-                    session_id: SESSION_ID,
-                    tokens: tokens
-                });
-                
-                renderTokenList();
-            }
-        }
-        
-        if (selectedItem && selectedItem.id === itemId) {
-            selectedItem = null;
-            selectedType = null;
-        }
-        
-        redrawAll();
-        showToast('Item removido!');
-    }
 }
 
 // ==================
@@ -1295,16 +1493,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatBottom = document.getElementById('chatBottom');
     if (chatBottom) {
         chatBottom.classList.add('minimized');
-    }
-    
-    // Enter no chat
-    const chatInput = document.getElementById('chatInput');
-    if (chatInput) {
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendChatMessage();
-            }
-        });
     }
     
     // Fechar painéis ao clicar fora
