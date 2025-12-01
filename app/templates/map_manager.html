@@ -19,72 +19,81 @@
         <h1>🗺️ Gerenciador de Mapas</h1>
     </div>
     <div class="header-actions">
-        <button class="btn" onclick="copyShareLink()">🔗 Copiar Link</button>
-        <button class="btn btn-danger" onclick="clearAll()">🗑️ Limpar Tudo</button>
+        <button class="btn" onclick="window.toolsModule.copyShareLink()">🔗 Copiar Link</button>
+        <button class="btn btn-danger" onclick="window.toolsModule.clearAll()">🗑️ Limpar Tudo</button>
     </div>
 </header>
+
 <div class="main-layout">
+    <!-- Sidebar Esquerda Retrátil -->
     <div class="tools-sidebar">
+        <button class="sidebar-toggle" onclick="window.toolsModule.toggleSidebar()">◀</button>
+        
         <div class="sidebar-header">🛠️ Ferramentas</div>
         <div class="sidebar-content">
             <div class="tools-section">
                 <h4>Modo de Trabalho</h4>
                 <div class="tool-grid">
-                    <button class="tool-btn active" onclick="setTool('select')">✋ Selecionar</button>
-                    <button class="tool-btn" onclick="setTool('pan')">🤚 Mover</button>
-                    <button class="tool-btn" onclick="setTool('draw')">✏️ Desenhar</button>
-                    <button class="tool-btn" onclick="setTool('erase')">🧹 Apagar</button>
+                    <button class="tool-btn active" onclick="window.toolsModule.setTool('select')">✋ Selecionar</button>
+                    <button class="tool-btn" onclick="window.toolsModule.setTool('pan')">🤚 Mover</button>
+                    <button class="tool-btn" onclick="window.toolsModule.setTool('draw')">✏️ Desenhar</button>
+                    <button class="tool-btn" onclick="window.toolsModule.setTool('erase')">🧹 Apagar</button>
                 </div>
             </div>
+            
             <div class="tools-section">
                 <h4>Grid</h4>
                 <div class="grid-controls">
                     <div class="control-row">
                         <label>
-                            <input type="checkbox" checked onchange="toggleGrid()">
+                            <input type="checkbox" checked onchange="window.canvasModule.toggleGrid()">
                             Mostrar Grid
                         </label>
                     </div>
                     <div class="control-row">
                         <label>Tamanho:</label>
-                        <input type="range" min="20" max="100" value="50" step="5" onchange="updateGridSize(this.value)">
+                        <input type="range" min="20" max="100" value="50" step="5" onchange="window.canvasModule.updateGridSize(this.value)">
                         <span class="grid-size-value" id="gridSizeValue">50px</span>
                     </div>
                 </div>
             </div>
+            
             <div class="tools-section">
                 <h4>Desenho</h4>
                 <div class="grid-controls">
                     <div class="control-row">
                         <label>Tamanho:</label>
-                        <input type="range" min="1" max="20" value="3" onchange="setBrushSize(this.value)">
+                        <input type="range" min="1" max="20" value="3" onchange="window.toolsModule.setBrushSize(this.value)">
                     </div>
                 </div>
                 <div class="color-palette" style="margin-top: 10px;">
-                    <div class="color-option active" style="background: #9b59b6;" onclick="setDrawingColor('#9b59b6')"></div>
-                    <div class="color-option" style="background: #e74c3c;" onclick="setDrawingColor('#e74c3c')"></div>
-                    <div class="color-option" style="background: #3498db;" onclick="setDrawingColor('#3498db')"></div>
-                    <div class="color-option" style="background: #2ecc71;" onclick="setDrawingColor('#2ecc71')"></div>
-                    <div class="color-option" style="background: #f39c12;" onclick="setDrawingColor('#f39c12')"></div>
-                    <div class="color-option" style="background: #1abc9c;" onclick="setDrawingColor('#1abc9c')"></div>
-                    <div class="color-option" style="background: #e67e22;" onclick="setDrawingColor('#e67e22')"></div>
-                    <div class="color-option" style="background: #ecf0f1;" onclick="setDrawingColor('#ecf0f1')"></div>
-                    <div class="color-option" style="background: #34495e;" onclick="setDrawingColor('#34495e')"></div>
-                    <div class="color-option" style="background: #000000;" onclick="setDrawingColor('#000000')"></div>
+                    <div class="color-option active" style="background: #9b59b6;" onclick="window.toolsModule.setDrawingColor('#9b59b6')"></div>
+                    <div class="color-option" style="background: #e74c3c;" onclick="window.toolsModule.setDrawingColor('#e74c3c')"></div>
+                    <div class="color-option" style="background: #3498db;" onclick="window.toolsModule.setDrawingColor('#3498db')"></div>
+                    <div class="color-option" style="background: #2ecc71;" onclick="window.toolsModule.setDrawingColor('#2ecc71')"></div>
+                    <div class="color-option" style="background: #f39c12;" onclick="window.toolsModule.setDrawingColor('#f39c12')"></div>
+                    <div class="color-option" style="background: #1abc9c;" onclick="window.toolsModule.setDrawingColor('#1abc9c')"></div>
+                    <div class="color-option" style="background: #e67e22;" onclick="window.toolsModule.setDrawingColor('#e67e22')"></div>
+                    <div class="color-option" style="background: #ecf0f1;" onclick="window.toolsModule.setDrawingColor('#ecf0f1')"></div>
+                    <div class="color-option" style="background: #34495e;" onclick="window.toolsModule.setDrawingColor('#34495e')"></div>
+                    <div class="color-option" style="background: #000000;" onclick="window.toolsModule.setDrawingColor('#000000')"></div>
                 </div>
-                <button class="action-btn" onclick="clearDrawings()" style="margin-top: 10px;">🧹 Limpar Desenhos</button>
+                <button class="action-btn" onclick="window.toolsModule.clearDrawings()" style="margin-top: 10px;">🧹 Limpar Desenhos</button>
             </div>
+            
             <div class="tools-section">
                 <h4>Adicionar ao Mapa</h4>
-                <button class="action-btn" onclick="addImage()">🖼️ Adicionar Imagem</button>
-                <button class="action-btn" onclick="addToken()">🎭 Adicionar Token</button>
+                <button class="action-btn" onclick="window.itemsModule.addImage()">🖼️ Adicionar Imagem</button>
+                <button class="action-btn" onclick="window.itemsModule.addToken()">🎭 Adicionar Token</button>
             </div>
+            
             <div class="tools-section">
                 <h4>Imagens no Mapa</h4>
                 <div class="item-list" id="imageList">
                     <div class="empty-state">Nenhuma imagem</div>
                 </div>
             </div>
+            
             <div class="tools-section">
                 <h4>Tokens no Mapa</h4>
                 <div class="item-list" id="tokenList">
@@ -93,6 +102,8 @@
             </div>
         </div>
     </div>
+    
+    <!-- Canvas Container -->
     <div class="canvas-container">
         <div class="canvas-wrapper" id="canvasWrapper">
             <canvas id="mapCanvas"></canvas>
@@ -101,18 +112,18 @@
         </div>
     </div>
 </div>
+
+<!-- Botões Flutuantes -->
 <div class="floating-buttons">
-    <button class="floating-btn" onclick="togglePlayersPanel()" title="Jogadores">
-        👥
-    </button>
-    <button class="floating-btn" onclick="toggleDiceRoller()" title="Dados">
-        🎲
-    </button>
+    <button class="floating-btn" onclick="window.playersModule.togglePlayersPanel()" title="Jogadores">👥</button>
+    <button class="floating-btn" onclick="window.playersModule.toggleDiceRoller()" title="Dados">🎲</button>
 </div>
+
+<!-- Painel de Jogadores -->
 <div class="floating-panel" id="playersPanel">
     <div class="panel-header">
         <h3>👥 Jogadores</h3>
-        <button class="panel-close" onclick="togglePlayersPanel()">×</button>
+        <button class="panel-close" onclick="window.playersModule.togglePlayersPanel()">×</button>
     </div>
     <div class="panel-content">
         <div class="players-list" id="playersList">
@@ -120,68 +131,70 @@
         </div>
     </div>
 </div>
+
+<!-- Painel de Dados -->
 <div class="floating-panel" id="dicePanel">
     <div class="panel-header">
         <h3>🎲 Dados</h3>
-        <button class="panel-close" onclick="toggleDiceRoller()">×</button>
+        <button class="panel-close" onclick="window.playersModule.toggleDiceRoller()">×</button>
     </div>
     <div class="panel-content">
         <div class="dice-result" id="diceResult">Selecione um dado</div>
-        
         <div class="dice-grid">
-            <button class="dice-btn" onclick="rollDice(4)">d4</button>
-            <button class="dice-btn" onclick="rollDice(6)">d6</button>
-            <button class="dice-btn" onclick="rollDice(8)">d8</button>
-            <button class="dice-btn" onclick="rollDice(10)">d10</button>
-            <button class="dice-btn" onclick="rollDice(12)">d12</button>
-            <button class="dice-btn" onclick="rollDice(20)">d20</button>
-            <button class="dice-btn" onclick="rollDice(100)">d100</button>
+            <button class="dice-btn" onclick="window.playersModule.rollDice(4)">d4</button>
+            <button class="dice-btn" onclick="window.playersModule.rollDice(6)">d6</button>
+            <button class="dice-btn" onclick="window.playersModule.rollDice(8)">d8</button>
+            <button class="dice-btn" onclick="window.playersModule.rollDice(10)">d10</button>
+            <button class="dice-btn" onclick="window.playersModule.rollDice(12)">d12</button>
+            <button class="dice-btn" onclick="window.playersModule.rollDice(20)">d20</button>
+            <button class="dice-btn" onclick="window.playersModule.rollDice(100)">d100</button>
         </div>
     </div>
 </div>
-<div class="chat-bottom minimized" id="chatBottom">
-    <div class="chat-toggle" onclick="toggleChat()">
-        <h3>💬 Mensagens</h3>
-        <span class="chat-arrow">▲</span>
+
+<!-- Chat Container WhatsApp -->
+<div class="chat-container" id="chatContainer">
+    <div class="chat-header" onclick="window.chatModule.toggleChatMinimize()">
+        <div class="chat-header-left">
+            <h3>💬 Chat</h3>
+            <span class="chat-badge" id="chatBadge" style="display: none;">0</span>
+        </div>
+        <div class="chat-controls">
+            <button class="chat-control-btn" onclick="event.stopPropagation(); window.chatModule.toggleChatMinimize()">
+                <span id="chatMinimizeIcon">▼</span>
+            </button>
+            <button class="chat-control-btn" onclick="event.stopPropagation(); window.chatModule.toggleChatCollapse()">×</button>
+        </div>
     </div>
     
-    <div class="chat-main-content">
-        <div class="chat-layout">
-            <div class="chat-contacts">
-                <div class="contacts-header">
-                    💬 Conversas
-                </div>
-                <div class="contacts-list" id="contactsList">
-                    <div class="empty-state">Nenhum jogador conectado</div>
-                </div>
+    <div class="chat-body">
+        <div class="chat-contacts" id="chatContacts">
+            <div id="contactsList"></div>
+        </div>
+        
+        <div class="chat-conversation">
+            <div class="conversation-placeholder" id="conversationPlaceholder">
+                <div class="conversation-placeholder-icon">💬</div>
+                <p>Selecione um jogador</p>
             </div>
-            <div class="chat-conversation">
-                <div class="conversation-placeholder" id="conversationPlaceholder">
-                    <div class="conversation-placeholder-icon">💬</div>
-                    <p>Selecione um jogador para iniciar uma conversa</p>
+            
+            <div id="conversationArea" style="display: none;">
+                <div class="conversation-header">
+                    <div class="contact-avatar" id="conversationContactAvatar">?</div>
+                    <div class="conversation-info">
+                        <h4 id="conversationContactName">Jogador</h4>
+                    </div>
                 </div>
-                <div id="conversationArea" style="display: none; flex-direction: column; height: 100%;">
-                    <div class="conversation-header">
-                        <div class="contact-avatar" id="conversationContactAvatar">?</div>
-                        <div class="conversation-header-info">
-                            <h4 id="conversationContactName">Jogador</h4>
-                            <p>Online</p>
-                        </div>
-                    </div>
-                    
-                    <div class="conversation-messages" id="conversationMessages">
-                    </div>
-                    
-                    <div class="conversation-input-area">
-                        <input type="text" 
-                               class="conversation-input" 
-                               id="conversationInput" 
-                               placeholder="Digite uma mensagem..." 
-                               maxlength="500">
-                        <button class="conversation-send-btn" onclick="sendChatMessage()">
-                            ➤
-                        </button>
-                    </div>
+                
+                <div class="conversation-messages" id="conversationMessages"></div>
+                
+                <div class="conversation-input-area">
+                    <input type="text" 
+                           class="conversation-input" 
+                           id="conversationInput" 
+                           placeholder="Mensagem..." 
+                           maxlength="500">
+                    <button class="conversation-send-btn" onclick="window.chatModule.sendChatMessage()">➤</button>
                 </div>
             </div>
         </div>
@@ -203,11 +216,11 @@
             <div class="radio-group">
                 <div class="radio-option">
                     <input type="radio" id="styleRound" name="tokenStyle" value="round" checked>
-                    <label for="styleRound">🔵 Redondo (com borda circular)</label>
+                    <label for="styleRound">🔵 Redondo</label>
                 </div>
                 <div class="radio-option">
                     <input type="radio" id="styleSquare" name="tokenStyle" value="square">
-                    <label for="styleSquare">⬜ Quadrado (imagem completa)</label>
+                    <label for="styleSquare">⬜ Quadrado</label>
                 </div>
             </div>
         </div>
@@ -215,18 +228,16 @@
         <div class="control-group">
             <label>Imagem (opcional)</label>
             <input type="file" id="tokenImage" accept="image/*">
-            <small style="color: #888; display: block; margin-top: 5px;">
-                Se não selecionar uma imagem, será criado um token colorido
-            </small>
         </div>
         
         <div class="modal-actions">
-            <button class="btn" onclick="closeTokenModal()">Cancelar</button>
-            <button class="action-btn" onclick="createToken()">Criar Token</button>
+            <button class="btn" onclick="window.itemsModule.closeTokenModal()">Cancelar</button>
+            <button class="action-btn" onclick="window.itemsModule.createToken()">Criar Token</button>
         </div>
     </div>
 </div>
 
+<!-- Modal de Permissões -->
 <div class="modal" id="tokenPermissionsModal">
     <div class="modal-content" style="max-width: 600px;">
         <h3 id="tokenPermModalTitle">Permissões de Tokens</h3>
@@ -239,14 +250,21 @@
         <div class="item-list" id="tokenPermList" style="max-height: 400px;"></div>
         
         <div class="modal-actions">
-            <button class="action-btn" onclick="closeTokenPermissionsModal()">Fechar</button>
+            <button class="action-btn" onclick="window.playersModule.closeTokenPermissionsModal()">Fechar</button>
         </div>
     </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<script defer src="{{ url_for('static', filename='js/map_manager_enhanced.js') }}"></script>
+<!-- Scripts Modularizados -->
+<script src="{{ url_for('static', filename='js/map_socket.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map_canvas.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map_tools.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map_mouse.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map_items.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map_chat.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map_players_dice.js') }}"></script>
 
 </body>
 </html>
