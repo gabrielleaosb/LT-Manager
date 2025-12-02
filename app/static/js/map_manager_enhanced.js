@@ -87,10 +87,10 @@ let sidebarCollapsed = false;
 // Estado do Fog of War
 let fogAreas = [];
 let fogDrawingMode = false;
-let fogShape = 'rectangle'; // 'rectangle' ou 'circle'
+let fogShape = 'rectangle';
 let fogDrawStart = null;
 let fogCurrentArea = null;
-let fogOpacity = 0.85;
+let fogOpacity = 0.5;
 
 // ==================
 // CENTRALIZAÇÃO E TRANSFORM
@@ -389,7 +389,7 @@ socket.on('fog_areas_sync', (data) => {
 });
 
 // ==================
-// FOG OF WAR
+// FOG (NÉVOA)
 // ==================
 function toggleFogMode() {
     fogDrawingMode = !fogDrawingMode;
@@ -402,10 +402,10 @@ function toggleFogMode() {
         if (btn) btn.classList.add('active');
         if (indicator) {
             indicator.style.display = 'block';
-            indicator.textContent = `🌫️ Modo Névoa: ${fogShape === 'rectangle' ? 'Retângulo' : 'Círculo'}`;
+            indicator.textContent = `🌫️ Desenhando Névoa - ${fogShape === 'rectangle' ? 'Retângulo' : 'Círculo'}`;
         }
         canvasWrapper.style.cursor = 'crosshair';
-        setTool('select'); // Desativar outras ferramentas
+        setTool('select');
     } else {
         fogCanvas.classList.remove('fog-drawing-mode');
         if (btn) btn.classList.remove('active');
@@ -423,7 +423,7 @@ function setFogShape(shape) {
     
     const indicator = document.getElementById('fogModeIndicator');
     if (indicator && fogDrawingMode) {
-        indicator.textContent = `🌫️ Modo Névoa: ${shape === 'rectangle' ? 'Retângulo' : 'Círculo'}`;
+        indicator.textContent = `🌫️ Desenhando Névoa - ${shape === 'rectangle' ? 'Retângulo' : 'Círculo'}`;
     }
 }
 
@@ -434,19 +434,13 @@ function setFogOpacity(value) {
 }
 
 function clearAllFog() {
-    if (confirm('Remover toda a névoa do mapa?')) {
+    if (confirm('Remover toda a névoa e revelar o mapa?')) {
         fogAreas = [];
         socket.emit('clear_fog_areas', {
             session_id: SESSION_ID
         });
         redrawFog();
-        showToast('Névoa removida!');
-    }
-}
-
-function revealAllMap() {
-    if (confirm('Revelar todo o mapa para os jogadores?')) {
-        clearAllFog();
+        showToast('Mapa revelado!');
     }
 }
 
@@ -466,11 +460,11 @@ function redrawFog() {
     
     if (fogAreas.length === 0) return;
     
-    // Desenhar névoa completa primeiro
+    // Desenhar névoa completa com opacidade controlável (apenas para o mestre)
     fogCtx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
     fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // "Cortar" as áreas visíveis usando composite operation
+    // "Cortar" as áreas visíveis
     fogCtx.globalCompositeOperation = 'destination-out';
     
     fogAreas.forEach(area => {
@@ -487,7 +481,7 @@ function redrawFog() {
     
     fogCtx.globalCompositeOperation = 'source-over';
     
-    // Desenhar preview da área atual sendo desenhada
+    // Preview da área sendo desenhada
     if (fogCurrentArea && fogDrawingMode) {
         fogCtx.strokeStyle = '#3498db';
         fogCtx.lineWidth = 3;
@@ -530,7 +524,7 @@ function renderFogList() {
         
         item.innerHTML = `
             <div style="flex: 1;">
-                <div class="item-name">${shapeIcon} ${shapeName} #${index + 1}</div>
+                <div class="item-name">${shapeIcon} Área ${index + 1} - ${shapeName}</div>
             </div>
             <div class="item-actions">
                 <button class="item-action-btn" onclick="removeFogArea('${area.id}'); event.stopPropagation();">🗑️</button>

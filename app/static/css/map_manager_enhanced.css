@@ -2026,7 +2026,7 @@ body, html {
 }
 
 /* ==========================================
-   FOG OF WAR SYSTEM
+   FOG (NÉVOA)
    ========================================== */
 
 #fogCanvas {
@@ -2044,117 +2044,34 @@ body, html {
     cursor: crosshair;
 }
 
-.fog-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+.fog-mode-indicator {
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.2), rgba(41, 128, 185, 0.2));
+    border: 2px solid rgba(52, 152, 219, 0.5);
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+    margin-bottom: 12px;
+    color: #3498db;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: none;
 }
 
 .fog-shape-selector {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
     margin-bottom: 10px;
 }
 
-.fog-shape-btn {
-    padding: 10px;
-    background: rgba(155,89,182,0.15);
-    border: 2px solid rgba(155,89,182,0.3);
+.fog-preview {
+    width: 100%;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.6);
     border-radius: 8px;
-    color: #fff;
-    cursor: pointer;
-    transition: all 0.3s ease;
+    border: 2px solid rgba(155, 89, 182, 0.3);
     text-align: center;
+    color: #888;
     font-size: 0.85rem;
-}
-
-.fog-shape-btn:hover {
-    border-color: #9b59b6;
-    background: rgba(155,89,182,0.25);
-}
-
-.fog-shape-btn.active {
-    background: rgba(155,89,182,0.4);
-    border-color: #9b59b6;
-}
-
-.fog-area-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px;
-    background: rgba(16,16,30,0.6);
-    border: 1px solid rgba(155,89,182,0.3);
-    border-radius: 8px;
-    margin-bottom: 8px;
-}
-
-.fog-area-item.revealed {
-    opacity: 0.5;
-    border-color: rgba(46,213,115,0.3);
-}
-
-.fog-area-preview {
-    width: 40px;
-    height: 40px;
-    background: rgba(0,0,0,0.8);
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2rem;
-}
-
-.fog-area-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.fog-area-name {
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: #e9d5f5;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.fog-area-status {
-    font-size: 0.75rem;
-    color: #999;
-}
-
-.fog-area-actions {
-    display: flex;
-    gap: 5px;
-}
-
-.fog-area-actions button {
-    padding: 5px 10px;
-    border-radius: 6px;
-    border: 1px solid;
-    cursor: pointer;
-    font-size: 0.8rem;
-    transition: all 0.3s ease;
-}
-
-.fog-reveal-btn {
-    background: rgba(46,213,115,0.2);
-    border-color: #2ed573;
-    color: #2ed573;
-}
-
-.fog-reveal-btn:hover {
-    background: rgba(46,213,115,0.3);
-}
-
-.fog-delete-btn {
-    background: rgba(231,76,60,0.2);
-    border-color: #e74c3c;
-    color: #e74c3c;
-}
-
-.fog-delete-btn:hover {
-    background: rgba(231,76,60,0.3);
+    margin-top: 10px;
 }

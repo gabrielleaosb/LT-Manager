@@ -37,7 +37,7 @@ fogCanvas.width = CANVAS_WIDTH;
 fogCanvas.height = CANVAS_HEIGHT;
 
 let fogAreas = [];
-let fogOpacity = 0.85;
+let fogOpacity = 1.0;
 
 let maps = [];
 let entities = [];
@@ -260,13 +260,14 @@ socket.on('fog_areas_sync', (data) => {
 });
 
 // ========== FOG OF WAR ==========
+// ========== FOG (NÉVOA) ==========
 function redrawFog() {
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     if (fogAreas.length === 0) return;
     
-    // Desenhar névoa completa
-    fogCtx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
+    // Névoa TOTALMENTE ESCURA para jogadores (opacidade 100%)
+    fogCtx.fillStyle = 'rgba(0, 0, 0, 1)';
     fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     // "Cortar" áreas visíveis
