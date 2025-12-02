@@ -77,7 +77,9 @@ def handle_join_session(data):
         'maps': session_state['maps'],
         'entities': session_state['entities'],
         'tokens': session_state['tokens'],
-        'drawings': session_state['drawings']
+        'drawings': session_state['drawings'],
+        'scenes': session_state.get('scenes', [])  
+
     })
 
     emit('fog_areas_sync', {

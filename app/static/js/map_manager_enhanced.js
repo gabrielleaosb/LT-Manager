@@ -106,6 +106,7 @@ let tempPanning = false;
 // ==================
 // CENTRALIZAÇÃO E TRANSFORM
 // ==================
+
 function centerCanvas() {
     const containerRect = canvasContainer.getBoundingClientRect();
     panX = (containerRect.width - CANVAS_WIDTH) / 2;
@@ -134,7 +135,6 @@ function zoom(delta) {
     applyTransform();
 }
 
-// Zoom com scroll
 canvasWrapper.addEventListener('wheel', (e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -144,6 +144,7 @@ canvasWrapper.addEventListener('wheel', (e) => {
 // ==================
 // SIDEBAR TOGGLE
 // ==================
+
 function toggleSidebar() {
     sidebarCollapsed = !sidebarCollapsed;
     const sidebar = document.querySelector('.tools-sidebar');
@@ -161,6 +162,7 @@ function toggleSidebar() {
 // ==================
 // GRID
 // ==================
+
 function drawGrid() {
     gridCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
@@ -190,7 +192,6 @@ function toggleGrid() {
     drawGrid();
     showToast(gridEnabled ? 'Grid ativada' : 'Grid desativada');
     
-    // Sincronizar com todos
     socket.emit('update_grid_settings', {
         session_id: SESSION_ID,
         grid_settings: {
@@ -209,7 +210,6 @@ function updateGridSize(size) {
     document.getElementById('gridSizeValue').textContent = gridSize + 'px';
     drawGrid();
     
-    // Sincronizar com todos
     socket.emit('update_grid_settings', {
         session_id: SESSION_ID,
         grid_settings: {
@@ -224,6 +224,7 @@ function updateGridSize(size) {
 // ==================
 // CARREGAMENTO DE IMAGENS
 // ==================
+
 function loadImageSafe(id, src, onComplete) {
     if (loadedImages.has(id)) {
         if (onComplete) onComplete(loadedImages.get(id));
@@ -286,7 +287,6 @@ function preloadAllImages() {
         }
     });
 
-    // Se não há imagens para carregar, redesenha imediatamente
     if (imagesToLoad === 0) {
         redrawAll();
     }
@@ -295,6 +295,7 @@ function preloadAllImages() {
 // ==================
 // WEBSOCKET EVENTS - CORRIGIDO COM REDRAW SEMPRE
 // ==================
+
 socket.on('connect', () => {
     console.log('✅ Conectado ao servidor');
     socket.emit('join_session', { session_id: SESSION_ID });
@@ -312,6 +313,11 @@ socket.on('session_state', (data) => {
     
     preloadAllImages();
     drawGrid();
+
+    scenes = data.scenes || [];
+    renderScenesList();
+    console.log('🎬 Cenas carregadas:', scenes.length);
+
     renderImageList();
     renderTokenList();
     redrawAll();
@@ -337,7 +343,6 @@ socket.on('player_left', (data) => {
     socket.emit('get_players', { session_id: SESSION_ID });
 });
 
-// SINCRONIZAÇÃO EM TEMPO REAL - SEMPRE REDESENHA
 socket.on('maps_sync', (data) => {
     console.log('📍 MAPS SYNC recebido:', data);
     const maps = data.maps || [];
@@ -371,7 +376,6 @@ socket.on('token_sync', (data) => {
     
     tokens = data.tokens || [];
     
-    // FORÇAR redesenho imediato
     window.requestAnimationFrame(() => {
         preloadAllImages();
         renderTokenList();
@@ -399,12 +403,24 @@ socket.on('fog_areas_sync', (data) => {
     renderFogList();
 });
 
+socket.on('scenes_sync', (data) => {
+    console.log('🎬 Sincronização de cenas recebida:', data);
+    scenes = data.scenes || [];
+    renderScenesList();
+    console.log('🎬 Total de cenas após sync:', scenes.length);
+});
+
+socket.on('scene_switched', (data) => {
+    console.log('🎬 Cena trocada:', data);
+    currentSceneId = data.scene_id;
+    currentScene = data.scene;
+    // Aqui você pode adicionar lógica para carregar o conteúdo da cena
+});
+
 // ==================
 // FOG (NÉVOA)
 // ==================
-// ==================
-// FOG (NÉVOA) - CORRIGIDO
-// ==================
+
 function toggleFogMode() {
     fogDrawingMode = !fogDrawingMode;
     
@@ -412,8 +428,7 @@ function toggleFogMode() {
     const indicator = document.getElementById('fogModeIndicator');
     
     if (fogDrawingMode) {
-        // DESABILITAR outras ferramentas
-        currentTool = 'select'; // resetar ferramenta
+        currentTool = 'select'; 
         document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
         
         fogCanvas.classList.add('fog-drawing-mode');
@@ -424,7 +439,6 @@ function toggleFogMode() {
         }
         canvasWrapper.style.cursor = 'crosshair';
         
-        // BLOQUEAR movimentação do mapa
         canvasWrapper.style.pointerEvents = 'none';
         fogCanvas.style.pointerEvents = 'auto';
         
@@ -435,7 +449,6 @@ function toggleFogMode() {
         if (indicator) indicator.style.display = 'none';
         canvasWrapper.style.cursor = 'default';
         
-        // REABILITAR movimentação do mapa
         canvasWrapper.style.pointerEvents = 'auto';
         fogCanvas.style.pointerEvents = 'none';
         
@@ -490,11 +503,9 @@ function redrawFog() {
     
     if (fogAreas.length === 0) return;
     
-    // Desenhar névoa completa com opacidade controlável (apenas para o mestre)
     fogCtx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
     fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // "Cortar" as áreas visíveis
     fogCtx.globalCompositeOperation = 'destination-out';
     
     fogAreas.forEach(area => {
@@ -511,7 +522,6 @@ function redrawFog() {
     
     fogCtx.globalCompositeOperation = 'source-over';
     
-    // Preview da área sendo desenhada
     if (fogCurrentArea && fogDrawingMode) {
         fogCtx.strokeStyle = '#3498db';
         fogCtx.lineWidth = 3;
@@ -565,6 +575,7 @@ function renderFogList() {
     });
 }
 
+
 // CHAT - Socket Handlers CORRIGIDOS (substitua no início do arquivo, parte 1)
 
 socket.on('chat_contacts_loaded', (data) => {
@@ -577,7 +588,6 @@ socket.on('conversation_loaded', (data) => {
     console.log('💬 Conversa carregada:', data);
     currentConversation = data.messages || [];
     
-    // Salvar no cache
     if (data.other_user_id) {
         conversationsCache[data.other_user_id] = [...currentConversation];
         console.log(`💾 Cache atualizado para ${data.other_user_id}:`, currentConversation.length, 'mensagens');
@@ -589,20 +599,16 @@ socket.on('conversation_loaded', (data) => {
 socket.on('new_private_message', (data) => {
     console.log('💬 Nova mensagem recebida:', data);
     
-    // Verificar se a mensagem já existe para evitar duplicação
     const messageExists = (messages, msgData) => {
         return messages.some(m => m.id === msgData.id);
     };
     
-    // Adicionar à conversa atual se estiver aberta e não existir
     if (currentChatContact) {
         let shouldAdd = false;
         
-        // Conversa direta
         if (data.sender_id === currentChatContact || data.recipient_id === currentChatContact) {
             shouldAdd = true;
         }
-        // Conversa entre jogadores (mestre observando)
         else if (currentChatContact.includes('_')) {
             const [player1, player2] = currentChatContact.split('_');
             if ((data.sender_id === player1 && data.recipient_id === player2) ||
@@ -618,8 +624,6 @@ socket.on('new_private_message', (data) => {
         }
     }
     
-    // Atualizar cache de outras conversas afetadas (sem duplicar)
-    // Conversa mestre -> jogador
     if (data.sender_id === 'master' && data.recipient_id) {
         if (!conversationsCache[data.recipient_id]) {
             conversationsCache[data.recipient_id] = [];
@@ -628,7 +632,6 @@ socket.on('new_private_message', (data) => {
             conversationsCache[data.recipient_id].push(data);
         }
     }
-    // Conversa jogador -> mestre
     else if (data.recipient_id === 'master' && data.sender_id) {
         if (!conversationsCache[data.sender_id]) {
             conversationsCache[data.sender_id] = [];
@@ -637,7 +640,6 @@ socket.on('new_private_message', (data) => {
             conversationsCache[data.sender_id].push(data);
         }
     }
-    // Conversas entre jogadores
     else if (data.sender_id !== 'master' && data.recipient_id !== 'master') {
         const conversationKey = [data.sender_id, data.recipient_id].sort().join('_');
         if (!conversationsCache[conversationKey]) {
@@ -663,17 +665,18 @@ socket.on('grid_settings_sync', (data) => {
     drawGrid();
 });
 
+
 // MAP MANAGER - PARTE 2 - FERRAMENTAS E RENDER
 
 // ==================
 // FERRAMENTAS
 // ==================
+
 function setTool(tool) {
     currentTool = tool;
     document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
     event.target.classList.add('active');
     
-    // Remover classes de modo
     canvasWrapper.classList.remove('drawing-mode');
     drawingCanvas.classList.remove('drawing-mode');
     
@@ -705,10 +708,10 @@ function setBrushSize(size) {
 // ==================
 // RENDER
 // ==================
+
 function redrawAll() {
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // Desenhar todas as imagens
     images.forEach(img => {
         const loadedImg = loadedImages.get(img.id);
         
@@ -721,7 +724,6 @@ function redrawAll() {
                     mapCtx.lineWidth = 4;
                     mapCtx.strokeRect(img.x, img.y, img.width, img.height);
                     
-                    // Handles de resize
                     const handleSize = 10;
                     mapCtx.fillStyle = '#9b59b6';
                     
@@ -738,7 +740,6 @@ function redrawAll() {
         }
     });
     
-    // Desenhar tokens
     tokens.forEach(token => {
         const img = loadedImages.get(token.id);
         
@@ -780,7 +781,6 @@ function redrawAll() {
             mapCtx.stroke();
         }
         
-        // Nome
         mapCtx.fillStyle = "#fff";
         mapCtx.font = "bold 11px Lato";
         mapCtx.textAlign = "center";
@@ -791,7 +791,6 @@ function redrawAll() {
         mapCtx.strokeText(token.name, token.x, nameY);
         mapCtx.fillText(token.name, token.x, nameY);
 
-        // Highlight
         if (selectedItem === token && selectedType === 'token') {
             mapCtx.strokeStyle = "#ffc107";
             mapCtx.lineWidth = 4;
@@ -832,7 +831,8 @@ function redrawDrawings() {
 
 // ==================
 // EVENTOS DE MOUSE
-// ==================
+// ================== 
+
 function getMousePos(e) {
     const rect = canvasWrapper.getBoundingClientRect();
     const scaleX = CANVAS_WIDTH / rect.width;
@@ -845,7 +845,6 @@ function getMousePos(e) {
 }
 
 function findItemAt(x, y) {
-    // Verificar tokens primeiro
     for (let i = tokens.length - 1; i >= 0; i--) {
         const token = tokens[i];
         
@@ -863,7 +862,6 @@ function findItemAt(x, y) {
         }
     }
     
-    // Verificar imagens
     for (let i = images.length - 1; i >= 0; i--) {
         const img = images[i];
         if (x >= img.x && x <= img.x + img.width &&
@@ -887,7 +885,6 @@ function isOnResizeHandle(img, x, y) {
 canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
     
-    // PAN TEMPORÁRIO COM ESPAÇO - PRIORIDADE MÁXIMA
     if (spacePressed) {
         tempPanning = true;
         isPanning = true;
@@ -897,7 +894,6 @@ canvasWrapper.addEventListener('mousedown', (e) => {
         return;
     }
     
-    // BLOQUEAR se fog mode está ativo
     if (fogDrawingMode) {
         return;
     }
@@ -955,7 +951,6 @@ canvasWrapper.addEventListener('mousedown', (e) => {
 canvasWrapper.addEventListener('mousemove', (e) => {
     const pos = getMousePos(e);
     
-    // PAN TEMPORÁRIO COM ESPAÇO
     if (tempPanning && isPanning) {
         panX = e.clientX - startPanX;
         panY = e.clientY - startPanY;
@@ -991,14 +986,13 @@ canvasWrapper.addEventListener('mousemove', (e) => {
         
         draggingItem.x = newX;
         draggingItem.y = newY;
-        
+  
         redrawAll();
     } else if (currentTool === 'select' && !mouseDown) {
         const found = findItemAt(pos.x, pos.y);
         if (found && found.type === 'image' && isOnResizeHandle(found.item, pos.x, pos.y)) {
             canvasWrapper.style.cursor = 'nwse-resize';
         } else {
-            // Mostrar grab se espaço está pressionado
             if (spacePressed) {
                 canvasWrapper.style.cursor = 'grab';
             } else {
@@ -1014,7 +1008,6 @@ canvasWrapper.addEventListener('mouseup', () => {
         tempPanning = false;
         isPanning = false;
         
-        // Restaurar cursor
         if (spacePressed) {
             canvasWrapper.style.cursor = 'grab';
         } else if (fogDrawingMode) {
@@ -1096,6 +1089,7 @@ canvasWrapper.addEventListener('mouseleave', () => {
 // ==================
 // DESENHO LIVRE
 // ==================
+
 function getDrawingPos(e) {
     const rect = drawingCanvas.getBoundingClientRect();
     const scaleX = CANVAS_WIDTH / rect.width;
@@ -1108,7 +1102,6 @@ function getDrawingPos(e) {
 }
 
 drawingCanvas.addEventListener('mousedown', (e) => {
-    // Não desenhar se espaço está pressionado
     if (spacePressed) {
         return;
     }
@@ -1124,7 +1117,6 @@ drawingCanvas.addEventListener('mousedown', (e) => {
 });
 
 drawingCanvas.addEventListener('mousemove', (e) => {
-    // Não desenhar se espaço está pressionado
     if (spacePressed) {
         return;
     }
@@ -1247,7 +1239,6 @@ fogCanvas.addEventListener('mouseup', (e) => {
     e.preventDefault();
     e.stopPropagation();
     
-    // Normalizar retângulo se necessário
     if (fogShape === 'rectangle') {
         if (fogCurrentArea.width < 0) {
             fogCurrentArea.x += fogCurrentArea.width;
@@ -1258,7 +1249,6 @@ fogCanvas.addEventListener('mouseup', (e) => {
             fogCurrentArea.height = Math.abs(fogCurrentArea.height);
         }
         
-        // Validar tamanho mínimo
         if (fogCurrentArea.width < 20 || fogCurrentArea.height < 20) {
             fogCurrentArea = null;
             fogDrawStart = null;
@@ -1276,15 +1266,12 @@ fogCanvas.addEventListener('mouseup', (e) => {
         }
     }
     
-    // Adicionar ID único
-    fogCurrentArea.id = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    
+    fogCurrentArea.id = Date.now() + '_' + Math.random().toString(36).substr(2, 9); 
     fogAreas.push(fogCurrentArea);
     
     console.log('🌫️ Fog area adicionada:', fogCurrentArea);
     console.log('🌫️ Total fog areas:', fogAreas.length);
     
-    // ENVIAR para o servidor
     socket.emit('add_fog_area', {
         session_id: SESSION_ID,
         fog_area: fogCurrentArea
@@ -1347,6 +1334,7 @@ function clearDrawings() {
 // ==================
 // ADICIONAR IMAGEM
 // ==================
+
 function addImage() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -1408,6 +1396,7 @@ function addImage() {
 // ==================
 // ADICIONAR TOKEN
 // ==================
+
 function addToken() {
     document.getElementById('tokenModal').classList.add('show');
 }
@@ -1492,6 +1481,7 @@ function closeTokenModal() {
 // ==================
 // DELETAR ITEM
 // ==================
+
 function deleteSelected() {
     if (!selectedItem) {
         alert('Selecione um item primeiro');
@@ -1537,13 +1527,11 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         spacePressed = true;
         
-        // Mostrar indicador
         const indicator = document.getElementById('panIndicator');
         if (indicator) {
             indicator.style.display = 'flex';
         }
         
-        // Mudar cursor para indicar pan disponível
         if (!tempPanning) {
             canvasWrapper.style.cursor = 'grab';
         }
@@ -1556,13 +1544,11 @@ document.addEventListener('keyup', (e) => {
         spacePressed = false;
         tempPanning = false;
         
-        // Esconder indicador
         const indicator = document.getElementById('panIndicator');
         if (indicator) {
             indicator.style.display = 'none';
         }
         
-        // Restaurar cursor baseado na ferramenta ativa
         if (fogDrawingMode) {
             canvasWrapper.style.cursor = 'crosshair';
         } else if (currentTool === 'draw') {
@@ -1580,6 +1566,7 @@ document.addEventListener('keyup', (e) => {
 // ==================
 // RENDERIZAR LISTAS
 // ==================
+
 function renderImageList() {
     const list = document.getElementById('imageList');
     if (!list) return;
@@ -1714,7 +1701,6 @@ function deleteItemById(itemId, type) {
 // CHAT - COM CACHE SEM DUPLICAÇÃO
 // ==================
 
-// Cache de conversas - armazena todas as conversas carregadas
 let conversationsCache = {};
 
 function toggleChatMinimize() {
@@ -1770,7 +1756,6 @@ function renderChatContacts() {
         return;
     }
     
-    // Atualizar badge total no header
     const totalUnread = chatContacts.reduce((sum, contact) => sum + (contact.unread || 0), 0);
     const chatBadge = document.getElementById('chatBadge');
     if (chatBadge) {
@@ -1804,7 +1789,6 @@ function renderChatContacts() {
 function openConversation(contactId) {
     console.log('💬 Abrindo conversa com:', contactId);
     
-    // Salvar conversa atual no cache antes de trocar
     if (currentChatContact && currentConversation.length > 0) {
         conversationsCache[currentChatContact] = [...currentConversation];
         console.log(`💾 Cache salvo para ${currentChatContact}:`, conversationsCache[currentChatContact].length, 'mensagens');
@@ -1812,7 +1796,6 @@ function openConversation(contactId) {
     
     currentChatContact = contactId;
     
-    // Marcar como lida no servidor
     socket.emit('mark_conversation_read', {
         session_id: SESSION_ID,
         user_id: 'master',
@@ -1822,7 +1805,6 @@ function openConversation(contactId) {
     document.querySelectorAll('.contact-item').forEach(item => item.classList.remove('active'));
     event.currentTarget?.classList.add('active');
     
-    // Verificar se já temos o cache desta conversa
     if (conversationsCache[contactId]) {
         console.log(`📦 Carregando do cache: ${contactId}`, conversationsCache[contactId].length, 'mensagens');
         currentConversation = [...conversationsCache[contactId]];
@@ -1854,7 +1836,6 @@ function openConversation(contactId) {
         }
     }
     
-    // Recarregar contatos para atualizar contador
     loadChatContacts();
 }
 
@@ -1909,7 +1890,6 @@ function sendChatMessage() {
     input.value = '';
 }
 
-// Listener para Enter no input
 document.addEventListener('DOMContentLoaded', () => {
     const conversationInput = document.getElementById('conversationInput');
     if (conversationInput) {
@@ -1921,11 +1901,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-
-
 // ==================
 // PERMISSÕES E JOGADORES
 // ==================
+
 function renderPlayersList() {
     const list = document.getElementById('playersList');
     if (!list) return;
@@ -2061,6 +2040,7 @@ function closeTokenPermissionsModal() {
 // ==================
 // PAINÉIS
 // ==================
+
 function togglePanel(panelId) {
     const panel = document.getElementById(panelId);
     const isVisible = panel.classList.contains('show');
@@ -2083,6 +2063,7 @@ function toggleDiceRoller() {
 // ==================
 // DICE ROLLER
 // ==================
+
 function rollDice(sides) {
     const result = Math.floor(Math.random() * sides) + 1;
     const resultDiv = document.getElementById('diceResult');
@@ -2090,7 +2071,6 @@ function rollDice(sides) {
     resultDiv.textContent = result;
     resultDiv.className = 'dice-result';
     
-    // Adicionar ao histórico
     addDiceToHistory(`1d${sides}`, result, sides === 20 && result === 20, sides === 20 && result === 1);
     
     setTimeout(() => {
@@ -2130,7 +2110,6 @@ function rollCustomDice() {
     resultDiv.textContent = total;
     resultDiv.className = 'dice-result show';
     
-    // Verificar críticos
     const isCrit = sides === 20 && count === 1 && rolls[0] === 20;
     const isFail = sides === 20 && count === 1 && rolls[0] === 1;
     
@@ -2142,7 +2121,6 @@ function rollCustomDice() {
         showToast('💀 FALHA CRÍTICA!');
     }
     
-    // Adicionar ao histórico
     addDiceToHistory(formula, total, isCrit, isFail, breakdown);
 }
 
@@ -2210,6 +2188,7 @@ function clearDiceHistory() {
 // ==================
 // UTILS
 // ==================
+
 function copyShareLink() {
     const link = `${window.location.origin}/player-view/${SESSION_ID}`;
     navigator.clipboard.writeText(link);
@@ -2244,6 +2223,7 @@ function clearAll() {
 // ==================
 // INICIALIZAÇÃO
 // ==================
+
 document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.floating-panel') && !e.target.closest('.floating-btn')) {
@@ -2279,7 +2259,6 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         spacePressed = true;
         
-        // Mudar cursor para indicar pan disponível
         if (!tempPanning) {
             canvasWrapper.style.cursor = 'grab';
         }

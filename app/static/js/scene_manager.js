@@ -2,7 +2,10 @@
 // SCENE MANAGER - Gerenciador de Cenas
 // ==========================================
 
+console.log('🎬 Scene Manager carregado');
+
 function openSceneManager() {
+    console.log('🎬 Abrindo gerenciador. Cenas atuais:', scenes.length);
     document.getElementById('sceneManagerModal').classList.add('show');
     renderScenesList();
 }
@@ -12,8 +15,13 @@ function closeSceneManager() {
 }
 
 function createNewScene() {
-    const name = prompt('Nome da nova cena:');
-    if (!name || !name.trim()) return;
+    const name = prompt('📝 Nome da nova cena:');
+    
+    if (!name || !name.trim()) {
+        return;
+    }
+    
+    console.log('🎬 Criando cena:', name.trim());
     
     socket.emit('create_scene', {
         session_id: SESSION_ID,
@@ -25,9 +33,14 @@ function createNewScene() {
 
 function deleteScene(sceneId) {
     const scene = scenes.find(s => s.id === sceneId);
+    
     if (!scene) return;
     
-    if (!confirm(`Deletar cena "${scene.name}"?`)) return;
+    if (!confirm(`🗑️ Tem certeza que deseja excluir a cena "${scene.name}"?`)) {
+        return;
+    }
+    
+    console.log('🗑️ Excluindo cena:', sceneId);
     
     socket.emit('delete_scene', {
         session_id: SESSION_ID,
@@ -40,6 +53,8 @@ function deleteScene(sceneId) {
 function switchToScene(sceneId) {
     const scene = scenes.find(s => s.id === sceneId);
     if (!scene) return;
+    
+    console.log('🎬 Trocando para cena:', sceneId);
     
     // Salvar conteúdo da cena atual antes de trocar
     if (currentSceneId && currentScene) {
@@ -58,13 +73,11 @@ function switchToScene(sceneId) {
     });
     
     showToast(`Cena alterada: ${scene.name}`);
-    renderScenesList();
+    closeSceneManager();
 }
 
 function saveCurrentSceneContent() {
     if (!currentSceneId) return;
-    
-    const allImages = [...maps, ...entities];
     
     socket.emit('update_scene_content', {
         session_id: SESSION_ID,
@@ -134,12 +147,18 @@ function toggleSceneVisibility(sceneId, playerId) {
 }
 
 function renderScenesList() {
+    console.log('🎬 Renderizando lista. Cenas disponíveis:', scenes);
+    
     const list = document.getElementById('scenesList');
-    if (!list) return;
+    
+    if (!list) {
+        console.error('❌ Container scenesList não encontrado!');
+        return;
+    }
     
     list.innerHTML = '';
     
-    if (scenes.length === 0) {
+    if (!scenes || scenes.length === 0) {
         list.innerHTML = '<div class="empty-state">Nenhuma cena criada</div>';
         return;
     }
@@ -167,6 +186,8 @@ function renderScenesList() {
         
         list.appendChild(item);
     });
+    
+    console.log('✅ Lista renderizada com', scenes.length, 'cena(s)');
 }
 
 function openSceneVisibility(sceneId) {
@@ -216,13 +237,14 @@ function renderSceneVisibilityList(scene) {
 
 // Socket handlers
 socket.on('scenes_sync', (data) => {
-    console.log('🎬 Cenas sincronizadas:', data);
+    console.log('🎬 Sincronização de cenas recebida:', data);
     scenes = data.scenes || [];
     renderScenesList();
+    console.log('🎬 Total de cenas após sync:', scenes.length);
 });
 
 socket.on('scene_switched', (data) => {
-    console.log('🎬 Cena alterada:', data);
+    console.log('🎬 Cena trocada:', data);
     
     if (currentSceneId !== data.scene_id) {
         currentSceneId = data.scene_id;
@@ -236,4 +258,4 @@ setInterval(() => {
     if (currentSceneId && currentScene) {
         saveCurrentSceneContent();
     }
-}, 5000); 
+}, 5000);
