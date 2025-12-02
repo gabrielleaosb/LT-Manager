@@ -564,12 +564,16 @@ def handle_add_fog_area(data):
     
     active_sessions[session_id]['fog_areas'].append(fog_area)
     
-    # Broadcast para TODA A SALA
+    print(f'🌫️ Fog area adicionada na sessão {session_id}')
+    print(f'🌫️ Total fog areas: {len(active_sessions[session_id]["fog_areas"])}')
+    print(f'🌫️ Fog area: {fog_area}')
+    
+    # Broadcast para TODA A SALA (incluindo jogadores)
     emit('fog_areas_sync', {
         'fog_areas': active_sessions[session_id]['fog_areas']
     }, room=session_id, include_self=True)
     
-    print(f'🌫️ Fog area adicionada na sessão {session_id}')
+    print(f'🌫️ Fog areas enviadas para sala {session_id}')
 
 @socketio.on('delete_fog_area')
 def handle_delete_fog_area(data):
@@ -586,11 +590,12 @@ def handle_delete_fog_area(data):
         if f['id'] != fog_id
     ]
     
+    print(f'🌫️ Fog area removida na sessão {session_id}')
+    
+    # Broadcast para TODA A SALA
     emit('fog_areas_sync', {
         'fog_areas': active_sessions[session_id]['fog_areas']
     }, room=session_id, include_self=True)
-    
-    print(f'🌫️ Fog area removida na sessão {session_id}')
 
 @socketio.on('clear_all_fog')
 def handle_clear_all_fog(data):
@@ -599,10 +604,11 @@ def handle_clear_all_fog(data):
     init_session(session_id)
     active_sessions[session_id]['fog_areas'] = []
     
+    print(f'🌫️ Todo fog limpo na sessão {session_id}')
+    
+    # Broadcast para TODA A SALA
     emit('fog_areas_sync', {'fog_areas': []}, 
          room=session_id, include_self=True)
-    
-    print(f'🌫️ Todo fog limpo na sessão {session_id}')
 
 @socketio.on('reveal_fog_area')
 def handle_reveal_fog_area(data):

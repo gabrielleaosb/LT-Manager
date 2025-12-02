@@ -92,6 +92,10 @@ let fogDrawStart = null;
 let fogCurrentArea = null;
 let fogOpacity = 0.5;
 
+// Pan temporário com espaço
+let spacePressed = false;
+let tempPanning = false;
+
 // ==================
 // CENTRALIZAÇÃO E TRANSFORM
 // ==================
@@ -391,6 +395,9 @@ socket.on('fog_areas_sync', (data) => {
 // ==================
 // FOG (NÉVOA)
 // ==================
+// ==================
+// FOG (NÉVOA) - CORRIGIDO
+// ==================
 function toggleFogMode() {
     fogDrawingMode = !fogDrawingMode;
     
@@ -398,6 +405,10 @@ function toggleFogMode() {
     const indicator = document.getElementById('fogModeIndicator');
     
     if (fogDrawingMode) {
+        // DESABILITAR outras ferramentas
+        currentTool = 'select'; // resetar ferramenta
+        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+        
         fogCanvas.classList.add('fog-drawing-mode');
         if (btn) btn.classList.add('active');
         if (indicator) {
@@ -405,12 +416,23 @@ function toggleFogMode() {
             indicator.textContent = `🌫️ Desenhando Névoa - ${fogShape === 'rectangle' ? 'Retângulo' : 'Círculo'}`;
         }
         canvasWrapper.style.cursor = 'crosshair';
-        setTool('select');
+        
+        // BLOQUEAR movimentação do mapa
+        canvasWrapper.style.pointerEvents = 'none';
+        fogCanvas.style.pointerEvents = 'auto';
+        
+        showToast('Modo Névoa ATIVADO - Desenhe no mapa');
     } else {
         fogCanvas.classList.remove('fog-drawing-mode');
         if (btn) btn.classList.remove('active');
         if (indicator) indicator.style.display = 'none';
         canvasWrapper.style.cursor = 'default';
+        
+        // REABILITAR movimentação do mapa
+        canvasWrapper.style.pointerEvents = 'auto';
+        fogCanvas.style.pointerEvents = 'none';
+        
+        showToast('Modo Névoa DESATIVADO');
     }
 }
 
@@ -436,19 +458,20 @@ function setFogOpacity(value) {
 function clearAllFog() {
     if (confirm('Remover toda a névoa e revelar o mapa?')) {
         fogAreas = [];
-        socket.emit('clear_fog_areas', {
+        socket.emit('clear_all_fog', {
             session_id: SESSION_ID
         });
         redrawFog();
+        renderFogList();
         showToast('Mapa revelado!');
     }
 }
 
 function removeFogArea(areaId) {
     fogAreas = fogAreas.filter(area => area.id !== areaId);
-    socket.emit('update_fog_areas', {
+    socket.emit('delete_fog_area', {
         session_id: SESSION_ID,
-        fog_areas: fogAreas
+        fog_id: areaId
     });
     redrawFog();
     renderFogList();
@@ -857,6 +880,21 @@ function isOnResizeHandle(img, x, y) {
 canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
     
+    // PAN TEMPORÁRIO COM ESPAÇO - PRIORIDADE MÁXIMA
+    if (spacePressed) {
+        tempPanning = true;
+        isPanning = true;
+        startPanX = e.clientX - panX;
+        startPanY = e.clientY - panY;
+        canvasWrapper.style.cursor = 'grabbing';
+        return;
+    }
+    
+    // BLOQUEAR se fog mode está ativo
+    if (fogDrawingMode) {
+        return;
+    }
+    
     if (currentTool === 'draw' || currentTool === 'erase') {
         return;
     }
@@ -910,6 +948,14 @@ canvasWrapper.addEventListener('mousedown', (e) => {
 canvasWrapper.addEventListener('mousemove', (e) => {
     const pos = getMousePos(e);
     
+    // PAN TEMPORÁRIO COM ESPAÇO
+    if (tempPanning && isPanning) {
+        panX = e.clientX - startPanX;
+        panY = e.clientY - startPanY;
+        applyTransform();
+        return;
+    }
+    
     if (currentTool === 'draw' || currentTool === 'erase') {
         return;
     }
@@ -945,12 +991,35 @@ canvasWrapper.addEventListener('mousemove', (e) => {
         if (found && found.type === 'image' && isOnResizeHandle(found.item, pos.x, pos.y)) {
             canvasWrapper.style.cursor = 'nwse-resize';
         } else {
-            canvasWrapper.style.cursor = found ? 'grab' : 'default';
+            // Mostrar grab se espaço está pressionado
+            if (spacePressed) {
+                canvasWrapper.style.cursor = 'grab';
+            } else {
+                canvasWrapper.style.cursor = found ? 'grab' : 'default';
+            }
         }
     }
 });
 
 canvasWrapper.addEventListener('mouseup', () => {
+    // Pan temporário
+    if (tempPanning) {
+        tempPanning = false;
+        isPanning = false;
+        
+        // Restaurar cursor
+        if (spacePressed) {
+            canvasWrapper.style.cursor = 'grab';
+        } else if (fogDrawingMode) {
+            canvasWrapper.style.cursor = 'crosshair';
+        } else if (currentTool === 'pan') {
+            canvasWrapper.style.cursor = 'grab';
+        } else {
+            canvasWrapper.style.cursor = 'default';
+        }
+        return;
+    }
+    
     if (resizingImage) {
         if (resizingImage.id.startsWith('map_')) {
             socket.emit('update_map', {
@@ -999,6 +1068,8 @@ canvasWrapper.addEventListener('mouseup', () => {
     
     if (currentTool === 'pan') {
         canvasWrapper.style.cursor = 'grab';
+    } else if (spacePressed) {
+        canvasWrapper.style.cursor = 'grab';
     } else {
         canvasWrapper.style.cursor = 'default';
     }
@@ -1030,6 +1101,11 @@ function getDrawingPos(e) {
 }
 
 drawingCanvas.addEventListener('mousedown', (e) => {
+    // Não desenhar se espaço está pressionado
+    if (spacePressed) {
+        return;
+    }
+    
     if (currentTool === 'draw') {
         isDrawing = true;
         const pos = getDrawingPos(e);
@@ -1041,6 +1117,11 @@ drawingCanvas.addEventListener('mousedown', (e) => {
 });
 
 drawingCanvas.addEventListener('mousemove', (e) => {
+    // Não desenhar se espaço está pressionado
+    if (spacePressed) {
+        return;
+    }
+    
     if (isDrawing && currentTool === 'draw') {
         const pos = getDrawingPos(e);
         currentPath.push(pos);
@@ -1066,7 +1147,7 @@ drawingCanvas.addEventListener('mousemove', (e) => {
 });
 
 drawingCanvas.addEventListener('mouseup', () => {
-    if (isDrawing && currentPath.length > 0) {
+    if (isDrawing && currentPath.length > 0 && !spacePressed) {
         const drawing = {
             id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
             path: currentPath,
@@ -1092,49 +1173,72 @@ drawingCanvas.addEventListener('mouseleave', () => {
 // ==================
 // FOG CANVAS EVENTS
 // ==================
+
 fogCanvas.addEventListener('mousedown', (e) => {
-    if (!fogDrawingMode) return;
+    if (!fogDrawingMode || spacePressed) return;
     
-    const pos = getMousePos(e);
-    fogDrawStart = pos;
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const rect = fogCanvas.getBoundingClientRect();
+    const scaleX = CANVAS_WIDTH / rect.width;
+    const scaleY = CANVAS_HEIGHT / rect.height;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    fogDrawStart = { x, y };
     
     if (fogShape === 'rectangle') {
         fogCurrentArea = {
             shape: 'rectangle',
-            x: pos.x,
-            y: pos.y,
+            x: x,
+            y: y,
             width: 0,
             height: 0
         };
     } else if (fogShape === 'circle') {
         fogCurrentArea = {
             shape: 'circle',
-            x: pos.x,
-            y: pos.y,
+            x: x,
+            y: y,
             radius: 0
         };
     }
+    
+    console.log('🌫️ Fog drawing started:', fogCurrentArea);
 });
 
 fogCanvas.addEventListener('mousemove', (e) => {
-    if (!fogDrawingMode || !fogDrawStart || !fogCurrentArea) return;
+    if (!fogDrawingMode || !fogDrawStart || !fogCurrentArea || spacePressed) return;
     
-    const pos = getMousePos(e);
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const rect = fogCanvas.getBoundingClientRect();
+    const scaleX = CANVAS_WIDTH / rect.width;
+    const scaleY = CANVAS_HEIGHT / rect.height;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
     
     if (fogShape === 'rectangle') {
-        fogCurrentArea.width = pos.x - fogDrawStart.x;
-        fogCurrentArea.height = pos.y - fogDrawStart.y;
+        fogCurrentArea.width = x - fogDrawStart.x;
+        fogCurrentArea.height = y - fogDrawStart.y;
     } else if (fogShape === 'circle') {
-        const dx = pos.x - fogDrawStart.x;
-        const dy = pos.y - fogDrawStart.y;
+        const dx = x - fogDrawStart.x;
+        const dy = y - fogDrawStart.y;
         fogCurrentArea.radius = Math.sqrt(dx * dx + dy * dy);
     }
     
     redrawFog();
 });
 
-fogCanvas.addEventListener('mouseup', () => {
-    if (!fogDrawingMode || !fogCurrentArea) return;
+fogCanvas.addEventListener('mouseup', (e) => {
+    if (!fogDrawingMode || !fogCurrentArea || spacePressed) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
     
     // Normalizar retângulo se necessário
     if (fogShape === 'rectangle') {
@@ -1152,6 +1256,7 @@ fogCanvas.addEventListener('mouseup', () => {
             fogCurrentArea = null;
             fogDrawStart = null;
             redrawFog();
+            showToast('Área muito pequena - desenhe uma área maior');
             return;
         }
     } else if (fogShape === 'circle') {
@@ -1159,6 +1264,7 @@ fogCanvas.addEventListener('mouseup', () => {
             fogCurrentArea = null;
             fogDrawStart = null;
             redrawFog();
+            showToast('Área muito pequena - desenhe uma área maior');
             return;
         }
     }
@@ -1168,9 +1274,13 @@ fogCanvas.addEventListener('mouseup', () => {
     
     fogAreas.push(fogCurrentArea);
     
-    socket.emit('update_fog_areas', {
+    console.log('🌫️ Fog area adicionada:', fogCurrentArea);
+    console.log('🌫️ Total fog areas:', fogAreas.length);
+    
+    // ENVIAR para o servidor
+    socket.emit('add_fog_area', {
         session_id: SESSION_ID,
-        fog_areas: fogAreas
+        fog_area: fogCurrentArea
     });
     
     fogCurrentArea = null;
@@ -1178,7 +1288,7 @@ fogCanvas.addEventListener('mouseup', () => {
     
     redrawFog();
     renderFogList();
-    showToast('Área revelada adicionada!');
+    showToast('Área de névoa adicionada!');
 });
 
 fogCanvas.addEventListener('mouseleave', () => {
@@ -1416,8 +1526,47 @@ function deleteSelected() {
 }
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Delete' && selectedItem) {
-        deleteSelected();
+    if (e.code === 'Space' && !spacePressed) {
+        e.preventDefault();
+        spacePressed = true;
+        
+        // Mostrar indicador
+        const indicator = document.getElementById('panIndicator');
+        if (indicator) {
+            indicator.style.display = 'flex';
+        }
+        
+        // Mudar cursor para indicar pan disponível
+        if (!tempPanning) {
+            canvasWrapper.style.cursor = 'grab';
+        }
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        spacePressed = false;
+        tempPanning = false;
+        
+        // Esconder indicador
+        const indicator = document.getElementById('panIndicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+        
+        // Restaurar cursor baseado na ferramenta ativa
+        if (fogDrawingMode) {
+            canvasWrapper.style.cursor = 'crosshair';
+        } else if (currentTool === 'draw') {
+            canvasWrapper.style.cursor = 'crosshair';
+        } else if (currentTool === 'erase') {
+            canvasWrapper.style.cursor = 'not-allowed';
+        } else if (currentTool === 'pan') {
+            canvasWrapper.style.cursor = 'grab';
+        } else {
+            canvasWrapper.style.cursor = 'default';
+        }
     }
 });
 
@@ -2113,6 +2262,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.addEventListener('resize', () => {
     centerCanvas();
+});
+
+// ==================
+// PAN TEMPORÁRIO COM ESPAÇO
+// ==================
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !spacePressed) {
+        e.preventDefault();
+        spacePressed = true;
+        
+        // Mudar cursor para indicar pan disponível
+        if (!tempPanning) {
+            canvasWrapper.style.cursor = 'grab';
+        }
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        spacePressed = false;
+        tempPanning = false;
+        
+        // Restaurar cursor baseado na ferramenta ativa
+        if (fogDrawingMode) {
+            canvasWrapper.style.cursor = 'crosshair';
+        } else if (currentTool === 'draw') {
+            canvasWrapper.style.cursor = 'crosshair';
+        } else if (currentTool === 'erase') {
+            canvasWrapper.style.cursor = 'not-allowed';
+        } else if (currentTool === 'pan') {
+            canvasWrapper.style.cursor = 'grab';
+        } else {
+            canvasWrapper.style.cursor = 'default';
+        }
+    }
 });
 
 setTool('select');

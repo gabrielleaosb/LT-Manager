@@ -23,7 +23,27 @@
         <button class="btn btn-danger" onclick="clearAll()">🗑️ Limpar Tudo</button>
     </div>
 </header>
-
+<div id="panIndicator" style="
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, rgba(155,89,182,0.95), rgba(108,52,131,0.95));
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    z-index: 1000;
+    box-shadow: 0 4px 15px rgba(155,89,182,0.5);
+    display: none;
+    align-items: center;
+    gap: 8px;
+    border: 2px solid rgba(255,255,255,0.2);
+">
+    <span>🤚</span>
+    <span>Segure ESPAÇO para mover o mapa</span>
+</div>
 <div class="main-layout">
     <!-- Sidebar Esquerda Retrátil -->
     <div class="tools-sidebar">
@@ -126,7 +146,7 @@
                 </div>
                 
                 <button class="action-btn" onclick="clearAllFog()" style="margin-top: 12px; background: linear-gradient(135deg, #3498db, #2980b9);">
-                    ✨ Revelar Tudo / Limpar Névoa
+                    ✨ Limpar Névoa
                 </button>
                 
                 <h4 style="color: #c49bdb; font-size: 0.85rem; margin: 15px 0 8px 0;">Áreas Reveladas</h4>

@@ -255,37 +255,60 @@ socket.on('player_joined', (data) => {
 
 socket.on('fog_areas_sync', (data) => {
     console.log('🌫️ [JOGADOR] FOG SYNC recebido:', data);
+    console.log('🌫️ Fog areas:', data.fog_areas);
     fogAreas = data.fog_areas || [];
+    console.log('🌫️ fogAreas atualizado:', fogAreas.length, 'áreas');
     redrawFog();
+    
+    if (fogAreas.length > 0) {
+        showToast(`Mapa atualizado - ${fogAreas.length} área(s) visível(is)`);
+    }
 });
 
 // ========== FOG OF WAR ==========
 // ========== FOG (NÉVOA) ==========
+// ========== FOG (NÉVOA) - CORRIGIDO ==========
 function redrawFog() {
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    if (fogAreas.length === 0) return;
+    console.log('🌫️ [JOGADOR] Redesenhando fog. Areas:', fogAreas.length);
+    
+    if (fogAreas.length === 0) {
+        // SEM FOG AREAS = MAPA TOTALMENTE COBERTO
+        fogCtx.fillStyle = 'rgba(0, 0, 0, 1)';
+        fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        console.log('🌫️ Mapa totalmente coberto (sem áreas visíveis)');
+        return;
+    }
     
     // Névoa TOTALMENTE ESCURA para jogadores (opacidade 100%)
     fogCtx.fillStyle = 'rgba(0, 0, 0, 1)';
     fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
+    console.log('🌫️ Base escura aplicada');
+    
     // "Cortar" áreas visíveis
     fogCtx.globalCompositeOperation = 'destination-out';
     
-    fogAreas.forEach(area => {
+    fogAreas.forEach((area, index) => {
+        console.log(`🌫️ Processando área ${index + 1}:`, area);
+        
         if (area.shape === 'rectangle') {
             fogCtx.fillStyle = 'rgba(255, 255, 255, 1)';
             fogCtx.fillRect(area.x, area.y, area.width, area.height);
+            console.log(`   ✅ Retângulo desenhado em (${area.x}, ${area.y}) ${area.width}x${area.height}`);
         } else if (area.shape === 'circle') {
             fogCtx.fillStyle = 'rgba(255, 255, 255, 1)';
             fogCtx.beginPath();
             fogCtx.arc(area.x, area.y, area.radius, 0, Math.PI * 2);
             fogCtx.fill();
+            console.log(`   ✅ Círculo desenhado em (${area.x}, ${area.y}) raio ${area.radius}`);
         }
     });
     
     fogCtx.globalCompositeOperation = 'source-over';
+    
+    console.log('🌫️ Fog redesenhado com sucesso');
 }
 
 // CHAT
