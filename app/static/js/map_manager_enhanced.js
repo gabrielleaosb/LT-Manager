@@ -206,7 +206,7 @@ function preloadAllImages() {
 }
 
 // ==================
-// WEBSOCKET EVENTS - CORRIGIDO
+// WEBSOCKET EVENTS - CORRIGIDO COM REDRAW SEMPRE
 // ==================
 socket.on('connect', () => {
     console.log('✅ Conectado ao servidor');
@@ -227,6 +227,8 @@ socket.on('session_state', (data) => {
     drawGrid();
     renderImageList();
     renderTokenList();
+    redrawAll();
+    redrawDrawings();
 });
 
 socket.on('players_list', (data) => {
@@ -248,7 +250,7 @@ socket.on('player_left', (data) => {
     socket.emit('get_players', { session_id: SESSION_ID });
 });
 
-// SINCRONIZAÇÃO EM TEMPO REAL - CORRIGIDO
+// SINCRONIZAÇÃO EM TEMPO REAL - SEMPRE REDESENHA
 socket.on('maps_sync', (data) => {
     console.log('📍 MAPS SYNC recebido:', data);
     const maps = data.maps || [];
@@ -256,6 +258,7 @@ socket.on('maps_sync', (data) => {
     images = [...maps, ...entities];
     preloadAllImages();
     renderImageList();
+    redrawAll();
 });
 
 socket.on('entities_sync', (data) => {
@@ -265,6 +268,7 @@ socket.on('entities_sync', (data) => {
     images = [...maps, ...entities];
     preloadAllImages();
     renderImageList();
+    redrawAll();
 });
 
 socket.on('token_sync', (data) => {
@@ -272,6 +276,7 @@ socket.on('token_sync', (data) => {
     tokens = data.tokens || [];
     preloadAllImages();
     renderTokenList();
+    redrawAll();
 });
 
 socket.on('drawing_sync', (data) => {
@@ -284,7 +289,8 @@ socket.on('drawings_cleared', () => {
     redrawDrawings();
 });
 
-// CHAT - CORRIGIDO
+// CHAT - Socket Handlers CORRIGIDOS (substitua no início do arquivo, parte 1)
+
 socket.on('chat_contacts_loaded', (data) => {
     console.log('📋 Contatos carregados:', data);
     chatContacts = data.contacts || [];
@@ -294,20 +300,78 @@ socket.on('chat_contacts_loaded', (data) => {
 socket.on('conversation_loaded', (data) => {
     console.log('💬 Conversa carregada:', data);
     currentConversation = data.messages || [];
+    
+    // Salvar no cache
+    if (data.other_user_id) {
+        conversationsCache[data.other_user_id] = [...currentConversation];
+        console.log(`💾 Cache atualizado para ${data.other_user_id}:`, currentConversation.length, 'mensagens');
+    }
+    
     renderConversation();
 });
 
 socket.on('new_private_message', (data) => {
-    console.log('💬 Nova mensagem:', data);
+    console.log('💬 Nova mensagem recebida:', data);
     
-    // Se a mensagem é da conversa atual, adiciona
-    if (currentChatContact && 
-        (data.sender_id === currentChatContact || data.recipient_id === currentChatContact)) {
-        currentConversation.push(data);
-        renderConversation();
+    // Verificar se a mensagem já existe para evitar duplicação
+    const messageExists = (messages, msgData) => {
+        return messages.some(m => m.id === msgData.id);
+    };
+    
+    // Adicionar à conversa atual se estiver aberta e não existir
+    if (currentChatContact) {
+        let shouldAdd = false;
+        
+        // Conversa direta
+        if (data.sender_id === currentChatContact || data.recipient_id === currentChatContact) {
+            shouldAdd = true;
+        }
+        // Conversa entre jogadores (mestre observando)
+        else if (currentChatContact.includes('_')) {
+            const [player1, player2] = currentChatContact.split('_');
+            if ((data.sender_id === player1 && data.recipient_id === player2) ||
+                (data.sender_id === player2 && data.recipient_id === player1)) {
+                shouldAdd = true;
+            }
+        }
+        
+        if (shouldAdd && !messageExists(currentConversation, data)) {
+            currentConversation.push(data);
+            conversationsCache[currentChatContact] = [...currentConversation];
+            renderConversation();
+        }
     }
     
-    // Recarregar contatos
+    // Atualizar cache de outras conversas afetadas (sem duplicar)
+    // Conversa mestre -> jogador
+    if (data.sender_id === 'master' && data.recipient_id) {
+        if (!conversationsCache[data.recipient_id]) {
+            conversationsCache[data.recipient_id] = [];
+        }
+        if (!messageExists(conversationsCache[data.recipient_id], data)) {
+            conversationsCache[data.recipient_id].push(data);
+        }
+    }
+    // Conversa jogador -> mestre
+    else if (data.recipient_id === 'master' && data.sender_id) {
+        if (!conversationsCache[data.sender_id]) {
+            conversationsCache[data.sender_id] = [];
+        }
+        if (!messageExists(conversationsCache[data.sender_id], data)) {
+            conversationsCache[data.sender_id].push(data);
+        }
+    }
+    // Conversas entre jogadores
+    else if (data.sender_id !== 'master' && data.recipient_id !== 'master') {
+        const conversationKey = [data.sender_id, data.recipient_id].sort().join('_');
+        if (!conversationsCache[conversationKey]) {
+            conversationsCache[conversationKey] = [];
+        }
+        if (!messageExists(conversationsCache[conversationKey], data)) {
+            conversationsCache[conversationKey].push(data);
+        }
+    }
+    
     loadChatContacts();
     playNotificationSound();
 });
@@ -691,7 +755,7 @@ canvasWrapper.addEventListener('mouseleave', () => {
     }
 });
 
-// MAP MANAGER - PARTE 3 - DESENHO E ADICIONAR ITENS
+// MAP MANAGER - PARTE 3 - DESENHO, ADICIONAR ITENS E CHAT
 
 // ==================
 // DESENHO LIVRE
@@ -1132,11 +1196,13 @@ function deleteItemById(itemId, type) {
     }
 }
 
-// MAP MANAGER - PARTE 4 - CHAT E UTILITÁRIOS (FINAL)
+// ==================
+// CHAT - COM CACHE SEM DUPLICAÇÃO
+// ==================
 
-// ==================
-// CHAT - CORRIGIDO
-// ==================
+// Cache de conversas - armazena todas as conversas carregadas
+let conversationsCache = {};
+
 function toggleChatMinimize() {
     chatMinimized = !chatMinimized;
     const chatContainer = document.getElementById('chatContainer');
@@ -1150,7 +1216,6 @@ function toggleChatMinimize() {
         chatContainer.classList.remove('minimized');
         chatContainer.classList.remove('collapsed');
         if (icon) icon.textContent = '▼';
-        // Reabrir: carregar contatos
         loadChatContacts();
     }
 }
@@ -1212,28 +1277,53 @@ function renderChatContacts() {
 
 function openConversation(contactId) {
     console.log('💬 Abrindo conversa com:', contactId);
+    
+    // Salvar conversa atual no cache antes de trocar
+    if (currentChatContact && currentConversation.length > 0) {
+        conversationsCache[currentChatContact] = [...currentConversation];
+        console.log(`💾 Cache salvo para ${currentChatContact}:`, conversationsCache[currentChatContact].length, 'mensagens');
+    }
+    
     currentChatContact = contactId;
     
-    // Atualizar UI
     document.querySelectorAll('.contact-item').forEach(item => item.classList.remove('active'));
     event.currentTarget?.classList.add('active');
     
-    // Carregar conversa
-    socket.emit('get_conversation', {
-        session_id: SESSION_ID,
-        user_id: 'master',
-        other_user_id: contactId
-    });
-    
-    // Mostrar área de conversa
-    document.getElementById('conversationPlaceholder').style.display = 'none';
-    document.getElementById('conversationArea').style.display = 'flex';
-    
-    // Atualizar header da conversa
-    const contact = chatContacts.find(c => c.id === contactId);
-    if (contact) {
-        document.getElementById('conversationContactName').textContent = contact.name;
-        document.getElementById('conversationContactAvatar').textContent = contact.name.charAt(0).toUpperCase();
+    // Verificar se já temos o cache desta conversa
+    if (conversationsCache[contactId]) {
+        console.log(`📦 Carregando do cache: ${contactId}`, conversationsCache[contactId].length, 'mensagens');
+        currentConversation = [...conversationsCache[contactId]];
+        renderConversation();
+        
+        // Mostrar área de conversa
+        document.getElementById('conversationPlaceholder').style.display = 'none';
+        document.getElementById('conversationArea').style.display = 'flex';
+        
+        // Atualizar header
+        const contact = chatContacts.find(c => c.id === contactId);
+        if (contact) {
+            document.getElementById('conversationContactName').textContent = contact.name;
+            document.getElementById('conversationContactAvatar').textContent = contact.name.charAt(0).toUpperCase();
+        }
+    } else {
+        // Carregar do servidor se não estiver no cache
+        console.log(`🌐 Carregando do servidor: ${contactId}`);
+        socket.emit('get_conversation', {
+            session_id: SESSION_ID,
+            user_id: 'master',
+            other_user_id: contactId
+        });
+        
+        // Mostrar área de conversa
+        document.getElementById('conversationPlaceholder').style.display = 'none';
+        document.getElementById('conversationArea').style.display = 'flex';
+        
+        // Atualizar header
+        const contact = chatContacts.find(c => c.id === contactId);
+        if (contact) {
+            document.getElementById('conversationContactName').textContent = contact.name;
+            document.getElementById('conversationContactAvatar').textContent = contact.name.charAt(0).toUpperCase();
+        }
     }
 }
 
@@ -1265,7 +1355,6 @@ function renderConversation() {
         messagesContainer.appendChild(bubble);
     });
     
-    // Scroll para o final
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
@@ -1289,7 +1378,7 @@ function sendChatMessage() {
     input.value = '';
 }
 
-// Enter para enviar
+// Listener para Enter no input
 document.addEventListener('DOMContentLoaded', () => {
     const conversationInput = document.getElementById('conversationInput');
     if (conversationInput) {
@@ -1308,7 +1397,7 @@ function playNotificationSound() {
 }
 
 // ==================
-// PERMISSÕES DE JOGADORES
+// PERMISSÕES E JOGADORES
 // ==================
 function renderPlayersList() {
     const list = document.getElementById('playersList');
@@ -1527,28 +1616,23 @@ function clearAll() {
 // INICIALIZAÇÃO
 // ==================
 document.addEventListener('DOMContentLoaded', () => {
-    // Fechar painéis ao clicar fora
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.floating-panel') && !e.target.closest('.floating-btn')) {
             document.querySelectorAll('.floating-panel').forEach(p => p.classList.remove('show'));
         }
     });
     
-    // Centralizar canvas ao carregar
     setTimeout(() => {
         centerCanvas();
     }, 100);
     
-    // Solicitar jogadores inicialmente
     socket.emit('get_players', { session_id: SESSION_ID });
 });
 
-// Redimensionamento
 window.addEventListener('resize', () => {
     centerCanvas();
 });
 
-// Inicializar
 setTool('select');
 drawGrid();
 renderImageList();

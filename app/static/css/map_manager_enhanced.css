@@ -1074,11 +1074,13 @@ body, html {
 .chat-container.minimized {
     height: 70px;
     width: 300px;
+    border-radius: 35px;
 }
 
 .chat-container.collapsed {
     width: 70px;
     height: 70px;
+    border-radius: 50%; 
 }
 
 /* Header com gradiente */
@@ -1093,6 +1095,7 @@ body, html {
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
+    border-radius: 14px 14px 0 0; /* Arredondado no topo por padrão */
 }
 
 .chat-header::before {
@@ -1496,4 +1499,17 @@ body, html {
     color: rgba(233,213,245,0.4);
     font-size: 12px;
     font-style: italic;
+}
+
+.chat-container.minimized .chat-header {
+    border-radius: 35px; /* Totalmente arredondado */
+    border-bottom: none;
+}
+
+/* Quando colapsado, o header fica circular */
+.chat-container.collapsed .chat-header {
+    border-radius: 50%; /* Círculo perfeito */
+    border-bottom: none;
+    padding: 0;
+    justify-content: center;
 }

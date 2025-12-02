@@ -16,7 +16,8 @@ def init_session(session_id):
             'drawings': [],
             'players': {},
             'permissions': {},
-            'chat_conversations': {}
+            'chat_conversations': {},
+            'master_socket': None
         }
 
 @socketio.on('connect')
@@ -28,6 +29,7 @@ def handle_disconnect():
     print(f'Cliente desconectado: {request.sid}')
     
     for session_id, session_data in active_sessions.items():
+        # Remover jogadores desconectados
         players_to_remove = [pid for pid, pdata in session_data['players'].items() 
                             if pdata.get('socket_id') == request.sid]
         for pid in players_to_remove:
@@ -35,6 +37,10 @@ def handle_disconnect():
             del session_data['players'][pid]
             emit('player_left', {'player_id': pid, 'player_name': player_name}, 
                  room=session_id, skip_sid=request.sid)
+        
+        # Remover mestre desconectado
+        if session_data.get('master_socket') == request.sid:
+            session_data['master_socket'] = None
 
 @socketio.on('join_session')
 def handle_join_session(data):
@@ -42,6 +48,9 @@ def handle_join_session(data):
     session_id = data.get('session_id')
     join_room(session_id)
     init_session(session_id)
+    
+    # Registrar socket do mestre
+    active_sessions[session_id]['master_socket'] = request.sid
     
     session_state = active_sessions[session_id]
     
@@ -276,7 +285,7 @@ def handle_get_players(data):
     emit('players_list', {'players': players_list})
 
 # ==================
-# CHAT - CORRIGIDO
+# CHAT - CORRIGIDO COM MESTRE VENDO TUDO
 # ==================
 @socketio.on('get_chat_contacts')
 def handle_get_contacts(data):
@@ -288,22 +297,57 @@ def handle_get_contacts(data):
     
     contacts = []
     
-    # Adicionar mestre se o usuário não for o mestre
-    if user_id != 'master':
-        contacts.append({
-            'id': 'master',
-            'name': '👑 Mestre',
-            'unread': 0
-        })
-    
-    # Adicionar jogadores
-    for player_id, player_data in active_sessions[session_id]['players'].items():
-        if player_id != user_id:
+    if user_id == 'master':
+        # MESTRE: Ver todos os jogadores E todas as conversas entre eles
+        for player_id, player_data in active_sessions[session_id]['players'].items():
             contacts.append({
                 'id': player_id,
                 'name': player_data['name'],
-                'unread': 0
+                'unread': 0,
+                'type': 'player'
             })
+        
+        # Adicionar conversas entre jogadores
+        seen_pairs = set()
+        for sender_id, conversations in active_sessions[session_id]['chat_conversations'].items():
+            if sender_id == 'master':
+                continue
+            for recipient_id in conversations.keys():
+                if recipient_id == 'master':
+                    continue
+                
+                # Criar par ordenado para evitar duplicatas
+                pair = tuple(sorted([sender_id, recipient_id]))
+                if pair not in seen_pairs:
+                    seen_pairs.add(pair)
+                    
+                    player1 = active_sessions[session_id]['players'].get(pair[0], {})
+                    player2 = active_sessions[session_id]['players'].get(pair[1], {})
+                    
+                    if player1 and player2:
+                        contacts.append({
+                            'id': f"{pair[0]}_{pair[1]}",
+                            'name': f"{player1['name']} ↔ {player2['name']}",
+                            'unread': 0,
+                            'type': 'conversation'
+                        })
+    else:
+        # JOGADOR: Ver mestre e outros jogadores
+        contacts.append({
+            'id': 'master',
+            'name': '👑 Mestre',
+            'unread': 0,
+            'type': 'player'
+        })
+        
+        for player_id, player_data in active_sessions[session_id]['players'].items():
+            if player_id != user_id:
+                contacts.append({
+                    'id': player_id,
+                    'name': player_data['name'],
+                    'unread': 0,
+                    'type': 'player'
+                })
     
     emit('chat_contacts_loaded', {'contacts': contacts})
     print(f'📋 Contatos enviados para {user_id}: {len(contacts)} contatos')
@@ -354,12 +398,19 @@ def handle_send_message(data):
     
     # Enviar para o destinatário
     if recipient_id == 'master':
-        # Enviar para todos na sala (mestre pode ter múltiplas conexões)
-        emit('new_private_message', message_data, room=session_id, skip_sid=request.sid)
+        master_socket = active_sessions[session_id].get('master_socket')
+        if master_socket and master_socket != request.sid:
+            emit('new_private_message', message_data, room=master_socket)
     else:
         recipient_socket = active_sessions[session_id]['players'].get(recipient_id, {}).get('socket_id')
         if recipient_socket:
             emit('new_private_message', message_data, room=recipient_socket)
+    
+    # ENVIAR PARA O MESTRE se ele não for nem remetente nem destinatário
+    if sender_id != 'master' and recipient_id != 'master':
+        master_socket = active_sessions[session_id].get('master_socket')
+        if master_socket:
+            emit('new_private_message', message_data, room=master_socket)
     
     print(f'💬 Mensagem de {sender_name} para {recipient_id}')
 
@@ -374,9 +425,20 @@ def handle_get_conversation(data):
     
     messages = []
     
-    if user_id in active_sessions[session_id]['chat_conversations']:
-        if other_user_id in active_sessions[session_id]['chat_conversations'][user_id]:
-            messages = active_sessions[session_id]['chat_conversations'][user_id][other_user_id]
+    # Mestre visualizando conversa entre dois jogadores
+    if user_id == 'master' and '_' in other_user_id:
+        player_ids = other_user_id.split('_')
+        if len(player_ids) == 2:
+            player1_id, player2_id = player_ids
+            
+            if player1_id in active_sessions[session_id]['chat_conversations']:
+                if player2_id in active_sessions[session_id]['chat_conversations'][player1_id]:
+                    messages = active_sessions[session_id]['chat_conversations'][player1_id][player2_id]
+    else:
+        # Conversa normal
+        if user_id in active_sessions[session_id]['chat_conversations']:
+            if other_user_id in active_sessions[session_id]['chat_conversations'][user_id]:
+                messages = active_sessions[session_id]['chat_conversations'][user_id][other_user_id]
     
     emit('conversation_loaded', {
         'messages': messages,

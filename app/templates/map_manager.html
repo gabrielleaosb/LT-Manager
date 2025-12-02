@@ -152,7 +152,7 @@
     </div>
 </div>
 
-<!-- Chat Container - Compacto no Canto -->
+<!-- Chat Container - EXATAMENTE IGUAL AO PLAYER VIEW -->
 <div class="chat-container" id="chatContainer">
     <div class="chat-header" onclick="toggleChatMinimize()">
         <div class="chat-header-left">
@@ -169,8 +169,10 @@
     
     <div class="chat-body">
         <!-- Lista de Contatos -->
-        <div class="chat-contacts" id="chatContacts">
-            <div id="contactsList"></div>
+        <div class="chat-contacts">
+            <div id="contactsList">
+                <div class="empty-state">Nenhum contato</div>
+            </div>
         </div>
         
         <!-- Área de Conversa -->
@@ -178,15 +180,15 @@
             <!-- Placeholder -->
             <div class="conversation-placeholder" id="conversationPlaceholder">
                 <div class="conversation-placeholder-icon">💬</div>
-                <p>Selecione um jogador</p>
+                <p>Selecione um contato para iniciar</p>
             </div>
             
             <!-- Conversa Ativa -->
-            <div id="conversationArea" style="display: none;">
+            <div id="conversationArea" style="display: none; flex-direction: column; height: 100%;">
                 <div class="conversation-header">
                     <div class="contact-avatar" id="conversationContactAvatar">?</div>
                     <div class="conversation-info">
-                        <h4 id="conversationContactName">Jogador</h4>
+                        <h4 id="conversationContactName">Contato</h4>
                     </div>
                 </div>
                 
@@ -196,7 +198,7 @@
                     <input type="text" 
                            class="conversation-input" 
                            id="conversationInput" 
-                           placeholder="Mensagem..." 
+                           placeholder="Digite sua mensagem..." 
                            maxlength="500">
                     <button class="conversation-send-btn" onclick="sendChatMessage()">➤</button>
                 </div>
