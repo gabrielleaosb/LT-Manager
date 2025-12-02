@@ -79,8 +79,19 @@ let gridColor = 'rgba(155, 89, 182, 0.3)';
 // ========== CENTRALIZAÇÃO E TRANSFORM ==========
 function centerCanvas() {
     const containerRect = canvasContainer.getBoundingClientRect();
-    panX = (containerRect.width - CANVAS_WIDTH) / 2;
-    panY = (containerRect.height - CANVAS_HEIGHT) / 2;
+    
+    if (CANVAS_WIDTH * currentScale < containerRect.width) {
+        panX = (containerRect.width - CANVAS_WIDTH * currentScale) / 2;
+    } else {
+        panX = 0;
+    }
+    
+    if (CANVAS_HEIGHT * currentScale < containerRect.height) {
+        panY = (containerRect.height - CANVAS_HEIGHT * currentScale) / 2;
+    } else {
+        panY = 0;
+    }
+    
     applyTransform();
 }
 
@@ -269,51 +280,63 @@ socket.on('fog_areas_sync', (data) => {
     }
 });
 
-socket.on('scenes_sync', (data) => {
-    console.log('🎬 [JOGADOR] Cenas sincronizadas:', data);
-    const scenes = data.scenes || [];
+socket.on('scene_activated', (data) => {
+    console.log('🎬 [PLAYER] Cena ativada:', data.scene.name);
     
-    // Filtrar apenas cenas visíveis para este jogador
-    visibleScenes = scenes.filter(scene => 
-        scene.visible_to_players && scene.visible_to_players.includes(playerId)
-    );
+    const scene = data.scene;
+    const isVisible = scene.visible_to_players && scene.visible_to_players.includes(playerId);
     
-    console.log('🎬 [JOGADOR] Cenas visíveis:', visibleScenes.length);
-});
-
-socket.on('scene_switched', (data) => {
-    console.log('🎬 [JOGADOR] Verificando se cena é visível:', data);
+    console.log('🎬 [PLAYER] Visível?', isVisible);
     
-    const isVisible = visibleScenes.some(s => s.id === data.scene_id);
-    
-    if (isVisible) {
-        currentPlayerSceneId = data.scene_id;
-        const scene = data.scene;
+    if (!isVisible) {
+        console.log('❌ [PLAYER] Cena não visível - limpando canvas');
         
-        maps = scene.maps || [];
-        entities = scene.entities || [];
-        tokens = scene.tokens || [];
-        drawings = scene.drawings || [];
-        fogAreas = scene.fog_areas || [];
-        
-        preloadAllImages();
-        redrawAll();
-        redrawDrawings();
-        redrawFog();
-        
-        showToast(`Cena alterada: ${scene.name}`);
-    } else {
-        // Cena não visível - limpar canvas
         maps = [];
         entities = [];
         tokens = [];
         drawings = [];
         fogAreas = [];
         
+        mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
         redrawAll();
         redrawDrawings();
         redrawFog();
+        
+        showToast('Você não tem acesso a esta cena');
+        return;
     }
+    
+    console.log('✅ [PLAYER] Cena visível - carregando conteúdo');
+    
+    const content = scene.content || {};
+    
+    maps = [...(content.maps || [])];
+    entities = [...(content.entities || [])];
+    tokens = [...(content.tokens || [])];
+    drawings = [...(content.drawings || [])];
+    fogAreas = [...(content.fog_areas || [])];
+    
+    console.log('🎬 [PLAYER] Conteúdo:', {
+        maps: maps.length,
+        entities: entities.length,
+        tokens: tokens.length,
+        fog: fogAreas.length
+    });
+    
+    preloadAllImages();
+    
+    mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    redrawAll();
+    redrawDrawings();
+    redrawFog();
+    
+    showToast(`Cena: ${scene.name}`);
 });
 
 // ========== FOG OF WAR ==========
@@ -1031,12 +1054,14 @@ function showToast(msg) {
 }
 
 // ========== INIT ==========
+setTimeout(() => {
+    currentScale = 0.5; 
+    centerCanvas();
+    console.log('[PLAYER] Canvas centralizado. Pan:', panX, panY, 'Scale:', currentScale);
+}, 100);
+
 window.addEventListener('resize', () => {
     centerCanvas();
 });
-
-setTimeout(() => {
-    centerCanvas();
-}, 100);
 
 drawGrid();

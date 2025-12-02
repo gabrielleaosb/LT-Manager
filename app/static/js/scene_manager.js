@@ -1,11 +1,21 @@
 // ==========================================
-// SCENE MANAGER - Gerenciador de Cenas
+// SCENE MANAGER - REFORMULADO
 // ==========================================
 
-console.log('🎬 Scene Manager carregado');
+console.log('🎬 Scene Manager v2.0 carregado');
+
+// ==================
+// VARIÁVEIS GLOBAIS
+// ==================
+let currentSceneId = null;
+let autoSaveInterval = null;
+
+// ==================
+// UI DO MODAL
+// ==================
 
 function openSceneManager() {
-    console.log('🎬 Abrindo gerenciador. Cenas atuais:', scenes.length);
+    console.log('🎬 Abrindo gerenciador de cenas');
     document.getElementById('sceneManagerModal').classList.add('show');
     renderScenesList();
 }
@@ -21,7 +31,7 @@ function createNewScene() {
         return;
     }
     
-    console.log('🎬 Criando cena:', name.trim());
+    console.log('🎬 Criando nova cena:', name.trim());
     
     socket.emit('create_scene', {
         session_id: SESSION_ID,
@@ -36,11 +46,11 @@ function deleteScene(sceneId) {
     
     if (!scene) return;
     
-    if (!confirm(`🗑️ Tem certeza que deseja excluir a cena "${scene.name}"?`)) {
+    if (!confirm(`🗑️ Deletar cena "${scene.name}"?\n\nTodo o conteúdo será perdido!`)) {
         return;
     }
     
-    console.log('🗑️ Excluindo cena:', sceneId);
+    console.log('🗑️ Deletando cena:', sceneId);
     
     socket.emit('delete_scene', {
         session_id: SESSION_ID,
@@ -52,103 +62,32 @@ function deleteScene(sceneId) {
 
 function switchToScene(sceneId) {
     const scene = scenes.find(s => s.id === sceneId);
-    if (!scene) return;
-    
-    console.log('🎬 Trocando para cena:', sceneId);
-    
-    // Salvar conteúdo da cena atual antes de trocar
-    if (currentSceneId && currentScene) {
-        saveCurrentSceneContent();
+    if (!scene) {
+        console.error('❌ Cena não encontrada:', sceneId);
+        return;
     }
     
-    currentSceneId = sceneId;
-    currentScene = scene;
+    console.log('🎬 Trocando para cena:', scene.name);
     
-    // Carregar conteúdo da nova cena
-    loadSceneContent(scene);
+    // Salvar cena atual antes de trocar
+    if (currentSceneId) {
+        saveCurrentScene();
+    }
     
+    // Trocar cena
     socket.emit('switch_scene', {
         session_id: SESSION_ID,
         scene_id: sceneId
     });
     
-    showToast(`Cena alterada: ${scene.name}`);
     closeSceneManager();
 }
 
-function saveCurrentSceneContent() {
-    if (!currentSceneId) return;
-    
-    socket.emit('update_scene_content', {
-        session_id: SESSION_ID,
-        scene_id: currentSceneId,
-        content_type: 'maps',
-        content: maps
-    });
-    
-    socket.emit('update_scene_content', {
-        session_id: SESSION_ID,
-        scene_id: currentSceneId,
-        content_type: 'entities',
-        content: entities
-    });
-    
-    socket.emit('update_scene_content', {
-        session_id: SESSION_ID,
-        scene_id: currentSceneId,
-        content_type: 'tokens',
-        content: tokens
-    });
-    
-    socket.emit('update_scene_content', {
-        session_id: SESSION_ID,
-        scene_id: currentSceneId,
-        content_type: 'drawings',
-        content: drawings
-    });
-    
-    socket.emit('update_scene_content', {
-        session_id: SESSION_ID,
-        scene_id: currentSceneId,
-        content_type: 'fog_areas',
-        content: fogAreas
-    });
-}
-
-function loadSceneContent(scene) {
-    maps = scene.maps || [];
-    entities = scene.entities || [];
-    images = [...maps, ...entities];
-    tokens = scene.tokens || [];
-    drawings = scene.drawings || [];
-    fogAreas = scene.fog_areas || [];
-    
-    preloadAllImages();
-    renderImageList();
-    renderTokenList();
-    renderFogList();
-    redrawAll();
-    redrawDrawings();
-    redrawFog();
-}
-
-function toggleSceneVisibility(sceneId, playerId) {
-    const scene = scenes.find(s => s.id === sceneId);
-    if (!scene) return;
-    
-    const isVisible = scene.visible_to_players && scene.visible_to_players.includes(playerId);
-    
-    socket.emit('update_scene_visibility', {
-        session_id: SESSION_ID,
-        scene_id: sceneId,
-        player_id: playerId,
-        visible: !isVisible
-    });
-}
+// ==================
+// RENDERIZAÇÃO
+// ==================
 
 function renderScenesList() {
-    console.log('🎬 Renderizando lista. Cenas disponíveis:', scenes);
-    
     const list = document.getElementById('scenesList');
     
     if (!list) {
@@ -164,38 +103,58 @@ function renderScenesList() {
     }
     
     scenes.forEach(scene => {
-        const isActive = scene.id === currentSceneId;
+        const isActive = scene.active || false;
+        const content = scene.content || {};
+        
+        const totalImages = (content.maps?.length || 0) + (content.entities?.length || 0);
+        const totalTokens = content.tokens?.length || 0;
+        const totalFog = content.fog_areas?.length || 0;
         
         const item = document.createElement('div');
         item.className = 'scene-item' + (isActive ? ' active' : '');
         
         item.innerHTML = `
             <div class="scene-info">
-                <div class="scene-name">🎬 ${scene.name}</div>
+                <div class="scene-name">
+                    ${isActive ? '✅' : '🎬'} ${scene.name}
+                    ${isActive ? '<span style="color: #2ed573; font-size: 0.8rem; margin-left: 8px;">(ATIVA)</span>' : ''}
+                </div>
                 <div class="scene-stats">
-                    <span>📍 ${(scene.maps?.length || 0) + (scene.entities?.length || 0)} imagens</span>
-                    <span>🎭 ${scene.tokens?.length || 0} tokens</span>
+                    <span>📍 ${totalImages} imagens</span>
+                    <span>🎭 ${totalTokens} tokens</span>
+                    <span>🌫️ ${totalFog} névoa</span>
                 </div>
             </div>
             <div class="scene-actions">
-                ${!isActive ? `<button class="scene-action-btn" onclick="switchToScene('${scene.id}')">🔄 Ativar</button>` : '<span style="color: #2ed573; font-weight: bold;">✓ Ativa</span>'}
-                <button class="scene-action-btn" onclick="openSceneVisibility('${scene.id}')">👁️ Visibilidade</button>
-                <button class="scene-action-btn delete" onclick="deleteScene('${scene.id}'); event.stopPropagation();">🗑️</button>
+                ${!isActive ? 
+                    `<button class="scene-action-btn" onclick="switchToScene('${scene.id}'); event.stopPropagation();">
+                        🔄 Ativar
+                    </button>` 
+                    : ''
+                }
+                <button class="scene-action-btn" onclick="openSceneVisibility('${scene.id}'); event.stopPropagation();">
+                    👁️ Jogadores
+                </button>
+                <button class="scene-action-btn delete" onclick="deleteScene('${scene.id}'); event.stopPropagation();">
+                    🗑️
+                </button>
             </div>
         `;
         
         list.appendChild(item);
     });
-    
-    console.log('✅ Lista renderizada com', scenes.length, 'cena(s)');
 }
+
+// ==================
+// VISIBILIDADE - TEMPO REAL
+// ==================
 
 function openSceneVisibility(sceneId) {
     const scene = scenes.find(s => s.id === sceneId);
     if (!scene) return;
     
     document.getElementById('currentSceneIdForVisibility').value = sceneId;
-    document.getElementById('sceneVisibilityTitle').textContent = `Visibilidade: ${scene.name}`;
+    document.getElementById('sceneVisibilityTitle').textContent = `👁️ Visibilidade: ${scene.name}`;
     
     renderSceneVisibilityList(scene);
     document.getElementById('sceneVisibilityModal').classList.add('show');
@@ -219,15 +178,25 @@ function renderSceneVisibilityList(scene) {
         
         const item = document.createElement('div');
         item.className = 'item-card';
+        item.style.transition = 'all 0.3s ease';
+        
+        // ID único para o checkbox
+        const checkboxId = `visibility_${scene.id}_${player.id}`;
         
         item.innerHTML = `
             <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
-                <span>👤 ${player.name}</span>
+                <span style="font-size: 1.2rem;">👤</span>
+                <span style="font-weight: 600;">${player.name}</span>
             </div>
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                <input type="checkbox" ${isVisible ? 'checked' : ''} 
-                       onchange="toggleSceneVisibility('${scene.id}', '${player.id}')">
-                <span>${isVisible ? 'Visível' : 'Oculta'}</span>
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none;">
+                <input type="checkbox" 
+                       id="${checkboxId}"
+                       ${isVisible ? 'checked' : ''} 
+                       onchange="toggleSceneVisibility('${scene.id}', '${player.id}')"
+                       style="width: 20px; height: 20px; cursor: pointer;">
+                <span style="font-weight: 600; color: ${isVisible ? '#2ed573' : '#e74c3c'};">
+                    ${isVisible ? '✅ Visível' : '❌ Oculta'}
+                </span>
             </label>
         `;
         
@@ -235,27 +204,151 @@ function renderSceneVisibilityList(scene) {
     });
 }
 
-// Socket handlers
-socket.on('scenes_sync', (data) => {
-    console.log('🎬 Sincronização de cenas recebida:', data);
-    scenes = data.scenes || [];
-    renderScenesList();
-    console.log('🎬 Total de cenas após sync:', scenes.length);
-});
-
-socket.on('scene_switched', (data) => {
-    console.log('🎬 Cena trocada:', data);
+function toggleSceneVisibility(sceneId, playerId) {
+    console.log('👁️ Toggle visibilidade:', sceneId, playerId);
     
-    if (currentSceneId !== data.scene_id) {
-        currentSceneId = data.scene_id;
-        currentScene = data.scene;
-        loadSceneContent(data.scene);
+    socket.emit('toggle_scene_visibility', {
+        session_id: SESSION_ID,
+        scene_id: sceneId,
+        player_id: playerId
+    });
+    
+    // Feedback visual imediato (será confirmado pelo servidor)
+    showToast('Atualizando visibilidade...');
+}
+
+// ==================
+// SALVAMENTO
+// ==================
+
+function saveCurrentScene() {
+    if (!currentSceneId) {
+        console.log('⚠️ Nenhuma cena ativa para salvar');
+        return;
+    }
+    
+    console.log('💾 Salvando cena atual:', currentSceneId);
+    
+    const content = {
+        maps: [...maps],
+        entities: [...entities],
+        tokens: [...tokens],
+        drawings: [...drawings],
+        fog_areas: [...fogAreas]
+    };
+    
+    console.log('💾 Conteúdo:', {
+        maps: content.maps.length,
+        entities: content.entities.length,
+        tokens: content.tokens.length,
+        drawings: content.drawings.length,
+        fog_areas: content.fog_areas.length
+    });
+    
+    socket.emit('save_scene_state', {
+        session_id: SESSION_ID,
+        scene_id: currentSceneId,
+        content: content
+    });
+}
+
+// Auto-save a cada 3 segundos se houver cena ativa
+function startAutoSave() {
+    if (autoSaveInterval) {
+        clearInterval(autoSaveInterval);
+    }
+    
+    autoSaveInterval = setInterval(() => {
+        if (currentSceneId) {
+            saveCurrentScene();
+        }
+    }, 3000);
+}
+
+// ==================
+// SOCKET HANDLERS
+// ==================
+
+socket.on('scenes_updated', (data) => {
+    console.log('🎬 [scenes_updated] Cenas atualizadas:', data.scenes.length);
+    scenes = data.scenes || [];
+    
+    // ✅ ATUALIZAR LISTA EM TEMPO REAL (se o modal estiver aberto)
+    const modal = document.getElementById('sceneManagerModal');
+    if (modal && modal.classList.contains('show')) {
+        renderScenesList();
+    }
+    
+    // ✅ ATUALIZAR VISIBILIDADE EM TEMPO REAL (se modal de visibilidade estiver aberto)
+    const visibilityModal = document.getElementById('sceneVisibilityModal');
+    if (visibilityModal && visibilityModal.classList.contains('show')) {
+        const sceneId = document.getElementById('currentSceneIdForVisibility').value;
+        const scene = scenes.find(s => s.id === sceneId);
+        if (scene) {
+            renderSceneVisibilityList(scene);
+        }
     }
 });
 
-// Salvar automaticamente ao modificar conteúdo
-setInterval(() => {
-    if (currentSceneId && currentScene) {
-        saveCurrentSceneContent();
+socket.on('scene_activated', (data) => {
+    console.log('🎬 [scene_activated] Cena ativada:', data.scene.name);
+    
+    currentSceneId = data.scene_id;
+    const scene = data.scene;
+    const content = scene.content || {};
+    
+    // Limpar estado atual
+    maps = [];
+    entities = [];
+    images = [];
+    tokens = [];
+    drawings = [];
+    fogAreas = [];
+    
+    // Carregar conteúdo da cena
+    maps = [...(content.maps || [])];
+    entities = [...(content.entities || [])];
+    tokens = [...(content.tokens || [])];
+    drawings = [...(content.drawings || [])];
+    fogAreas = [...(content.fog_areas || [])];
+    
+    images = [...maps, ...entities];
+    
+    console.log('🎬 Conteúdo carregado:', {
+        maps: maps.length,
+        entities: entities.length,
+        tokens: tokens.length,
+        drawings: drawings.length,
+        fog: fogAreas.length
+    });
+    
+    // Redesenhar tudo
+    preloadAllImages();
+    renderImageList();
+    renderTokenList();
+    renderFogList();
+    
+    mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    redrawAll();
+    redrawDrawings();
+    redrawFog();
+    
+    showToast(`Cena ativada: ${scene.name}`);
+});
+
+socket.on('scene_saved', (data) => {
+    if (data.success) {
+        console.log('✅ Cena salva:', data.scene_id);
     }
-}, 5000);
+});
+
+// ==================
+// INICIALIZAÇÃO
+// ==================
+
+startAutoSave();
+
+console.log('✅ Scene Manager v2.0 inicializado');
