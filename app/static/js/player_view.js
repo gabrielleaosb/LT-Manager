@@ -10,8 +10,8 @@ let playerId = null;
 let permissions = { moveTokens: [], draw: false };
 
 // SCENES
-let visibleScenes = [];
-let currentPlayerSceneId = null;
+let playerVisibleScenes = [];
+let currentPlayerSceneContent = null;
 
 // CHAT
 let chatContacts = [];
@@ -281,22 +281,26 @@ socket.on('fog_areas_sync', (data) => {
 });
 
 socket.on('scene_activated', (data) => {
-    console.log('🎬 [PLAYER] Cena ativada:', data.scene.name);
+    console.log('🎬 [PLAYER] Cena ativada pelo mestre:', data.scene.name);
     
     const scene = data.scene;
     const isVisible = scene.visible_to_players && scene.visible_to_players.includes(playerId);
     
-    console.log('🎬 [PLAYER] Visível?', isVisible);
+    console.log('🎬 [PLAYER] Sou visível nesta cena?', isVisible);
+    console.log('🎬 [PLAYER] Lista de visíveis:', scene.visible_to_players);
+    console.log('🎬 [PLAYER] Meu ID:', playerId);
     
     if (!isVisible) {
         console.log('❌ [PLAYER] Cena não visível - limpando canvas');
         
+        // Limpar tudo
         maps = [];
         entities = [];
         tokens = [];
         drawings = [];
         fogAreas = [];
         
+        // Limpar canvas
         mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -305,7 +309,7 @@ socket.on('scene_activated', (data) => {
         redrawDrawings();
         redrawFog();
         
-        showToast('Você não tem acesso a esta cena');
+        showToast('⛔ Você não tem acesso a esta cena');
         return;
     }
     
@@ -313,19 +317,21 @@ socket.on('scene_activated', (data) => {
     
     const content = scene.content || {};
     
-    maps = [...(content.maps || [])];
-    entities = [...(content.entities || [])];
-    tokens = [...(content.tokens || [])];
-    drawings = [...(content.drawings || [])];
-    fogAreas = [...(content.fog_areas || [])];
+    // Carregar conteúdo
+    maps = JSON.parse(JSON.stringify(content.maps || []));
+    entities = JSON.parse(JSON.stringify(content.entities || []));
+    tokens = JSON.parse(JSON.stringify(content.tokens || []));
+    drawings = JSON.parse(JSON.stringify(content.drawings || []));
+    fogAreas = JSON.parse(JSON.stringify(content.fog_areas || []));
     
-    console.log('🎬 [PLAYER] Conteúdo:', {
+    console.log('🎬 [PLAYER] Conteúdo carregado:', {
         maps: maps.length,
         entities: entities.length,
         tokens: tokens.length,
         fog: fogAreas.length
     });
     
+    // Redesenhar
     preloadAllImages();
     
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -336,7 +342,7 @@ socket.on('scene_activated', (data) => {
     redrawDrawings();
     redrawFog();
     
-    showToast(`Cena: ${scene.name}`);
+    showToast(`📍 Cena: ${scene.name}`);
 });
 
 // ========== FOG OF WAR ==========

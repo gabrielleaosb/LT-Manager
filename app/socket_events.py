@@ -206,25 +206,15 @@ def handle_delete_map(data):
 # ==================
 # ENTITIES - BROADCAST PARA TODOS
 # ==================
-
 @socketio.on('add_entity')
 def handle_add_entity(data):
     session_id = data.get('session_id')
     entity_data = data.get('entity')
     
     init_session(session_id)
-    
     active_sessions[session_id]['entities'].append(entity_data)
     
-    if 'scenes' in active_sessions[session_id]:
-        for scene in active_sessions[session_id]['scenes']:
-            if scene.get('active', False):  
-                if 'entities' not in scene:
-                    scene['entities'] = []
-                scene['entities'].append(entity_data)
-                print(f'🎭 Entidade adicionada à cena ativa: {scene["name"]} (total: {len(scene["entities"])})')
-                break
-    
+    # BROADCAST para TODA A SALA
     emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, 
          room=session_id, include_self=True)
     print(f'🎭 Entidade adicionada - broadcasting para sessão {session_id}')
@@ -563,12 +553,10 @@ def handle_mark_read(data):
 
 
 # ==================
-# SCENES (CENAS) - REFORMULADO
+# SCENES (CENAS)
 # ==================
-
 @socketio.on('create_scene')
 def handle_create_scene(data):
-    """Criar nova cena vazia"""
     session_id = data.get('session_id')
     scene_name = data.get('scene_name')
     
@@ -577,34 +565,27 @@ def handle_create_scene(data):
     if 'scenes' not in active_sessions[session_id]:
         active_sessions[session_id]['scenes'] = []
     
-    # Criar cena com estrutura completa e vazia
     scene = {
         'id': f"scene_{int(time.time() * 1000)}",
         'name': scene_name,
-        'active': False,
-        'content': {
-            'maps': [],
-            'entities': [],
-            'tokens': [],
-            'drawings': [],
-            'fog_areas': []
-        },
+        'maps': [],
+        'entities': [],
+        'tokens': [],
+        'drawings': [],
+        'fog_areas': [],
         'visible_to_players': []
     }
     
     active_sessions[session_id]['scenes'].append(scene)
     
-    # Broadcast para todos
-    emit('scenes_updated', {
+    emit('scenes_sync', {
         'scenes': active_sessions[session_id]['scenes']
     }, room=session_id, include_self=True)
     
-    print(f'🎬 [create_scene] Nova cena criada: "{scene_name}"')
-    print(f'🎬 Total de cenas: {len(active_sessions[session_id]["scenes"])}')
+    print(f'🎬 Nova cena criada: {scene_name}')
 
 @socketio.on('delete_scene')
 def handle_delete_scene(data):
-    """Deletar cena"""
     session_id = data.get('session_id')
     scene_id = data.get('scene_id')
     
@@ -613,22 +594,49 @@ def handle_delete_scene(data):
     if 'scenes' not in active_sessions[session_id]:
         return
     
-    # Remover cena
     active_sessions[session_id]['scenes'] = [
         s for s in active_sessions[session_id]['scenes'] 
         if s['id'] != scene_id
     ]
     
-    # Se era a cena ativa, voltar para o estado global
-    emit('scenes_updated', {
+    emit('scenes_sync', {
         'scenes': active_sessions[session_id]['scenes']
     }, room=session_id, include_self=True)
     
-    print(f'🗑️ [delete_scene] Cena deletada: {scene_id}')
+    print(f'🎬 Cena removida: {scene_id}')
+
+@socketio.on('update_scene_visibility')
+def handle_update_scene_visibility(data):
+    session_id = data.get('session_id')
+    scene_id = data.get('scene_id')
+    player_id = data.get('player_id')
+    visible = data.get('visible')
+    
+    init_session(session_id)
+    
+    if 'scenes' not in active_sessions[session_id]:
+        return
+    
+    for scene in active_sessions[session_id]['scenes']:
+        if scene['id'] == scene_id:
+            if 'visible_to_players' not in scene:
+                scene['visible_to_players'] = []
+            
+            if visible and player_id not in scene['visible_to_players']:
+                scene['visible_to_players'].append(player_id)
+            elif not visible and player_id in scene['visible_to_players']:
+                scene['visible_to_players'].remove(player_id)
+            break
+    
+    # Notificar jogadores sobre mudança de visibilidade
+    emit('scenes_sync', {
+        'scenes': active_sessions[session_id]['scenes']
+    }, room=session_id, include_self=True)
+    
+    print(f'🎬 Visibilidade da cena {scene_id} atualizada para jogador {player_id}')
 
 @socketio.on('switch_scene')
 def handle_switch_scene(data):
-    """Trocar de cena ativa"""
     session_id = data.get('session_id')
     scene_id = data.get('scene_id')
     
@@ -637,45 +645,21 @@ def handle_switch_scene(data):
     if 'scenes' not in active_sessions[session_id]:
         return
     
-    # Desativar todas as cenas
-    for scene in active_sessions[session_id]['scenes']:
-        scene['active'] = False
+    scene = next((s for s in active_sessions[session_id]['scenes'] if s['id'] == scene_id), None)
     
-    # Ativar a cena selecionada
-    target_scene = None
-    for scene in active_sessions[session_id]['scenes']:
-        if scene['id'] == scene_id:
-            scene['active'] = True
-            target_scene = scene
-            break
-    
-    if not target_scene:
-        print(f'❌ [switch_scene] Cena não encontrada: {scene_id}')
-        return
-    
-    print(f'🎬 [switch_scene] Ativando cena: "{target_scene["name"]}"')
-    print(f'🎬 Conteúdo:')
-    print(f'   - Maps: {len(target_scene["content"]["maps"])}')
-    print(f'   - Entities: {len(target_scene["content"]["entities"])}')
-    print(f'   - Tokens: {len(target_scene["content"]["tokens"])}')
-    print(f'   - Fog: {len(target_scene["content"]["fog_areas"])}')
-    
-    # Broadcast para TODOS (mestre e jogadores)
-    emit('scene_activated', {
-        'scene_id': scene_id,
-        'scene': target_scene
-    }, room=session_id, include_self=True)
-    
-    # Atualizar lista de cenas
-    emit('scenes_updated', {
-        'scenes': active_sessions[session_id]['scenes']
-    }, room=session_id, include_self=True)
+    if scene:
+        emit('scene_switched', {
+            'scene_id': scene_id,
+            'scene': scene
+        }, room=session_id, include_self=True)
+        
+        print(f'🎬 Cena alterada para: {scene["name"]}')
 
-@socketio.on('save_scene_state')
-def handle_save_scene_state(data):
-    """Salvar estado completo da cena ativa"""
+@socketio.on('update_scene_content')
+def handle_update_scene_content(data):
     session_id = data.get('session_id')
     scene_id = data.get('scene_id')
+    content_type = data.get('content_type')  # 'maps', 'entities', 'tokens', 'drawings', 'fog_areas'
     content = data.get('content')
     
     init_session(session_id)
@@ -683,93 +667,14 @@ def handle_save_scene_state(data):
     if 'scenes' not in active_sessions[session_id]:
         return
     
-    # Encontrar e atualizar a cena
     for scene in active_sessions[session_id]['scenes']:
         if scene['id'] == scene_id:
-            scene['content'] = content
-            
-            print(f'💾 [save_scene_state] Cena salva: "{scene["name"]}"')
-            print(f'💾 Conteúdo:')
-            print(f'   - Maps: {len(content.get("maps", []))}')
-            print(f'   - Entities: {len(content.get("entities", []))}')
-            print(f'   - Tokens: {len(content.get("tokens", []))}')
-            print(f'   - Fog: {len(content.get("fog_areas", []))}')
+            scene[content_type] = content
             break
     
-    # Confirmar salvamento
-    emit('scene_saved', {
-        'scene_id': scene_id,
-        'success': True
-    })
-    
-    # Atualizar lista de cenas (para mostrar contadores corretos)
-    emit('scenes_updated', {
+    emit('scenes_sync', {
         'scenes': active_sessions[session_id]['scenes']
     }, room=session_id, include_self=True)
-
-@socketio.on('toggle_scene_visibility')
-def handle_toggle_scene_visibility(data):
-    """Toggle visibilidade de cena para um jogador específico"""
-    session_id = data.get('session_id')
-    scene_id = data.get('scene_id')
-    player_id = data.get('player_id')
-    
-    init_session(session_id)
-    
-    if 'scenes' not in active_sessions[session_id]:
-        return
-    
-    # Encontrar cena
-    for scene in active_sessions[session_id]['scenes']:
-        if scene['id'] == scene_id:
-            if 'visible_to_players' not in scene:
-                scene['visible_to_players'] = []
-            
-            # Toggle visibilidade
-            if player_id in scene['visible_to_players']:
-                scene['visible_to_players'].remove(player_id)
-                print(f'👁️ [toggle_visibility] Cena "{scene["name"]}" OCULTA para jogador {player_id}')
-            else:
-                scene['visible_to_players'].append(player_id)
-                print(f'👁️ [toggle_visibility] Cena "{scene["name"]}" VISÍVEL para jogador {player_id}')
-            
-            break
-    
-    # ✅ BROADCAST IMEDIATO para atualizar UI em tempo real
-    emit('scenes_updated', {
-        'scenes': active_sessions[session_id]['scenes']
-    }, room=session_id, include_self=True)
-    
-    # Notificar jogador afetado se a cena estiver ativa
-    for scene in active_sessions[session_id]['scenes']:
-        if scene['id'] == scene_id and scene.get('active', False):
-            emit('scene_activated', {
-                'scene_id': scene_id,
-                'scene': scene
-            }, room=session_id, include_self=True)
-            break
-
-@socketio.on('get_active_scene')
-def handle_get_active_scene(data):
-    """Obter cena ativa atual"""
-    session_id = data.get('session_id')
-    
-    init_session(session_id)
-    
-    if 'scenes' not in active_sessions[session_id]:
-        emit('active_scene', {'scene': None})
-        return
-    
-    # Buscar cena ativa
-    active_scene = None
-    for scene in active_sessions[session_id]['scenes']:
-        if scene.get('active', False):
-            active_scene = scene
-            break
-    
-    emit('active_scene', {
-        'scene': active_scene
-    })
 
 # ==================
 # FOG OF WAR

@@ -97,6 +97,7 @@ let fogOpacity = 0.5;
 // SCENES
 let scenes = [];
 let currentSceneId = null;
+let currentScene = null;
 
 // Pan temporário com espaço
 let spacePressed = false;
@@ -106,25 +107,10 @@ let tempPanning = false;
 // CENTRALIZAÇÃO E TRANSFORM
 // ==================
 
-// SUBSTITUIR a função centerCanvas() por:
 function centerCanvas() {
     const containerRect = canvasContainer.getBoundingClientRect();
-    
-    panX = (containerRect.width - CANVAS_WIDTH * currentScale) / 2;
-    panY = (containerRect.height - CANVAS_HEIGHT * currentScale) / 2;
-    
-    if (CANVAS_WIDTH * currentScale < containerRect.width) {
-        panX = (containerRect.width - CANVAS_WIDTH * currentScale) / 2;
-    } else {
-        panX = 0;
-    }
-    
-    if (CANVAS_HEIGHT * currentScale < containerRect.height) {
-        panY = (containerRect.height - CANVAS_HEIGHT * currentScale) / 2;
-    } else {
-        panY = 0;
-    }
-    
+    panX = (containerRect.width - CANVAS_WIDTH) / 2;
+    panY = (containerRect.height - CANVAS_HEIGHT) / 2;
     applyTransform();
 }
 
@@ -141,17 +127,12 @@ function zoom(delta) {
     const mouseCanvasY = (centerY - panY) / currentScale;
     
     const oldScale = currentScale;
-    currentScale = Math.max(0.1, Math.min(3, currentScale + delta));
+    currentScale = Math.max(0.3, Math.min(3, currentScale + delta));
     
     panX = centerX - mouseCanvasX * currentScale;
     panY = centerY - mouseCanvasY * currentScale;
     
     applyTransform();
-
-    const zoomLevelEl = document.getElementById('zoomLevel');
-    if (zoomLevelEl) {
-        zoomLevelEl.textContent = Math.round(currentScale * 100) + '%';
-    }
 }
 
 canvasWrapper.addEventListener('wheel', (e) => {
@@ -323,54 +304,24 @@ socket.on('connect', () => {
 socket.on('session_state', (data) => {
     console.log('📦 Estado da sessão recebido:', data);
     
-    const mapsData = data.maps || [];
-    const entitiesData = data.entities || [];
+    const maps = data.maps || [];
+    const entities = data.entities || [];
+    images = [...maps, ...entities];
     
     tokens = data.tokens || [];
     drawings = data.drawings || [];
     
-    // ✅ CARREGAR CENAS
-    scenes = data.scenes || [];
-    
-    // ✅ Verificar se há cena ativa
-    const activeScene = scenes.find(s => s.active);
-    
-    if (activeScene) {
-        console.log('🎬 Cena ativa detectada:', activeScene.name);
-        currentSceneId = activeScene.id;
-        
-        // Carregar conteúdo da cena ativa
-        const content = activeScene.content || {};
-        maps = [...(content.maps || [])];
-        entities = [...(content.entities || [])];
-        tokens = [...(content.tokens || [])];
-        drawings = [...(content.drawings || [])];
-        fogAreas = [...(content.fog_areas || [])];
-    } else {
-        console.log('📦 Sem cena ativa, usando estado global');
-        maps = [...mapsData];
-        entities = [...entitiesData];
-        fogAreas = data.fog_areas || [];
-    }
-    
-    images = [...maps, ...entities];
-    
-    console.log('📦 Processado:', {
-        maps: maps.length,
-        entities: entities.length,
-        tokens: tokens.length,
-        scenes: scenes.length
-    });
-    
     preloadAllImages();
     drawGrid();
+
+    scenes = data.scenes || [];
     renderScenesList();
+    console.log('🎬 Cenas carregadas:', scenes.length);
+
     renderImageList();
     renderTokenList();
-    renderFogList();
     redrawAll();
     redrawDrawings();
-    redrawFog();
 });
 
 socket.on('players_list', (data) => {
@@ -461,15 +412,9 @@ socket.on('scenes_sync', (data) => {
 
 socket.on('scene_switched', (data) => {
     console.log('🎬 Cena trocada:', data);
-    if (currentSceneId !== data.scene_id) {
-        currentSceneId = data.scene_id;
-        currentScene = data.scene;
-        loadSceneContent(data.scene);
-    }
-});
-
-socket.on('scene_content_saved', (data) => {
-    console.log(`✅ Conteúdo salvo - ${data.content_type}: ${data.count} itens`);
+    currentSceneId = data.scene_id;
+    currentScene = data.scene;
+    // Aqui você pode adicionar lógica para carregar o conteúdo da cena
 });
 
 // ==================
@@ -539,13 +484,6 @@ function clearAllFog() {
         redrawFog();
         renderFogList();
         showToast('Mapa revelado!');
-
-        if (currentSceneId && currentScene) {
-            setTimeout(() => {
-                console.log('💾 [clearAllFog] Salvando fog na cena atual');
-                saveCurrentSceneContent();
-            }, 500);
-        }
     }
 }
 
@@ -558,13 +496,6 @@ function removeFogArea(areaId) {
     redrawFog();
     renderFogList();
     showToast('Área de névoa removida');
-
-    if (currentSceneId && currentScene) {
-        setTimeout(() => {
-            console.log('💾 [removeFogArea] Salvando fog na cena atual');
-            saveCurrentSceneContent();
-        }, 500);
-    }
 }
 
 function redrawFog() {
@@ -1345,12 +1276,6 @@ fogCanvas.addEventListener('mouseup', (e) => {
         session_id: SESSION_ID,
         fog_area: fogCurrentArea
     });
-    if (currentSceneId && currentScene) {
-        setTimeout(() => {
-            console.log('💾 [add_fog_area] Salvando fog na cena atual');
-            saveCurrentSceneContent();
-        }, 500);
-    }
     
     fogCurrentArea = null;
     fogDrawStart = null;
@@ -1439,8 +1364,8 @@ function addImage() {
                 const newImage = {
                     id: 'img_' + Date.now(),
                     name: name,
-                    x: Math.abs(panX / currentScale) + (canvasContainer.clientWidth / currentScale / 2) - (width / 2),
-                    y: Math.abs(panY / currentScale) + (canvasContainer.clientHeight / currentScale / 2) - (height / 2),
+                    x: CANVAS_WIDTH / 2 - width / 2,
+                    y: CANVAS_HEIGHT / 2 - height / 2,
                     width: width,
                     height: height,
                     image: ev.target.result
@@ -1453,12 +1378,6 @@ function addImage() {
                     session_id: SESSION_ID,
                     entity: newImage
                 });
-                if (currentSceneId && currentScene) {
-                    console.log('💾 Salvando imagem na cena atual:', currentSceneId);
-                    setTimeout(() => {
-                        saveCurrentSceneContent();
-                    }, 500);
-                }
                 
                 redrawAll();
                 renderImageList();
@@ -1503,8 +1422,8 @@ function createToken() {
                 const newToken = {
                     id: 'token_' + Date.now(),
                     name: name,
-                    x: Math.abs(panX / currentScale) + (canvasContainer.clientWidth / currentScale / 2),
-                    y: Math.abs(panY / currentScale) + (canvasContainer.clientHeight / currentScale / 2),
+                    x: CANVAS_WIDTH / 2,
+                    y: CANVAS_HEIGHT / 2,
                     image: e.target.result,
                     style: style
                 };
@@ -2313,10 +2232,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     setTimeout(() => {
-        currentScale = 0.5; 
         centerCanvas();
-        console.log('Canvas centralizado. Pan:', panX, panY, 'Scale:', currentScale);
-
     }, 100);
     
     socket.emit('get_players', { session_id: SESSION_ID });
