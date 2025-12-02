@@ -9,6 +9,10 @@ let playerName = '';
 let playerId = null;
 let permissions = { moveTokens: [], draw: false };
 
+// SCENES
+let visibleScenes = [];
+let currentPlayerSceneId = null;
+
 // CHAT
 let chatContacts = [];
 let currentChatContact = null;
@@ -265,9 +269,54 @@ socket.on('fog_areas_sync', (data) => {
     }
 });
 
+socket.on('scenes_sync', (data) => {
+    console.log('🎬 [JOGADOR] Cenas sincronizadas:', data);
+    const scenes = data.scenes || [];
+    
+    // Filtrar apenas cenas visíveis para este jogador
+    visibleScenes = scenes.filter(scene => 
+        scene.visible_to_players && scene.visible_to_players.includes(playerId)
+    );
+    
+    console.log('🎬 [JOGADOR] Cenas visíveis:', visibleScenes.length);
+});
+
+socket.on('scene_switched', (data) => {
+    console.log('🎬 [JOGADOR] Verificando se cena é visível:', data);
+    
+    const isVisible = visibleScenes.some(s => s.id === data.scene_id);
+    
+    if (isVisible) {
+        currentPlayerSceneId = data.scene_id;
+        const scene = data.scene;
+        
+        maps = scene.maps || [];
+        entities = scene.entities || [];
+        tokens = scene.tokens || [];
+        drawings = scene.drawings || [];
+        fogAreas = scene.fog_areas || [];
+        
+        preloadAllImages();
+        redrawAll();
+        redrawDrawings();
+        redrawFog();
+        
+        showToast(`Cena alterada: ${scene.name}`);
+    } else {
+        // Cena não visível - limpar canvas
+        maps = [];
+        entities = [];
+        tokens = [];
+        drawings = [];
+        fogAreas = [];
+        
+        redrawAll();
+        redrawDrawings();
+        redrawFog();
+    }
+});
+
 // ========== FOG OF WAR ==========
-// ========== FOG (NÉVOA) ==========
-// ========== FOG (NÉVOA) - CORRIGIDO ==========
 function redrawFog() {
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     

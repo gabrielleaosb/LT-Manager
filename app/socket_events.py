@@ -549,6 +549,131 @@ def handle_mark_read(data):
     
     print(f'✅ Conversa marcada como lida: {user_id} <-> {other_user_id}')
 
+
+# ==================
+# SCENES (CENAS)
+# ==================
+@socketio.on('create_scene')
+def handle_create_scene(data):
+    session_id = data.get('session_id')
+    scene_name = data.get('scene_name')
+    
+    init_session(session_id)
+    
+    if 'scenes' not in active_sessions[session_id]:
+        active_sessions[session_id]['scenes'] = []
+    
+    scene = {
+        'id': f"scene_{int(time.time() * 1000)}",
+        'name': scene_name,
+        'maps': [],
+        'entities': [],
+        'tokens': [],
+        'drawings': [],
+        'fog_areas': [],
+        'visible_to_players': []
+    }
+    
+    active_sessions[session_id]['scenes'].append(scene)
+    
+    emit('scenes_sync', {
+        'scenes': active_sessions[session_id]['scenes']
+    }, room=session_id, include_self=True)
+    
+    print(f'🎬 Nova cena criada: {scene_name}')
+
+@socketio.on('delete_scene')
+def handle_delete_scene(data):
+    session_id = data.get('session_id')
+    scene_id = data.get('scene_id')
+    
+    init_session(session_id)
+    
+    if 'scenes' not in active_sessions[session_id]:
+        return
+    
+    active_sessions[session_id]['scenes'] = [
+        s for s in active_sessions[session_id]['scenes'] 
+        if s['id'] != scene_id
+    ]
+    
+    emit('scenes_sync', {
+        'scenes': active_sessions[session_id]['scenes']
+    }, room=session_id, include_self=True)
+    
+    print(f'🎬 Cena removida: {scene_id}')
+
+@socketio.on('update_scene_visibility')
+def handle_update_scene_visibility(data):
+    session_id = data.get('session_id')
+    scene_id = data.get('scene_id')
+    player_id = data.get('player_id')
+    visible = data.get('visible')
+    
+    init_session(session_id)
+    
+    if 'scenes' not in active_sessions[session_id]:
+        return
+    
+    for scene in active_sessions[session_id]['scenes']:
+        if scene['id'] == scene_id:
+            if 'visible_to_players' not in scene:
+                scene['visible_to_players'] = []
+            
+            if visible and player_id not in scene['visible_to_players']:
+                scene['visible_to_players'].append(player_id)
+            elif not visible and player_id in scene['visible_to_players']:
+                scene['visible_to_players'].remove(player_id)
+            break
+    
+    # Notificar jogadores sobre mudança de visibilidade
+    emit('scenes_sync', {
+        'scenes': active_sessions[session_id]['scenes']
+    }, room=session_id, include_self=True)
+    
+    print(f'🎬 Visibilidade da cena {scene_id} atualizada para jogador {player_id}')
+
+@socketio.on('switch_scene')
+def handle_switch_scene(data):
+    session_id = data.get('session_id')
+    scene_id = data.get('scene_id')
+    
+    init_session(session_id)
+    
+    if 'scenes' not in active_sessions[session_id]:
+        return
+    
+    scene = next((s for s in active_sessions[session_id]['scenes'] if s['id'] == scene_id), None)
+    
+    if scene:
+        emit('scene_switched', {
+            'scene_id': scene_id,
+            'scene': scene
+        }, room=session_id, include_self=True)
+        
+        print(f'🎬 Cena alterada para: {scene["name"]}')
+
+@socketio.on('update_scene_content')
+def handle_update_scene_content(data):
+    session_id = data.get('session_id')
+    scene_id = data.get('scene_id')
+    content_type = data.get('content_type')  # 'maps', 'entities', 'tokens', 'drawings', 'fog_areas'
+    content = data.get('content')
+    
+    init_session(session_id)
+    
+    if 'scenes' not in active_sessions[session_id]:
+        return
+    
+    for scene in active_sessions[session_id]['scenes']:
+        if scene['id'] == scene_id:
+            scene[content_type] = content
+            break
+    
+    emit('scenes_sync', {
+        'scenes': active_sessions[session_id]['scenes']
+    }, room=session_id, include_self=True)
+
 # ==================
 # FOG OF WAR
 # ==================

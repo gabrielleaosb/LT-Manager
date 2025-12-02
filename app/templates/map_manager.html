@@ -19,6 +19,7 @@
         <h1>🗺️ Gerenciador de Mapas</h1>
     </div>
     <div class="header-actions">
+        <button class="btn" onclick="openSceneManager()">🎬 Cenas</button>
         <button class="btn" onclick="copyShareLink()">🔗 Copiar Link</button>
         <button class="btn btn-danger" onclick="clearAll()">🗑️ Limpar Tudo</button>
     </div>
@@ -368,10 +369,48 @@
         </div>
     </div>
 </div>
+<!-- Modal de Gerenciador de Cenas -->
+<div class="modal" id="sceneManagerModal">
+    <div class="modal-content" style="max-width: 800px;">
+        <h3>🎬 Gerenciador de Cenas</h3>
+        
+        <button class="action-btn" onclick="createNewScene()" style="margin-bottom: 20px;">
+            + Criar Nova Cena
+        </button>
+        
+        <div class="item-list" id="scenesList" style="max-height: 500px;">
+            <div class="empty-state">Nenhuma cena criada</div>
+        </div>
+        
+        <div class="modal-actions" style="margin-top: 20px;">
+            <button class="btn" onclick="closeSceneManager()">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Visibilidade de Cena -->
+<div class="modal" id="sceneVisibilityModal">
+    <div class="modal-content" style="max-width: 600px;">
+        <h3 id="sceneVisibilityTitle">Visibilidade da Cena</h3>
+        <input type="hidden" id="currentSceneIdForVisibility">
+        
+        <p style="color: #bbb; margin-bottom: 15px;">
+            Selecione quais jogadores podem ver esta cena:
+        </p>
+        
+        <div class="item-list" id="sceneVisibilityList" style="max-height: 400px;"></div>
+        
+        <div class="modal-actions">
+            <button class="action-btn" onclick="closeSceneVisibilityModal()">Fechar</button>
+        </div>
+    </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
+<script defer src="{{ url_for('static', filename='js/scene_manager.js') }}"></script>
 <script defer src="{{ url_for('static', filename='js/map_manager_enhanced.js') }}"></script>
+
 
 </body>
 </html>

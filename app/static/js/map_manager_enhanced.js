@@ -15,8 +15,8 @@ const canvasWrapper = document.querySelector('.canvas-wrapper');
 const canvasContainer = document.querySelector('.canvas-container');
 
 // Tamanho do canvas
-const CANVAS_WIDTH = 2000;
-const CANVAS_HEIGHT = 2000;
+const CANVAS_WIDTH = 10000;
+const CANVAS_HEIGHT = 10000;
 
 const fogCanvas = document.getElementById('fogCanvas');
 const fogCtx = fogCanvas.getContext('2d');
@@ -93,6 +93,11 @@ let fogShape = 'rectangle';
 let fogDrawStart = null;
 let fogCurrentArea = null;
 let fogOpacity = 0.5;
+
+// SCENES
+let scenes = [];
+let currentSceneId = null;
+let currentScene = null;
 
 // Pan temporário com espaço
 let spacePressed = false;
@@ -2303,6 +2308,10 @@ document.addEventListener('keyup', (e) => {
 });
 
 setTool('select');
-drawGrid();
+setTimeout(() => {
+    drawGrid();
+    console.log('✅ Grid desenhado');
+}, 500);
+
 renderImageList();
 renderTokenList();

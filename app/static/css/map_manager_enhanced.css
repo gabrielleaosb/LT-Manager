@@ -2075,3 +2075,76 @@ body, html {
     font-size: 0.85rem;
     margin-top: 10px;
 }
+
+/* ==========================================
+   SCENE MANAGER
+   ========================================== */
+
+.scene-item {
+    background: linear-gradient(135deg, rgba(26,26,46,0.7), rgba(16,16,30,0.7));
+    border: 2px solid rgba(155,89,182,0.25);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
+}
+
+.scene-item:hover {
+    border-color: rgba(155,89,182,0.5);
+    transform: translateX(3px);
+}
+
+.scene-item.active {
+    border-color: #2ed573;
+    background: linear-gradient(135deg, rgba(46,213,115,0.15), rgba(38,222,129,0.1));
+}
+
+.scene-info {
+    margin-bottom: 10px;
+}
+
+.scene-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #e9d5f5;
+    margin-bottom: 8px;
+}
+
+.scene-stats {
+    display: flex;
+    gap: 15px;
+    font-size: 0.85rem;
+    color: #bbb;
+}
+
+.scene-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.scene-action-btn {
+    padding: 6px 12px;
+    background: rgba(155,89,182,0.2);
+    border: 1px solid rgba(155,89,182,0.4);
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+}
+
+.scene-action-btn:hover {
+    background: rgba(155,89,182,0.4);
+    border-color: #9b59b6;
+}
+
+.scene-action-btn.delete {
+    background: rgba(231,76,60,0.2);
+    border-color: rgba(231,76,60,0.4);
+}
+
+.scene-action-btn.delete:hover {
+    background: rgba(231,76,60,0.4);
+    border-color: #e74c3c;
+}
