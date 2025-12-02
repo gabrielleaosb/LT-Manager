@@ -32,7 +32,7 @@
         <div class="sidebar-header">🛠️ Ferramentas</div>
         <div class="sidebar-content">
             <div class="tools-section">
-                <h4>Modo de Trabalho</h4>
+                <h4>🎯 Modo de Trabalho</h4>
                 <div class="tool-grid">
                     <button class="tool-btn active" onclick="setTool('select')">✋ Selecionar</button>
                     <button class="tool-btn" onclick="setTool('pan')">🤚 Mover</button>
@@ -42,16 +42,16 @@
             </div>
             
             <div class="tools-section">
-                <h4>Grid</h4>
+                <h4>📐 Grid do Mapa</h4>
                 <div class="grid-controls">
                     <div class="control-row">
                         <label>
                             <input type="checkbox" checked onchange="toggleGrid()">
-                            Mostrar Grid
+                            Exibir Grid
                         </label>
                     </div>
                     <div class="control-row">
-                        <label>Tamanho:</label>
+                        <label>Tamanho da Célula</label>
                         <input type="range" min="20" max="100" value="50" step="5" onchange="updateGridSize(this.value)">
                         <span class="grid-size-value" id="gridSizeValue">50px</span>
                     </div>
@@ -59,14 +59,14 @@
             </div>
             
             <div class="tools-section">
-                <h4>Desenho</h4>
+                <h4>🎨 Ferramentas de Desenho</h4>
                 <div class="grid-controls">
                     <div class="control-row">
-                        <label>Tamanho:</label>
+                        <label>Espessura do Pincel</label>
                         <input type="range" min="1" max="20" value="3" onchange="setBrushSize(this.value)">
                     </div>
                 </div>
-                <div class="color-palette" style="margin-top: 10px;">
+                <div class="color-palette" style="margin-top: 12px;">
                     <div class="color-option active" style="background: #9b59b6;" onclick="setDrawingColor('#9b59b6')"></div>
                     <div class="color-option" style="background: #e74c3c;" onclick="setDrawingColor('#e74c3c')"></div>
                     <div class="color-option" style="background: #3498db;" onclick="setDrawingColor('#3498db')"></div>
@@ -78,26 +78,26 @@
                     <div class="color-option" style="background: #34495e;" onclick="setDrawingColor('#34495e')"></div>
                     <div class="color-option" style="background: #000000;" onclick="setDrawingColor('#000000')"></div>
                 </div>
-                <button class="action-btn" onclick="clearDrawings()" style="margin-top: 10px;">🧹 Limpar Desenhos</button>
+                <button class="action-btn" onclick="clearDrawings()" style="margin-top: 12px;">🧹 Limpar Todos os Desenhos</button>
             </div>
             
             <div class="tools-section">
-                <h4>Adicionar ao Mapa</h4>
+                <h4>➕ Adicionar Elementos</h4>
                 <button class="action-btn" onclick="addImage()">🖼️ Adicionar Imagem</button>
                 <button class="action-btn" onclick="addToken()">🎭 Adicionar Token</button>
             </div>
             
             <div class="tools-section">
-                <h4>Imagens no Mapa</h4>
+                <h4>🖼️ Imagens no Mapa</h4>
                 <div class="item-list" id="imageList">
-                    <div class="empty-state">Nenhuma imagem</div>
+                    <div class="empty-state">Nenhuma imagem adicionada</div>
                 </div>
             </div>
             
             <div class="tools-section">
-                <h4>Tokens no Mapa</h4>
+                <h4>🎭 Tokens Ativos</h4>
                 <div class="item-list" id="tokenList">
-                    <div class="empty-state">Nenhum token</div>
+                    <div class="empty-state">Nenhum token no mapa</div>
                 </div>
             </div>
         </div>
@@ -135,19 +135,70 @@
 <!-- Painel de Dados -->
 <div class="floating-panel" id="dicePanel">
     <div class="panel-header">
-        <h3>🎲 Dados</h3>
+        <h3>🎲 Rolador de Dados</h3>
         <button class="panel-close" onclick="toggleDiceRoller()">×</button>
     </div>
     <div class="panel-content">
+        <!-- Resultado -->
         <div class="dice-result" id="diceResult">Selecione um dado</div>
-        <div class="dice-grid">
-            <button class="dice-btn" onclick="rollDice(4)">d4</button>
-            <button class="dice-btn" onclick="rollDice(6)">d6</button>
-            <button class="dice-btn" onclick="rollDice(8)">d8</button>
-            <button class="dice-btn" onclick="rollDice(10)">d10</button>
-            <button class="dice-btn" onclick="rollDice(12)">d12</button>
-            <button class="dice-btn" onclick="rollDice(20)">d20</button>
-            <button class="dice-btn" onclick="rollDice(100)">d100</button>
+        
+        <!-- Dados Rápidos -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="color: #c49bdb; margin-bottom: 10px; font-size: 0.95rem;">⚡ Dados Rápidos</h4>
+            <div class="dice-grid">
+                <button class="dice-btn" onclick="rollDice(4)">d4</button>
+                <button class="dice-btn" onclick="rollDice(6)">d6</button>
+                <button class="dice-btn" onclick="rollDice(8)">d8</button>
+                <button class="dice-btn" onclick="rollDice(10)">d10</button>
+                <button class="dice-btn" onclick="rollDice(12)">d12</button>
+                <button class="dice-btn" onclick="rollDice(20)">d20</button>
+                <button class="dice-btn" onclick="rollDice(100)">d100</button>
+            </div>
+        </div>
+        
+        <!-- Rolagem Customizada -->
+        <div style="background: rgba(16,16,30,0.6); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+            <h4 style="color: #c49bdb; margin-bottom: 12px; font-size: 0.95rem;">🎯 Rolagem Personalizada</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                <div>
+                    <label style="color: #bbb; font-size: 0.8rem; display: block; margin-bottom: 5px;">Quantidade</label>
+                    <input type="number" id="customDiceCount" value="1" min="1" max="20" 
+                           style="width: 100%; padding: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(155,89,182,0.3); color: #fff; border-radius: 6px;">
+                </div>
+                <div>
+                    <label style="color: #bbb; font-size: 0.8rem; display: block; margin-bottom: 5px;">Tipo</label>
+                    <select id="customDiceSides" 
+                            style="width: 100%; padding: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(155,89,182,0.3); color: #fff; border-radius: 6px;">
+                        <option value="4">d4</option>
+                        <option value="6">d6</option>
+                        <option value="8">d8</option>
+                        <option value="10">d10</option>
+                        <option value="12">d12</option>
+                        <option value="20" selected>d20</option>
+                        <option value="100">d100</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="color: #bbb; font-size: 0.8rem; display: block; margin-bottom: 5px;">Modificador</label>
+                    <input type="number" id="customDiceModifier" value="0" min="-100" max="100" 
+                           style="width: 100%; padding: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(155,89,182,0.3); color: #fff; border-radius: 6px;">
+                </div>
+            </div>
+            <button class="action-btn" onclick="rollCustomDice()" style="width: 100%;">🎲 Rolar</button>
+        </div>
+        
+        <!-- Histórico -->
+        <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h4 style="color: #c49bdb; font-size: 0.95rem; margin: 0;">📋 Histórico</h4>
+                <button onclick="clearDiceHistory()" 
+                        style="padding: 4px 10px; background: rgba(231,76,60,0.2); border: 1px solid #e74c3c; color: #fff; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                    🗑️ Limpar
+                </button>
+            </div>
+            <div id="diceHistoryList" style="max-height: 200px; overflow-y: auto;">
+                <div class="empty-state" style="padding: 20px; color: #666; text-align: center;">Nenhuma rolagem ainda</div>
+            </div>
         </div>
     </div>
 </div>

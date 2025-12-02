@@ -13,7 +13,7 @@ let permissions = { moveTokens: [], draw: false };
 let chatContacts = [];
 let currentChatContact = null;
 let currentConversation = [];
-let chatMinimized = false;
+let chatMinimized = true;
 let chatCollapsed = false;
 let conversationsCache = {};
 
@@ -120,6 +120,7 @@ function drawGrid() {
         gridCtx.stroke();
     }
 }
+drawGrid();
 
 // ========== LOGIN ==========
 document.getElementById('loginBtn').addEventListener('click', () => {
@@ -882,6 +883,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 sendChatMessage();
             }
         });
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const chatContainer = document.getElementById('chatContainer');
+    if (chatContainer) {
+        chatContainer.classList.add('minimized');
+        const icon = document.getElementById('chatMinimizeIcon');
+        if (icon) icon.textContent = '▲';
     }
 });
 

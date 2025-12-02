@@ -29,7 +29,7 @@ let players = [];
 let chatContacts = [];
 let currentChatContact = null;
 let currentConversation = [];
-let chatMinimized = false;
+let chatMinimized = true;
 let chatCollapsed = false;
 
 // Controles
@@ -38,6 +38,8 @@ let drawingColor = '#9b59b6';
 let brushSize = 3;
 let isDrawing = false;
 let currentPath = [];
+
+let diceHistory = [];
 
 const TOKEN_RADIUS = 35;
 
@@ -156,6 +158,7 @@ function drawGrid() {
         gridCtx.stroke();
     }
 }
+drawGrid();
 
 function toggleGrid() {
     gridEnabled = !gridEnabled;
@@ -1626,6 +1629,9 @@ function rollDice(sides) {
     resultDiv.textContent = result;
     resultDiv.className = 'dice-result';
     
+    // Adicionar ao histórico
+    addDiceToHistory(`1d${sides}`, result, sides === 20 && result === 20, sides === 20 && result === 1);
+    
     setTimeout(() => {
         resultDiv.classList.add('show');
         
@@ -1639,6 +1645,105 @@ function rollDice(sides) {
             }
         }
     }, 10);
+}
+
+function rollCustomDice() {
+    const count = parseInt(document.getElementById('customDiceCount')?.value) || 1;
+    const sides = parseInt(document.getElementById('customDiceSides')?.value) || 20;
+    const modifier = parseInt(document.getElementById('customDiceModifier')?.value) || 0;
+    
+    let rolls = [];
+    let sum = 0;
+    
+    for (let i = 0; i < count; i++) {
+        const roll = Math.floor(Math.random() * sides) + 1;
+        rolls.push(roll);
+        sum += roll;
+    }
+    
+    const total = sum + modifier;
+    const formula = `${count}d${sides}${modifier !== 0 ? (modifier > 0 ? '+' : '') + modifier : ''}`;
+    const breakdown = rolls.join(' + ') + (modifier !== 0 ? ` ${modifier > 0 ? '+' : ''}${modifier}` : '');
+    
+    const resultDiv = document.getElementById('diceResult');
+    resultDiv.textContent = total;
+    resultDiv.className = 'dice-result show';
+    
+    // Verificar críticos
+    const isCrit = sides === 20 && count === 1 && rolls[0] === 20;
+    const isFail = sides === 20 && count === 1 && rolls[0] === 1;
+    
+    if (isCrit) {
+        resultDiv.classList.add('critical-success');
+        showToast('🎉 CRÍTICO!');
+    } else if (isFail) {
+        resultDiv.classList.add('critical-fail');
+        showToast('💀 FALHA CRÍTICA!');
+    }
+    
+    // Adicionar ao histórico
+    addDiceToHistory(formula, total, isCrit, isFail, breakdown);
+}
+
+function addDiceToHistory(formula, result, isCrit, isFail, breakdown = '') {
+    const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    
+    diceHistory.unshift({
+        formula,
+        result,
+        isCrit,
+        isFail,
+        breakdown,
+        timestamp
+    });
+    
+    if (diceHistory.length > 50) {
+        diceHistory = diceHistory.slice(0, 50);
+    }
+    
+    renderDiceHistory();
+}
+
+function renderDiceHistory() {
+    const historyList = document.getElementById('diceHistoryList');
+    if (!historyList) return;
+    
+    if (diceHistory.length === 0) {
+        historyList.innerHTML = '<div class="empty-state" style="padding: 20px; color: #666; text-align: center;">Nenhuma rolagem ainda</div>';
+        return;
+    }
+    
+    historyList.innerHTML = diceHistory.map(item => {
+        let resultClass = '';
+        let icon = '🎲';
+        
+        if (item.isCrit) {
+            resultClass = 'style="color: #ffd700; font-weight: bold;"';
+            icon = '⭐';
+        } else if (item.isFail) {
+            resultClass = 'style="color: #e74c3c; font-weight: bold;"';
+            icon = '💀';
+        }
+        
+        return `
+            <div class="history-item" style="padding: 10px; background: rgba(16,16,30,0.6); border-radius: 6px; border: 1px solid rgba(155,89,182,0.2); margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <strong style="color: #c49bdb;">${icon} ${item.formula}</strong>
+                    <span ${resultClass}>${item.result}</span>
+                </div>
+                ${item.breakdown ? `<div style="font-size: 0.85rem; color: #888;">${item.breakdown}</div>` : ''}
+                <div style="font-size: 0.75rem; color: #666; margin-top: 4px;">${item.timestamp}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearDiceHistory() {
+    if (confirm('Limpar histórico de dados?')) {
+        diceHistory = [];
+        renderDiceHistory();
+        showToast('Histórico limpo');
+    }
 }
 
 // ==================
@@ -1690,6 +1795,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 100);
     
     socket.emit('get_players', { session_id: SESSION_ID });
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const chatContainer = document.getElementById('chatContainer');
+    if (chatContainer) {
+        chatContainer.classList.add('minimized');
+        const icon = document.getElementById('chatMinimizeIcon');
+        if (icon) icon.textContent = '▲';
+    }
 });
 
 window.addEventListener('resize', () => {
