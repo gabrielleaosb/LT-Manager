@@ -1,11 +1,16 @@
 from . import app
-from flask import render_template, jsonify, request
+from flask import render_template, jsonify, request, redirect, url_for
 import uuid
+
+
+@app.route("/")
+def root():
+    return redirect(url_for("dashboard"))
 
 @app.route("/dashboard")
 def dashboard():
     """Dashboard principal do RPG Manager"""
-    return render_template("dashboard.html")
+    return render_template("dashboard.html") 
 
 @app.route("/map-manager")
 def map_manager():

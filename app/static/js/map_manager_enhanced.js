@@ -1,5 +1,7 @@
 // MAP MANAGER - MESTRE - PARTE 1 - INICIALIZAÇÃO E WEBSOCKETS
-const socket = io();
+const socket = io('https://abc123.ngrok-free.app', {
+    transports: ['websocket', 'polling'] 
+});
 const SESSION_ID = document.getElementById('sessionId').value;
 
 // Canvas elements
@@ -13,8 +15,8 @@ const canvasWrapper = document.querySelector('.canvas-wrapper');
 const canvasContainer = document.querySelector('.canvas-container');
 
 // Tamanho do canvas
-const CANVAS_WIDTH = 2000;
-const CANVAS_HEIGHT = 2000;
+const CANVAS_WIDTH = 5000;
+const CANVAS_HEIGHT = 5000;
 
 const fogCanvas = document.getElementById('fogCanvas');
 const fogCtx = fogCanvas.getContext('2d');

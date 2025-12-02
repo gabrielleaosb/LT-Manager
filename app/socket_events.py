@@ -401,7 +401,7 @@ def handle_get_contacts(data):
         unread_count = unread_data.get(f"{user_id}_master", 0)
         contacts.append({
             'id': 'master',
-            'name': '👑 Mestre',
+            'name': '🗣️ A Voz',
             'unread': unread_count,
             'type': 'player'
         })
