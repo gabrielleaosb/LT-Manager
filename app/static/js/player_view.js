@@ -304,6 +304,17 @@ socket.on('new_private_message', (data) => {
     loadChatContacts();
 });
 
+socket.on('grid_settings_sync', (data) => {
+    console.log('📐 [PLAYER] Grid settings recebidos:', data);
+    const settings = data.grid_settings || {};
+    
+    gridEnabled = settings.enabled !== false;
+    gridSize = settings.size || 50;
+    gridColor = settings.color || 'rgba(155, 89, 182, 0.3)';
+    
+    drawGrid();
+});
+
 function updateStatus(connected) {
     const indicator = document.getElementById('statusIndicator');
     const text = document.getElementById('statusText');

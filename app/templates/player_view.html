@@ -165,19 +165,19 @@
     font-size: 0.9rem;
 }
 
-.color-mini {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 5px;
-}
-
 .color-option {
-    width: 30px;
-    height: 30px;
-    border-radius: 6px;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 8px;
     cursor: pointer;
     border: 2px solid transparent;
-    transition: all 0.3s;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.color-option:hover {
+    transform: scale(1.15);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
 
 .color-option.active {
@@ -239,14 +239,16 @@
     <button class="tool-btn" onclick="setDrawTool('erase')">🧹 Apagar</button>
     <button class="tool-btn" onclick="setDrawTool('pan')">🤚 Mover</button>
     <h4 style="margin-top: 5px;">Cores</h4>
-    <div class="color-mini">
+    <div class="color-palette" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px;">
         <div class="color-option active" style="background: #9b59b6;" onclick="setPlayerColor('#9b59b6')"></div>
         <div class="color-option" style="background: #e74c3c;" onclick="setPlayerColor('#e74c3c')"></div>
         <div class="color-option" style="background: #3498db;" onclick="setPlayerColor('#3498db')"></div>
         <div class="color-option" style="background: #2ecc71;" onclick="setPlayerColor('#2ecc71')"></div>
         <div class="color-option" style="background: #f39c12;" onclick="setPlayerColor('#f39c12')"></div>
         <div class="color-option" style="background: #1abc9c;" onclick="setPlayerColor('#1abc9c')"></div>
+        <div class="color-option" style="background: #e67e22;" onclick="setPlayerColor('#e67e22')"></div>
         <div class="color-option" style="background: #ecf0f1;" onclick="setPlayerColor('#ecf0f1')"></div>
+        <div class="color-option" style="background: #34495e;" onclick="setPlayerColor('#34495e')"></div>
         <div class="color-option" style="background: #000000;" onclick="setPlayerColor('#000000')"></div>
     </div>
 </div>

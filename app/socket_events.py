@@ -20,6 +20,23 @@ def init_session(session_id):
             'master_socket': None
         }
 
+@socketio.on('update_grid_settings')
+def handle_update_grid_settings(data):
+    """Sincronizar configurações de grid para todos"""
+    session_id = data.get('session_id')
+    grid_settings = data.get('grid_settings')
+    
+    init_session(session_id)
+    
+    # Salvar configurações na sessão
+    active_sessions[session_id]['grid_settings'] = grid_settings
+    
+    # Broadcast para TODA A SALA
+    emit('grid_settings_sync', {'grid_settings': grid_settings}, 
+         room=session_id, include_self=True)
+    
+    print(f'📐 Grid settings atualizados na sessão {session_id}')
+
 @socketio.on('connect')
 def handle_connect():
     print(f'Cliente conectado: {request.sid}')
@@ -61,6 +78,14 @@ def handle_join_session(data):
         'tokens': session_state['tokens'],
         'drawings': session_state['drawings']
     })
+
+    grid_settings = session_state.get('grid_settings', {
+    'enabled': True,
+    'size': 50,
+    'color': 'rgba(155, 89, 182, 0.3)',
+    'lineWidth': 1
+    })
+    emit('grid_settings_sync', {'grid_settings': grid_settings})
     
     emit('players_list', {'players': list(session_state['players'].values())})
     print(f'✅ Mestre entrou na sessão: {session_id}')
@@ -95,7 +120,15 @@ def handle_player_join(data):
         'tokens': session_state['tokens'],
         'drawings': session_state['drawings']
     })
-    
+
+    grid_settings = session_state.get('grid_settings', {
+    'enabled': True,
+    'size': 50,
+    'color': 'rgba(155, 89, 182, 0.3)',
+    'lineWidth': 1
+    })
+    emit('grid_settings_sync', {'grid_settings': grid_settings})
+        
     emit('permissions_updated', {
         'player_id': player_id,
         'permissions': active_sessions[session_id]['permissions'][player_id]

@@ -164,12 +164,36 @@ function toggleGrid() {
     gridEnabled = !gridEnabled;
     drawGrid();
     showToast(gridEnabled ? 'Grid ativada' : 'Grid desativada');
+    
+    // Sincronizar com todos
+    socket.emit('update_grid_settings', {
+        session_id: SESSION_ID,
+        grid_settings: {
+            enabled: gridEnabled,
+            size: gridSize,
+            color: gridColor,
+            lineWidth: gridLineWidth
+        }
+    });
+    
+    showToast(gridEnabled ? 'Grid ativada' : 'Grid desativada');
 }
 
 function updateGridSize(size) {
     gridSize = parseInt(size);
     document.getElementById('gridSizeValue').textContent = gridSize + 'px';
     drawGrid();
+    
+    // Sincronizar com todos
+    socket.emit('update_grid_settings', {
+        session_id: SESSION_ID,
+        grid_settings: {
+            enabled: gridEnabled,
+            size: gridSize,
+            color: gridColor,
+            lineWidth: gridLineWidth
+        }
+    });
 }
 
 // ==================
@@ -427,6 +451,18 @@ socket.on('new_private_message', (data) => {
     }
     
     loadChatContacts();
+});
+
+socket.on('grid_settings_sync', (data) => {
+    console.log('📐 Grid settings recebidos:', data);
+    const settings = data.grid_settings || {};
+    
+    gridEnabled = settings.enabled !== false;
+    gridSize = settings.size || 50;
+    gridColor = settings.color || 'rgba(155, 89, 182, 0.3)';
+    gridLineWidth = settings.lineWidth || 1;
+    
+    drawGrid();
 });
 
 // MAP MANAGER - PARTE 2 - FERRAMENTAS E RENDER
