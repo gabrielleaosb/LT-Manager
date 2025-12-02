@@ -192,17 +192,52 @@ function loadImageSafe(id, src, onComplete) {
 }
 
 function preloadAllImages() {
-    images.forEach(img => {
-        if (img.image && !loadedImages.has(img.id)) {
-            loadImageSafe(img.id, img.image);
+    let imagesToLoad = 0;
+    let imagesLoaded = 0;
+
+    const checkAllLoaded = () => {
+        imagesLoaded++;
+        if (imagesLoaded === imagesToLoad) {
+            redrawAll();
+        }
+    };
+
+    [...maps, ...entities].forEach(img => {
+        if (img.image && !loadedImages[img.id]) {
+            imagesToLoad++;
+            const i = new Image();
+            i.onload = () => {
+                loadedImages[img.id] = i;
+                checkAllLoaded();
+            };
+            i.onerror = () => {
+                console.error('Erro ao carregar imagem:', img.id);
+                checkAllLoaded();
+            };
+            i.src = img.image;
         }
     });
     
     tokens.forEach(token => {
-        if (token.image && !loadedImages.has(token.id)) {
-            loadImageSafe(token.id, token.image);
+        if (token.image && !loadedImages[token.id]) {
+            imagesToLoad++;
+            const i = new Image();
+            i.onload = () => {
+                loadedImages[token.id] = i;
+                checkAllLoaded();
+            };
+            i.onerror = () => {
+                console.error('Erro ao carregar token:', token.id);
+                checkAllLoaded();
+            };
+            i.src = token.image;
         }
     });
+
+    // Se não há imagens para carregar, redesenha imediatamente
+    if (imagesToLoad === 0) {
+        redrawAll();
+    }
 }
 
 // ==================
@@ -272,21 +307,37 @@ socket.on('entities_sync', (data) => {
 });
 
 socket.on('token_sync', (data) => {
-    console.log('🎯 TOKEN SYNC recebido:', data);
+    console.log('🎯 [MESTRE] TOKEN SYNC recebido:', {
+        timestamp: new Date().toISOString(),
+        tokensCount: data.tokens?.length,
+        firstToken: data.tokens?.[0] ? {
+            name: data.tokens[0].name,
+            x: data.tokens[0].x,
+            y: data.tokens[0].y
+        } : null
+    });
+    
     tokens = data.tokens || [];
-    preloadAllImages();
-    renderTokenList();
-    redrawAll();
+    
+    // FORÇAR redesenho imediato
+    window.requestAnimationFrame(() => {
+        preloadAllImages();
+        renderTokenList();
+        redrawAll();
+        console.log('✅ [MESTRE] Canvas redesenhado após token_sync');
+    });
 });
 
 socket.on('drawing_sync', (data) => {
     drawings.push(data.drawing);
     redrawDrawings();
+    redrawAll();
 });
 
 socket.on('drawings_cleared', () => {
     drawings = [];
     redrawDrawings();
+    redrawAll();
 });
 
 // CHAT - Socket Handlers CORRIGIDOS (substitua no início do arquivo, parte 1)
@@ -373,7 +424,6 @@ socket.on('new_private_message', (data) => {
     }
     
     loadChatContacts();
-    playNotificationSound();
 });
 
 // MAP MANAGER - PARTE 2 - FERRAMENTAS E RENDER
@@ -1256,6 +1306,18 @@ function renderChatContacts() {
         return;
     }
     
+    // Atualizar badge total no header
+    const totalUnread = chatContacts.reduce((sum, contact) => sum + (contact.unread || 0), 0);
+    const chatBadge = document.getElementById('chatBadge');
+    if (chatBadge) {
+        if (totalUnread > 0) {
+            chatBadge.textContent = totalUnread;
+            chatBadge.style.display = 'inline-block';
+        } else {
+            chatBadge.style.display = 'none';
+        }
+    }
+    
     chatContacts.forEach(contact => {
         const item = document.createElement('div');
         item.className = 'contact-item';
@@ -1286,6 +1348,13 @@ function openConversation(contactId) {
     
     currentChatContact = contactId;
     
+    // Marcar como lida no servidor
+    socket.emit('mark_conversation_read', {
+        session_id: SESSION_ID,
+        user_id: 'master',
+        other_user_id: contactId
+    });
+    
     document.querySelectorAll('.contact-item').forEach(item => item.classList.remove('active'));
     event.currentTarget?.classList.add('active');
     
@@ -1295,18 +1364,15 @@ function openConversation(contactId) {
         currentConversation = [...conversationsCache[contactId]];
         renderConversation();
         
-        // Mostrar área de conversa
         document.getElementById('conversationPlaceholder').style.display = 'none';
         document.getElementById('conversationArea').style.display = 'flex';
         
-        // Atualizar header
         const contact = chatContacts.find(c => c.id === contactId);
         if (contact) {
             document.getElementById('conversationContactName').textContent = contact.name;
             document.getElementById('conversationContactAvatar').textContent = contact.name.charAt(0).toUpperCase();
         }
     } else {
-        // Carregar do servidor se não estiver no cache
         console.log(`🌐 Carregando do servidor: ${contactId}`);
         socket.emit('get_conversation', {
             session_id: SESSION_ID,
@@ -1314,17 +1380,18 @@ function openConversation(contactId) {
             other_user_id: contactId
         });
         
-        // Mostrar área de conversa
         document.getElementById('conversationPlaceholder').style.display = 'none';
         document.getElementById('conversationArea').style.display = 'flex';
         
-        // Atualizar header
         const contact = chatContacts.find(c => c.id === contactId);
         if (contact) {
             document.getElementById('conversationContactName').textContent = contact.name;
             document.getElementById('conversationContactAvatar').textContent = contact.name.charAt(0).toUpperCase();
         }
     }
+    
+    // Recarregar contatos para atualizar contador
+    loadChatContacts();
 }
 
 function renderConversation() {
@@ -1390,11 +1457,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-function playNotificationSound() {
-    const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGGa88OScTgwOWK3n77BdGAg+ltf');
-    audio.volume = 0.3;
-    audio.play().catch(() => {});
-}
+
 
 // ==================
 // PERMISSÕES E JOGADORES

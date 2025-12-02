@@ -186,28 +186,47 @@ socket.on('maps_sync', (data) => {
     console.log('📍 MAPS SYNC recebido:', data);
     maps = data.maps || [];
     preloadAllImages();
+    redrawAll();
 });
 
 socket.on('entities_sync', (data) => {
     console.log('🎭 ENTITIES SYNC recebido:', data);
     entities = data.entities || [];
     preloadAllImages();
+    redrawAll();
 });
 
 socket.on('token_sync', (data) => {
-    console.log('🎯 TOKEN SYNC recebido:', data);
+    console.log('🎯 [JOGADOR] TOKEN SYNC recebido:', {
+        timestamp: new Date().toISOString(),
+        tokensCount: data.tokens?.length,
+        firstToken: data.tokens?.[0] ? {
+            name: data.tokens[0].name,
+            x: data.tokens[0].x,
+            y: data.tokens[0].y
+        } : null
+    });
+    
     tokens = data.tokens || [];
-    preloadAllImages();
+    
+    // FORÇAR redesenho imediato
+    window.requestAnimationFrame(() => {
+        preloadAllImages();
+        redrawAll();
+        console.log('✅ [JOGADOR] Canvas redesenhado após token_sync');
+    });
 });
 
 socket.on('drawing_sync', (data) => {
     drawings.push(data.drawing);
     redrawDrawings();
+    redrawAll();
 });
 
 socket.on('drawings_cleared', () => {
     drawings = [];
     redrawDrawings();
+    redrawAll();
 });
 
 socket.on('players_list', (data) => {
@@ -247,7 +266,6 @@ socket.on('new_private_message', (data) => {
     }
     
     loadChatContacts();
-    playNotificationSound();
 });
 
 function updateStatus(connected) {
@@ -265,21 +283,52 @@ function updateStatus(connected) {
 
 // ========== IMAGENS ==========
 function preloadAllImages() {
+    let imagesToLoad = 0;
+    let imagesLoaded = 0;
+
+    const checkAllLoaded = () => {
+        imagesLoaded++;
+        if (imagesLoaded === imagesToLoad) {
+            redrawAll();
+        }
+    };
+
     [...maps, ...entities].forEach(img => {
         if (img.image && !loadedImages[img.id]) {
+            imagesToLoad++;
             const i = new Image();
-            i.onload = () => { loadedImages[img.id] = i; redrawAll(); };
+            i.onload = () => {
+                loadedImages[img.id] = i;
+                checkAllLoaded();
+            };
+            i.onerror = () => {
+                console.error('Erro ao carregar imagem:', img.id);
+                checkAllLoaded();
+            };
             i.src = img.image;
         }
     });
     
     tokens.forEach(token => {
         if (token.image && !loadedImages[token.id]) {
+            imagesToLoad++;
             const i = new Image();
-            i.onload = () => { loadedImages[token.id] = i; redrawAll(); };
+            i.onload = () => {
+                loadedImages[token.id] = i;
+                checkAllLoaded();
+            };
+            i.onerror = () => {
+                console.error('Erro ao carregar token:', token.id);
+                checkAllLoaded();
+            };
             i.src = token.image;
         }
     });
+
+    // Se não há imagens para carregar, redesenha imediatamente
+    if (imagesToLoad === 0) {
+        redrawAll();
+    }
 }
 
 // PLAYER VIEW - PARTE 2 - RENDER, MOUSE E CHAT (FINAL)
@@ -429,22 +478,29 @@ canvasWrapper.addEventListener('mousemove', (e) => {
 
 canvasWrapper.addEventListener('mouseup', () => {
     if (draggingToken) {
+        const tokensCopy = JSON.parse(JSON.stringify(tokens));
+        
+        console.log('📤 [JOGADOR] Enviando token_update:', {
+            sessionId: SESSION_ID,
+            tokensCount: tokensCopy.length,
+            movedToken: {
+                name: draggingToken.name,
+                newX: draggingToken.x,
+                newY: draggingToken.y
+            }
+        });
+        
         socket.emit('token_update', {
             session_id: SESSION_ID,
-            tokens: tokens
+            tokens: tokensCopy
         });
+        
         draggingToken = null;
     }
     
     isPanning = false;
     canvasWrapper.classList.remove('grabbing');
     canvasWrapper.style.cursor = 'grab';
-});
-
-canvasWrapper.addEventListener('mouseleave', () => {
-    draggingToken = null;
-    isPanning = false;
-    canvasWrapper.classList.remove('grabbing');
 });
 
 // ========== DESENHO ==========
@@ -639,8 +695,20 @@ function renderChatContacts() {
     console.log('📋 Renderizando contatos:', chatContacts);
     
     if (chatContacts.length === 0) {
-        contactsList.innerHTML = '<div class="empty-state">Nenhum contato disponível</div>';
+        contactsList.innerHTML = '<div class="empty-state">Nenhum jogador conectado</div>';
         return;
+    }
+    
+    // Atualizar badge total no header
+    const totalUnread = chatContacts.reduce((sum, contact) => sum + (contact.unread || 0), 0);
+    const chatBadge = document.getElementById('chatBadge');
+    if (chatBadge) {
+        if (totalUnread > 0) {
+            chatBadge.textContent = totalUnread;
+            chatBadge.style.display = 'inline-block';
+        } else {
+            chatBadge.style.display = 'none';
+        }
     }
     
     chatContacts.forEach(contact => {
@@ -664,25 +732,59 @@ function renderChatContacts() {
 
 function openConversation(contactId) {
     console.log('💬 Abrindo conversa com:', contactId);
+    
+    // Salvar conversa atual no cache antes de trocar
+    if (currentChatContact && currentConversation.length > 0) {
+        conversationsCache[currentChatContact] = [...currentConversation];
+        console.log(`💾 Cache salvo para ${currentChatContact}:`, conversationsCache[currentChatContact].length, 'mensagens');
+    }
+    
     currentChatContact = contactId;
     
-    document.querySelectorAll('.contact-item').forEach(item => item.classList.remove('active'));
-    event.currentTarget?.classList.add('active');
-    
-    socket.emit('get_conversation', {
+    // Marcar como lida no servidor
+    socket.emit('mark_conversation_read', {
         session_id: SESSION_ID,
         user_id: playerId,
         other_user_id: contactId
     });
     
-    document.getElementById('conversationPlaceholder').style.display = 'none';
-    document.getElementById('conversationArea').style.display = 'flex';
+    document.querySelectorAll('.contact-item').forEach(item => item.classList.remove('active'));
+    event.currentTarget?.classList.add('active');
     
-    const contact = chatContacts.find(c => c.id === contactId);
-    if (contact) {
-        document.getElementById('conversationContactName').textContent = contact.name;
-        document.getElementById('conversationContactAvatar').textContent = contact.name.charAt(0).toUpperCase();
+    // Verificar se já temos o cache desta conversa
+    if (conversationsCache[contactId]) {
+        console.log(`📦 Carregando do cache: ${contactId}`, conversationsCache[contactId].length, 'mensagens');
+        currentConversation = [...conversationsCache[contactId]];
+        renderConversation();
+        
+        document.getElementById('conversationPlaceholder').style.display = 'none';
+        document.getElementById('conversationArea').style.display = 'flex';
+        
+        const contact = chatContacts.find(c => c.id === contactId);
+        if (contact) {
+            document.getElementById('conversationContactName').textContent = contact.name;
+            document.getElementById('conversationContactAvatar').textContent = contact.name.charAt(0).toUpperCase();
+        }
+    } else {
+        console.log(`🌐 Carregando do servidor: ${contactId}`);
+        socket.emit('get_conversation', {
+            session_id: SESSION_ID,
+            user_id: 'master',
+            other_user_id: contactId
+        });
+        
+        document.getElementById('conversationPlaceholder').style.display = 'none';
+        document.getElementById('conversationArea').style.display = 'flex';
+        
+        const contact = chatContacts.find(c => c.id === contactId);
+        if (contact) {
+            document.getElementById('conversationContactName').textContent = contact.name;
+            document.getElementById('conversationContactAvatar').textContent = contact.name.charAt(0).toUpperCase();
+        }
     }
+    
+    // Recarregar contatos para atualizar contador
+    loadChatContacts();
 }
 
 function renderConversation() {
@@ -747,12 +849,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-
-function playNotificationSound() {
-    const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGGa88OScTgwOWK3n77BdGAg+ltf');
-    audio.volume = 0.3;
-    audio.play().catch(() => {});
-}
 
 function showToast(msg) {
     const toast = document.getElementById('toast');

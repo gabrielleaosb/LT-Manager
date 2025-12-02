@@ -214,14 +214,30 @@ def handle_delete_entity(data):
 def handle_token_update(data):
     session_id = data.get('session_id')
     tokens = data.get('tokens', [])
+    sender_sid = request.sid
     
     init_session(session_id)
     active_sessions[session_id]['tokens'] = tokens
     
-    # BROADCAST para TODA A SALA (incluindo quem enviou)
+    print('🎯 TOKEN UPDATE recebido:')
+    print(f'   - Session: {session_id}')
+    print(f'   - Sender SID: {sender_sid}')
+    print(f'   - Tokens: {len(tokens)}')
+    print(f'   - Jogadores na sessão: {list(active_sessions[session_id]["players"].keys())}')
+    print(f'   - Master socket: {active_sessions[session_id].get("master_socket")}')
+    
+    # Enviar para TODOS na sala, EXCETO quem enviou (ele já tem os dados)
     emit('token_sync', {'tokens': tokens}, 
-         room=session_id, include_self=True)
-    print(f'🎯 Tokens atualizados - broadcasting para sessão {session_id}')
+         room=session_id, 
+         skip_sid=sender_sid)
+    
+    # IMPORTANTE: Enviar também diretamente para o mestre
+    master_socket = active_sessions[session_id].get('master_socket')
+    if master_socket and master_socket != sender_sid:
+        print(f'   📤 Enviando diretamente para o mestre: {master_socket}')
+        emit('token_sync', {'tokens': tokens}, room=master_socket)
+    
+    print('   ✅ Broadcast concluído')
 
 # ==================
 # DRAWINGS
@@ -289,21 +305,27 @@ def handle_get_players(data):
 # ==================
 @socketio.on('get_chat_contacts')
 def handle_get_contacts(data):
-    """Retorna lista de contatos disponíveis"""
+    """Retorna lista de contatos disponíveis com contagem de não lidas"""
     session_id = data.get('session_id')
     user_id = data.get('user_id')
     
     init_session(session_id)
     
+    # Inicializar estrutura de não lidas se não existir
+    if 'unread_messages' not in active_sessions[session_id]:
+        active_sessions[session_id]['unread_messages'] = {}
+    
     contacts = []
+    unread_data = active_sessions[session_id]['unread_messages']
     
     if user_id == 'master':
         # MESTRE: Ver todos os jogadores E todas as conversas entre eles
         for player_id, player_data in active_sessions[session_id]['players'].items():
+            unread_count = unread_data.get(f"{user_id}_{player_id}", 0)
             contacts.append({
                 'id': player_id,
                 'name': player_data['name'],
-                'unread': 0,
+                'unread': unread_count,
                 'type': 'player'
             })
         
@@ -316,7 +338,6 @@ def handle_get_contacts(data):
                 if recipient_id == 'master':
                     continue
                 
-                # Criar par ordenado para evitar duplicatas
                 pair = tuple(sorted([sender_id, recipient_id]))
                 if pair not in seen_pairs:
                     seen_pairs.add(pair)
@@ -325,27 +346,31 @@ def handle_get_contacts(data):
                     player2 = active_sessions[session_id]['players'].get(pair[1], {})
                     
                     if player1 and player2:
+                        conversation_id = f"{pair[0]}_{pair[1]}"
+                        unread_count = unread_data.get(f"{user_id}_{conversation_id}", 0)
                         contacts.append({
-                            'id': f"{pair[0]}_{pair[1]}",
+                            'id': conversation_id,
                             'name': f"{player1['name']} ↔ {player2['name']}",
-                            'unread': 0,
+                            'unread': unread_count,
                             'type': 'conversation'
                         })
     else:
         # JOGADOR: Ver mestre e outros jogadores
+        unread_count = unread_data.get(f"{user_id}_master", 0)
         contacts.append({
             'id': 'master',
             'name': '👑 Mestre',
-            'unread': 0,
+            'unread': unread_count,
             'type': 'player'
         })
         
         for player_id, player_data in active_sessions[session_id]['players'].items():
             if player_id != user_id:
+                unread_count = unread_data.get(f"{user_id}_{player_id}", 0)
                 contacts.append({
                     'id': player_id,
                     'name': player_data['name'],
-                    'unread': 0,
+                    'unread': unread_count,
                     'type': 'player'
                 })
     
@@ -354,13 +379,17 @@ def handle_get_contacts(data):
 
 @socketio.on('send_private_message')
 def handle_send_message(data):
-    """Enviar mensagem privada"""
+    """Enviar mensagem privada e incrementar contador de não lidas"""
     session_id = data.get('session_id')
     sender_id = data.get('sender_id')
     recipient_id = data.get('recipient_id')
     message_text = data.get('message')
     
     init_session(session_id)
+    
+    # Inicializar estrutura de não lidas se não existir
+    if 'unread_messages' not in active_sessions[session_id]:
+        active_sessions[session_id]['unread_messages'] = {}
     
     # Validar remetente
     if sender_id == 'master':
@@ -393,6 +422,12 @@ def handle_send_message(data):
     active_sessions[session_id]['chat_conversations'][sender_id][recipient_id].append(message_data)
     active_sessions[session_id]['chat_conversations'][recipient_id][sender_id].append(message_data)
     
+    # INCREMENTAR contador de não lidas para o destinatário
+    unread_key = f"{recipient_id}_{sender_id}"
+    if unread_key not in active_sessions[session_id]['unread_messages']:
+        active_sessions[session_id]['unread_messages'][unread_key] = 0
+    active_sessions[session_id]['unread_messages'][unread_key] += 1
+    
     # Enviar para o remetente
     emit('new_private_message', message_data, room=request.sid)
     
@@ -410,6 +445,13 @@ def handle_send_message(data):
     if sender_id != 'master' and recipient_id != 'master':
         master_socket = active_sessions[session_id].get('master_socket')
         if master_socket:
+            # Incrementar não lidas para o mestre observando conversa
+            conversation_id = '_'.join(sorted([sender_id, recipient_id]))
+            mestre_unread_key = f"master_{conversation_id}"
+            if mestre_unread_key not in active_sessions[session_id]['unread_messages']:
+                active_sessions[session_id]['unread_messages'][mestre_unread_key] = 0
+            active_sessions[session_id]['unread_messages'][mestre_unread_key] += 1
+            
             emit('new_private_message', message_data, room=master_socket)
     
     print(f'💬 Mensagem de {sender_name} para {recipient_id}')
@@ -446,3 +488,21 @@ def handle_get_conversation(data):
     })
     
     print(f'💬 Conversa carregada: {user_id} <-> {other_user_id}, {len(messages)} mensagens')
+
+@socketio.on('mark_conversation_read')
+def handle_mark_read(data):
+    """Marcar conversa como lida"""
+    session_id = data.get('session_id')
+    user_id = data.get('user_id')
+    other_user_id = data.get('other_user_id')
+    
+    init_session(session_id)
+    
+    if 'unread_messages' not in active_sessions[session_id]:
+        active_sessions[session_id]['unread_messages'] = {}
+    
+    # Zerar contador de não lidas
+    unread_key = f"{user_id}_{other_user_id}"
+    active_sessions[session_id]['unread_messages'][unread_key] = 0
+    
+    print(f'✅ Conversa marcada como lida: {user_id} <-> {other_user_id}')
