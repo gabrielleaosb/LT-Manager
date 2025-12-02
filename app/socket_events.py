@@ -17,7 +17,8 @@ def init_session(session_id):
             'players': {},
             'permissions': {},
             'chat_conversations': {},
-            'master_socket': None
+            'master_socket': None,
+            'fog_areas': []
         }
 
 @socketio.on('update_grid_settings')
@@ -79,6 +80,10 @@ def handle_join_session(data):
         'drawings': session_state['drawings']
     })
 
+    emit('fog_areas_sync', {
+    'fog_areas': session_state.get('fog_areas', [])
+    })
+
     grid_settings = session_state.get('grid_settings', {
     'enabled': True,
     'size': 50,
@@ -119,6 +124,10 @@ def handle_player_join(data):
         'entities': session_state['entities'],
         'tokens': session_state['tokens'],
         'drawings': session_state['drawings']
+    })
+
+    emit('fog_areas_sync', {
+    'fog_areas': session_state.get('fog_areas', [])
     })
 
     grid_settings = session_state.get('grid_settings', {
@@ -539,3 +548,79 @@ def handle_mark_read(data):
     active_sessions[session_id]['unread_messages'][unread_key] = 0
     
     print(f'✅ Conversa marcada como lida: {user_id} <-> {other_user_id}')
+
+# ==================
+# FOG OF WAR
+# ==================
+@socketio.on('add_fog_area')
+def handle_add_fog_area(data):
+    session_id = data.get('session_id')
+    fog_area = data.get('fog_area')
+    
+    init_session(session_id)
+    
+    if 'fog_areas' not in active_sessions[session_id]:
+        active_sessions[session_id]['fog_areas'] = []
+    
+    active_sessions[session_id]['fog_areas'].append(fog_area)
+    
+    # Broadcast para TODA A SALA
+    emit('fog_areas_sync', {
+        'fog_areas': active_sessions[session_id]['fog_areas']
+    }, room=session_id, include_self=True)
+    
+    print(f'🌫️ Fog area adicionada na sessão {session_id}')
+
+@socketio.on('delete_fog_area')
+def handle_delete_fog_area(data):
+    session_id = data.get('session_id')
+    fog_id = data.get('fog_id')
+    
+    init_session(session_id)
+    
+    if 'fog_areas' not in active_sessions[session_id]:
+        active_sessions[session_id]['fog_areas'] = []
+    
+    active_sessions[session_id]['fog_areas'] = [
+        f for f in active_sessions[session_id]['fog_areas'] 
+        if f['id'] != fog_id
+    ]
+    
+    emit('fog_areas_sync', {
+        'fog_areas': active_sessions[session_id]['fog_areas']
+    }, room=session_id, include_self=True)
+    
+    print(f'🌫️ Fog area removida na sessão {session_id}')
+
+@socketio.on('clear_all_fog')
+def handle_clear_all_fog(data):
+    session_id = data.get('session_id')
+    
+    init_session(session_id)
+    active_sessions[session_id]['fog_areas'] = []
+    
+    emit('fog_areas_sync', {'fog_areas': []}, 
+         room=session_id, include_self=True)
+    
+    print(f'🌫️ Todo fog limpo na sessão {session_id}')
+
+@socketio.on('reveal_fog_area')
+def handle_reveal_fog_area(data):
+    session_id = data.get('session_id')
+    fog_id = data.get('fog_id')
+    
+    init_session(session_id)
+    
+    if 'fog_areas' not in active_sessions[session_id]:
+        return
+    
+    for fog in active_sessions[session_id]['fog_areas']:
+        if fog['id'] == fog_id:
+            fog['revealed'] = True
+            break
+    
+    emit('fog_areas_sync', {
+        'fog_areas': active_sessions[session_id]['fog_areas']
+    }, room=session_id, include_self=True)
+    
+    print(f'🌫️ Fog area revelada: {fog_id}')

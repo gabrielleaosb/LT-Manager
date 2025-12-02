@@ -30,6 +30,15 @@ const canvasContainer = document.querySelector('.canvas-container');
 mapCanvas.width = gridCanvas.width = drawingCanvas.width = CANVAS_WIDTH;
 mapCanvas.height = gridCanvas.height = drawingCanvas.height = CANVAS_HEIGHT;
 
+const fogCanvas = document.getElementById('fogCanvas');
+const fogCtx = fogCanvas.getContext('2d');
+
+fogCanvas.width = CANVAS_WIDTH;
+fogCanvas.height = CANVAS_HEIGHT;
+
+let fogAreas = [];
+let fogOpacity = 0.85;
+
 let maps = [];
 let entities = [];
 let tokens = [];
@@ -244,6 +253,40 @@ socket.on('player_joined', (data) => {
     loadChatContacts();
 });
 
+socket.on('fog_areas_sync', (data) => {
+    console.log('🌫️ [JOGADOR] FOG SYNC recebido:', data);
+    fogAreas = data.fog_areas || [];
+    redrawFog();
+});
+
+// ========== FOG OF WAR ==========
+function redrawFog() {
+    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    if (fogAreas.length === 0) return;
+    
+    // Desenhar névoa completa
+    fogCtx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
+    fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // "Cortar" áreas visíveis
+    fogCtx.globalCompositeOperation = 'destination-out';
+    
+    fogAreas.forEach(area => {
+        if (area.shape === 'rectangle') {
+            fogCtx.fillStyle = 'rgba(255, 255, 255, 1)';
+            fogCtx.fillRect(area.x, area.y, area.width, area.height);
+        } else if (area.shape === 'circle') {
+            fogCtx.fillStyle = 'rgba(255, 255, 255, 1)';
+            fogCtx.beginPath();
+            fogCtx.arc(area.x, area.y, area.radius, 0, Math.PI * 2);
+            fogCtx.fill();
+        }
+    });
+    
+    fogCtx.globalCompositeOperation = 'source-over';
+}
+
 // CHAT
 socket.on('chat_contacts_loaded', (data) => {
     console.log('📋 Contatos carregados:', data);
@@ -435,6 +478,7 @@ function redrawAll() {
         mapCtx.strokeText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
         mapCtx.fillText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
     });
+    redrawFog();
 }
 
 function redrawDrawings() {

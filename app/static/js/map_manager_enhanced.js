@@ -16,6 +16,12 @@ const canvasContainer = document.querySelector('.canvas-container');
 const CANVAS_WIDTH = 2000;
 const CANVAS_HEIGHT = 2000;
 
+const fogCanvas = document.getElementById('fogCanvas');
+const fogCtx = fogCanvas.getContext('2d');
+
+fogCanvas.width = CANVAS_WIDTH;
+fogCanvas.height = CANVAS_HEIGHT;
+
 mapCanvas.width = gridCanvas.width = drawingCanvas.width = CANVAS_WIDTH;
 mapCanvas.height = gridCanvas.height = drawingCanvas.height = CANVAS_HEIGHT;
 
@@ -77,6 +83,14 @@ let loadedImages = new Map();
 
 // Sidebar
 let sidebarCollapsed = false;
+
+// Estado do Fog of War
+let fogAreas = [];
+let fogDrawingMode = false;
+let fogShape = 'rectangle'; // 'rectangle' ou 'circle'
+let fogDrawStart = null;
+let fogCurrentArea = null;
+let fogOpacity = 0.85;
 
 // ==================
 // CENTRALIZAÇÃO E TRANSFORM
@@ -367,6 +381,166 @@ socket.on('drawings_cleared', () => {
     redrawAll();
 });
 
+socket.on('fog_areas_sync', (data) => {
+    console.log('🌫️ FOG SYNC recebido:', data);
+    fogAreas = data.fog_areas || [];
+    redrawFog();
+    renderFogList();
+});
+
+// ==================
+// FOG OF WAR
+// ==================
+function toggleFogMode() {
+    fogDrawingMode = !fogDrawingMode;
+    
+    const btn = document.querySelector('[onclick="toggleFogMode()"]');
+    const indicator = document.getElementById('fogModeIndicator');
+    
+    if (fogDrawingMode) {
+        fogCanvas.classList.add('fog-drawing-mode');
+        if (btn) btn.classList.add('active');
+        if (indicator) {
+            indicator.style.display = 'block';
+            indicator.textContent = `🌫️ Modo Névoa: ${fogShape === 'rectangle' ? 'Retângulo' : 'Círculo'}`;
+        }
+        canvasWrapper.style.cursor = 'crosshair';
+        setTool('select'); // Desativar outras ferramentas
+    } else {
+        fogCanvas.classList.remove('fog-drawing-mode');
+        if (btn) btn.classList.remove('active');
+        if (indicator) indicator.style.display = 'none';
+        canvasWrapper.style.cursor = 'default';
+    }
+}
+
+function setFogShape(shape) {
+    fogShape = shape;
+    document.querySelectorAll('.fog-shape-selector .tool-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    const indicator = document.getElementById('fogModeIndicator');
+    if (indicator && fogDrawingMode) {
+        indicator.textContent = `🌫️ Modo Névoa: ${shape === 'rectangle' ? 'Retângulo' : 'Círculo'}`;
+    }
+}
+
+function setFogOpacity(value) {
+    fogOpacity = parseFloat(value);
+    document.getElementById('fogOpacityValue').textContent = Math.round(fogOpacity * 100) + '%';
+    redrawFog();
+}
+
+function clearAllFog() {
+    if (confirm('Remover toda a névoa do mapa?')) {
+        fogAreas = [];
+        socket.emit('clear_fog_areas', {
+            session_id: SESSION_ID
+        });
+        redrawFog();
+        showToast('Névoa removida!');
+    }
+}
+
+function revealAllMap() {
+    if (confirm('Revelar todo o mapa para os jogadores?')) {
+        clearAllFog();
+    }
+}
+
+function removeFogArea(areaId) {
+    fogAreas = fogAreas.filter(area => area.id !== areaId);
+    socket.emit('update_fog_areas', {
+        session_id: SESSION_ID,
+        fog_areas: fogAreas
+    });
+    redrawFog();
+    renderFogList();
+    showToast('Área de névoa removida');
+}
+
+function redrawFog() {
+    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    if (fogAreas.length === 0) return;
+    
+    // Desenhar névoa completa primeiro
+    fogCtx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
+    fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // "Cortar" as áreas visíveis usando composite operation
+    fogCtx.globalCompositeOperation = 'destination-out';
+    
+    fogAreas.forEach(area => {
+        if (area.shape === 'rectangle') {
+            fogCtx.fillStyle = 'rgba(255, 255, 255, 1)';
+            fogCtx.fillRect(area.x, area.y, area.width, area.height);
+        } else if (area.shape === 'circle') {
+            fogCtx.fillStyle = 'rgba(255, 255, 255, 1)';
+            fogCtx.beginPath();
+            fogCtx.arc(area.x, area.y, area.radius, 0, Math.PI * 2);
+            fogCtx.fill();
+        }
+    });
+    
+    fogCtx.globalCompositeOperation = 'source-over';
+    
+    // Desenhar preview da área atual sendo desenhada
+    if (fogCurrentArea && fogDrawingMode) {
+        fogCtx.strokeStyle = '#3498db';
+        fogCtx.lineWidth = 3;
+        fogCtx.setLineDash([10, 5]);
+        
+        if (fogShape === 'rectangle') {
+            fogCtx.strokeRect(
+                fogCurrentArea.x,
+                fogCurrentArea.y,
+                fogCurrentArea.width,
+                fogCurrentArea.height
+            );
+        } else if (fogShape === 'circle') {
+            fogCtx.beginPath();
+            fogCtx.arc(fogCurrentArea.x, fogCurrentArea.y, fogCurrentArea.radius, 0, Math.PI * 2);
+            fogCtx.stroke();
+        }
+        
+        fogCtx.setLineDash([]);
+    }
+}
+
+function renderFogList() {
+    const list = document.getElementById('fogAreasList');
+    if (!list) return;
+    
+    list.innerHTML = '';
+    
+    if (fogAreas.length === 0) {
+        list.innerHTML = '<div class="empty-state">Nenhuma área revelada</div>';
+        return;
+    }
+    
+    fogAreas.forEach((area, index) => {
+        const item = document.createElement('div');
+        item.className = 'item-card';
+        
+        const shapeIcon = area.shape === 'rectangle' ? '⬜' : '🔵';
+        const shapeName = area.shape === 'rectangle' ? 'Retângulo' : 'Círculo';
+        
+        item.innerHTML = `
+            <div style="flex: 1;">
+                <div class="item-name">${shapeIcon} ${shapeName} #${index + 1}</div>
+            </div>
+            <div class="item-actions">
+                <button class="item-action-btn" onclick="removeFogArea('${area.id}'); event.stopPropagation();">🗑️</button>
+            </div>
+        `;
+        
+        list.appendChild(item);
+    });
+}
+
 // CHAT - Socket Handlers CORRIGIDOS (substitua no início do arquivo, parte 1)
 
 socket.on('chat_contacts_loaded', (data) => {
@@ -607,6 +781,7 @@ function redrawAll() {
             }
         }
     });
+    redrawFog();
 }
 
 function redrawDrawings() {
@@ -918,6 +1093,106 @@ drawingCanvas.addEventListener('mouseup', () => {
 
 drawingCanvas.addEventListener('mouseleave', () => {
     isDrawing = false;
+});
+
+// ==================
+// FOG CANVAS EVENTS
+// ==================
+fogCanvas.addEventListener('mousedown', (e) => {
+    if (!fogDrawingMode) return;
+    
+    const pos = getMousePos(e);
+    fogDrawStart = pos;
+    
+    if (fogShape === 'rectangle') {
+        fogCurrentArea = {
+            shape: 'rectangle',
+            x: pos.x,
+            y: pos.y,
+            width: 0,
+            height: 0
+        };
+    } else if (fogShape === 'circle') {
+        fogCurrentArea = {
+            shape: 'circle',
+            x: pos.x,
+            y: pos.y,
+            radius: 0
+        };
+    }
+});
+
+fogCanvas.addEventListener('mousemove', (e) => {
+    if (!fogDrawingMode || !fogDrawStart || !fogCurrentArea) return;
+    
+    const pos = getMousePos(e);
+    
+    if (fogShape === 'rectangle') {
+        fogCurrentArea.width = pos.x - fogDrawStart.x;
+        fogCurrentArea.height = pos.y - fogDrawStart.y;
+    } else if (fogShape === 'circle') {
+        const dx = pos.x - fogDrawStart.x;
+        const dy = pos.y - fogDrawStart.y;
+        fogCurrentArea.radius = Math.sqrt(dx * dx + dy * dy);
+    }
+    
+    redrawFog();
+});
+
+fogCanvas.addEventListener('mouseup', () => {
+    if (!fogDrawingMode || !fogCurrentArea) return;
+    
+    // Normalizar retângulo se necessário
+    if (fogShape === 'rectangle') {
+        if (fogCurrentArea.width < 0) {
+            fogCurrentArea.x += fogCurrentArea.width;
+            fogCurrentArea.width = Math.abs(fogCurrentArea.width);
+        }
+        if (fogCurrentArea.height < 0) {
+            fogCurrentArea.y += fogCurrentArea.height;
+            fogCurrentArea.height = Math.abs(fogCurrentArea.height);
+        }
+        
+        // Validar tamanho mínimo
+        if (fogCurrentArea.width < 20 || fogCurrentArea.height < 20) {
+            fogCurrentArea = null;
+            fogDrawStart = null;
+            redrawFog();
+            return;
+        }
+    } else if (fogShape === 'circle') {
+        if (fogCurrentArea.radius < 10) {
+            fogCurrentArea = null;
+            fogDrawStart = null;
+            redrawFog();
+            return;
+        }
+    }
+    
+    // Adicionar ID único
+    fogCurrentArea.id = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    
+    fogAreas.push(fogCurrentArea);
+    
+    socket.emit('update_fog_areas', {
+        session_id: SESSION_ID,
+        fog_areas: fogAreas
+    });
+    
+    fogCurrentArea = null;
+    fogDrawStart = null;
+    
+    redrawFog();
+    renderFogList();
+    showToast('Área revelada adicionada!');
+});
+
+fogCanvas.addEventListener('mouseleave', () => {
+    if (fogDrawingMode && fogCurrentArea) {
+        fogCurrentArea = null;
+        fogDrawStart = null;
+        redrawFog();
+    }
 });
 
 function eraseDrawingsAt(x, y) {
