@@ -15,6 +15,7 @@ let currentChatContact = null;
 let currentConversation = [];
 let chatMinimized = false;
 let chatCollapsed = false;
+let conversationsCache = {};
 
 // Canvas
 const mapCanvas = document.getElementById('mapCanvas');
@@ -252,17 +253,51 @@ socket.on('chat_contacts_loaded', (data) => {
 socket.on('conversation_loaded', (data) => {
     console.log('💬 Conversa carregada:', data);
     currentConversation = data.messages || [];
+    
+    // Salvar no cache
+    if (data.other_user_id) {
+        conversationsCache[data.other_user_id] = [...currentConversation];
+        console.log(`💾 Cache atualizado para ${data.other_user_id}:`, currentConversation.length, 'mensagens');
+    }
+    
     renderConversation();
 });
 
 socket.on('new_private_message', (data) => {
     console.log('💬 Nova mensagem:', data);
     
-    // Se a mensagem é da conversa atual, adiciona
+    // Verificar se a mensagem já existe para evitar duplicação
+    const messageExists = (messages, msgData) => {
+        return messages.some(m => m.id === msgData.id);
+    };
+    
+    // Se a mensagem é da conversa atual, adiciona (sem duplicar)
     if (currentChatContact && 
         (data.sender_id === currentChatContact || data.recipient_id === currentChatContact)) {
-        currentConversation.push(data);
-        renderConversation();
+        if (!messageExists(currentConversation, data)) {
+            currentConversation.push(data);
+            conversationsCache[currentChatContact] = [...currentConversation];
+            renderConversation();
+        }
+    }
+    
+    // Atualizar cache de outras conversas (sem duplicar)
+    if (data.sender_id !== playerId && data.sender_id) {
+        if (!conversationsCache[data.sender_id]) {
+            conversationsCache[data.sender_id] = [];
+        }
+        if (!messageExists(conversationsCache[data.sender_id], data)) {
+            conversationsCache[data.sender_id].push(data);
+        }
+    }
+    
+    if (data.recipient_id !== playerId && data.recipient_id) {
+        if (!conversationsCache[data.recipient_id]) {
+            conversationsCache[data.recipient_id] = [];
+        }
+        if (!messageExists(conversationsCache[data.recipient_id], data)) {
+            conversationsCache[data.recipient_id].push(data);
+        }
     }
     
     loadChatContacts();
@@ -695,7 +730,7 @@ function renderChatContacts() {
     console.log('📋 Renderizando contatos:', chatContacts);
     
     if (chatContacts.length === 0) {
-        contactsList.innerHTML = '<div class="empty-state">Nenhum jogador conectado</div>';
+        contactsList.innerHTML = '<div class="empty-state">Nenhum contato disponível</div>';
         return;
     }
     
@@ -741,10 +776,10 @@ function openConversation(contactId) {
     
     currentChatContact = contactId;
     
-    // Marcar como lida no servidor
+    // Marcar como lida no servidor - CORRIGIDO: usar playerId
     socket.emit('mark_conversation_read', {
         session_id: SESSION_ID,
-        user_id: playerId,
+        user_id: playerId,  // ✅ USAR playerId em vez de 'master'
         other_user_id: contactId
     });
     
@@ -769,7 +804,7 @@ function openConversation(contactId) {
         console.log(`🌐 Carregando do servidor: ${contactId}`);
         socket.emit('get_conversation', {
             session_id: SESSION_ID,
-            user_id: 'master',
+            user_id: playerId,  // ✅ USAR playerId em vez de 'master'
             other_user_id: contactId
         });
         
