@@ -1,5 +1,5 @@
 from . import app
-from flask import render_template, jsonify, request, redirect, url_for
+from flask import render_template, jsonify, request, redirect, url_for # type: ignore
 import uuid
 
 
