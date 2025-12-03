@@ -622,6 +622,7 @@ function redrawDrawings() {
 }
 
 // ========== MOUSE - PAN E MOVER TOKENS ==========
+// ========== MOUSE - PAN E MOVER TOKENS ==========
 function getMousePos(e) {
     const rect = canvasWrapper.getBoundingClientRect();
     const scaleX = CANVAS_WIDTH / rect.width;
@@ -647,20 +648,12 @@ function findTokenAt(x, y) {
 canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
     
-    if (e.button === 1) {
-        e.preventDefault();
-        middleMousePressed = true;
-        isPanning = true;
-        startPanX = e.clientX - panX;
-        startPanY = e.clientY - panY;
-        canvasWrapper.classList.add('grabbing');
-        return;
-    }
-
+    // Se está em modo desenho, não fazer nada aqui
     if (permissions.draw && (drawTool === 'draw' || drawTool === 'erase')) {
         return;
     }
     
+    // Tentar pegar token primeiro
     const token = findTokenAt(pos.x, pos.y);
     if (token) {
         draggingToken = token;
@@ -670,19 +663,22 @@ canvasWrapper.addEventListener('mousedown', (e) => {
         return;
     }
     
+    // Se não pegou token, fazer pan
     isPanning = true;
     startPanX = e.clientX - panX;
     startPanY = e.clientY - panY;
-    canvasWrapper.classList.add('grabbing');
+    canvasWrapper.style.cursor = 'grabbing';
 });
 
 canvasWrapper.addEventListener('mousemove', (e) => {
     const pos = getMousePos(e);
     
+    // Se está em modo desenho, não fazer nada aqui
     if (permissions.draw && (drawTool === 'draw' || drawTool === 'erase')) {
         return;
     }
     
+    // Se está arrastando token
     if (draggingToken) {
         draggingToken.x = pos.x - dragOffsetX;
         draggingToken.y = pos.y - dragOffsetY;
@@ -690,23 +686,24 @@ canvasWrapper.addEventListener('mousemove', (e) => {
         return;
     }
     
+    // Se está fazendo pan
     if (isPanning) {
         panX = e.clientX - startPanX;
         panY = e.clientY - startPanY;
         applyTransform();
+        return;
+    }
+    
+    // Hover: mostrar cursor apropriado
+    const token = findTokenAt(pos.x, pos.y);
+    if (token) {
+        canvasWrapper.style.cursor = 'grab';
+    } else {
+        canvasWrapper.style.cursor = 'default';
     }
 });
 
 canvasWrapper.addEventListener('mouseup', () => {
-
-    if (e.button === 1) {
-        middleMousePressed = false;
-        isPanning = false;
-        canvasWrapper.classList.remove('grabbing');
-        canvasWrapper.style.cursor = 'grab';
-        return;
-    }
-
     if (draggingToken) {
         const tokensCopy = JSON.parse(JSON.stringify(tokens));
         
@@ -729,8 +726,20 @@ canvasWrapper.addEventListener('mouseup', () => {
     }
     
     isPanning = false;
-    canvasWrapper.classList.remove('grabbing');
-    canvasWrapper.style.cursor = 'grab';
+    
+    // Restaurar cursor padrão
+    if (permissions.draw && drawTool === 'draw') {
+        canvasWrapper.style.cursor = 'crosshair';
+    } else if (permissions.draw && drawTool === 'erase') {
+        canvasWrapper.style.cursor = 'not-allowed';
+    } else {
+        canvasWrapper.style.cursor = 'default';
+    }
+});
+
+canvasWrapper.addEventListener('mouseleave', () => {
+    isPanning = false;
+    draggingToken = null;
 });
 
 // ========== DESENHO ==========
