@@ -1,5 +1,5 @@
 from app import app, socketio
-from pyngrok import ngrok
+from pyngrok import ngrok # type: ignore
 import os
 
 def start_ngrok():
@@ -42,11 +42,11 @@ if __name__ == "__main__":
         
         socketio.run(
             app, 
-            debug=False,  # Desativa debug para evitar reinicializações
-            allow_unsafe_werkzeug=True, 
+            debug=False,  
             host='0.0.0.0', 
             port=5000,
-            use_reloader=False  # IMPORTANTE: Evita reiniciar e criar nova sessão ngrok
+            use_reloader=False,
+            log_output=True
         )
         
     except KeyboardInterrupt:

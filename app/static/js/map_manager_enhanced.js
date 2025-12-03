@@ -26,18 +26,17 @@ fogCanvas.height = CANVAS_HEIGHT;
 mapCanvas.width = gridCanvas.width = drawingCanvas.width = CANVAS_WIDTH;
 mapCanvas.height = gridCanvas.height = drawingCanvas.height = CANVAS_HEIGHT;
 
-// ✅ INICIALIZAR VARIÁVEIS GLOBAIS CORRETAMENTE
-let maps = [];           // ✅ ADICIONADO
-let entities = [];       // ✅ ADICIONADO
+let maps = [];          
+let entities = [];      
 let images = [];
 let tokens = [];
 let drawings = [];
 let players = [];
-let scenes = [];         // ✅ ADICIONADO - Inicializar scenes ANTES de usar
+let scenes = [];         
 
-// FOG OF WAR - ✅ INICIALIZAR CORRETAMENTE
-let fogAreas = [];       // ✅ ADICIONADO - Array de áreas visíveis
-let fogOpacity = 1.0;    // ✅ ADICIONADO
+// FOG OF WAR - 
+let fogAreas = [];       
+let fogOpacity = 1.0;    
 let fogBrushSize = 100;
 let fogBrushShape = 'circle';
 let fogDrawingActive = false;
@@ -110,6 +109,148 @@ const MAX_HISTORY = 50;
 
 // Scene Manager
 let currentSceneId = null;  // ✅ ADICIONADO
+
+
+// ==========================================
+// AUTO-SAVE E PERSISTÊNCIA
+// ==========================================
+
+let autoSaveInterval = null;
+
+// ==========================================
+// DEBUG: MOSTRAR INFO DA SESSÃO
+// ==========================================
+console.log('🔍 SESSION_ID atual:', SESSION_ID);
+console.log('🔍 Verificando localStorage para:', SESSION_ID);
+
+const savedState = localStorage.getItem('rpg_session_state_' + SESSION_ID);
+if (savedState) {
+    console.log('✅ DADOS ENCONTRADOS no localStorage');
+    const parsed = JSON.parse(savedState);
+    console.log('📊 Dados salvos:', {
+        images: parsed.images?.length || 0,
+        tokens: parsed.tokens?.length || 0,
+        drawings: parsed.drawings?.length || 0,
+        timestamp: new Date(parsed.timestamp).toLocaleString()
+    });
+} else {
+    console.log('❌ NENHUM DADO no localStorage para esta sessão');
+}
+
+// Função de auto-save (executa a cada 10 segundos)]
+
+let isSaving = false;
+
+function startAutoSave() {
+    if (autoSaveInterval) {
+        clearInterval(autoSaveInterval);
+    }
+    
+    // ✅ Auto-save a cada 30 segundos (não 10!)
+    autoSaveInterval = setInterval(() => {
+        saveToDatabaseAsync();
+    }, 30000);
+    
+    console.log('✅ Auto-save ativado (30s)');
+}
+
+async function saveToDatabaseAsync() {
+    if (!SESSION_ID || isSaving) {
+        console.log('⏳ Salvamento já em andamento, pulando...');
+        return;
+    }
+    
+    isSaving = true;
+    console.log('💾 Salvando no banco de dados...');
+    
+    try {
+        const state = {
+            images: images,
+            tokens: tokens,
+            drawings: drawings,
+            fogImage: fogCanvas.toDataURL('image/jpeg', 0.7)  // ✅ Qualidade menor
+        };
+        
+        // Salvar estado
+        await PersistenceManager.saveSessionState(SESSION_ID, state);
+        
+        // Salvar cenas
+        if (scenes && scenes.length > 0) {
+            await PersistenceManager.saveScenes(SESSION_ID, scenes);
+        }
+        
+        // Salvar grid
+        await PersistenceManager.saveGridSettings(SESSION_ID, {
+            enabled: gridEnabled,
+            size: gridSize,
+            color: gridColor,
+            lineWidth: gridLineWidth
+        });
+        
+        console.log('✅ Tudo salvo no banco de dados');
+        
+    } catch (error) {
+        console.error('❌ Erro ao salvar:', error);
+        showToast('❌ Erro ao salvar no banco');
+    } finally {
+        isSaving = false;
+    }
+}
+
+async function loadFromDatabaseAsync() {
+    if (!SESSION_ID) return false;
+    
+    console.log('📂 Carregando do banco de dados...');
+    
+    try {
+        // Carregar estado
+        const savedState = await PersistenceManager.loadSessionState(SESSION_ID);
+        
+        if (savedState) {
+            images = savedState.images || [];
+            tokens = savedState.tokens || [];
+            drawings = savedState.drawings || [];
+            
+            if (savedState.fogImage) {
+                loadFogState(savedState.fogImage);
+            }
+            
+            preloadAllImages();
+            renderImageList();
+            renderTokenList();
+            
+            setTimeout(() => {
+                redrawAll();
+                redrawDrawings();
+            }, 200);
+            
+            showToast('✅ Sessão restaurada do banco!');
+        }
+        
+        // Carregar cenas
+        const savedScenes = await PersistenceManager.loadScenes(SESSION_ID);
+        if (savedScenes.length > 0) {
+            scenes = savedScenes;
+            renderScenesList();
+        }
+        
+        // Carregar grid
+        const savedGrid = await PersistenceManager.loadGridSettings(SESSION_ID);
+        if (savedGrid) {
+            gridEnabled = savedGrid.enabled;
+            gridSize = savedGrid.size;
+            gridColor = savedGrid.color;
+            gridLineWidth = savedGrid.lineWidth;
+            drawGrid();
+        }
+        
+        return !!savedState;
+        
+    } catch (error) {
+        console.error('❌ Erro ao carregar:', error);
+        return false;
+    }
+}
 
 // ==================
 // CENTRALIZAÇÃO E TRANSFORM
@@ -307,21 +448,38 @@ function preloadAllImages() {
 
 socket.on('connect', () => {
     console.log('✅ Conectado ao servidor');
-    socket.emit('join_session', { session_id: SESSION_ID });
+    
+    loadFromDatabaseAsync().then(wasRestored => {
+        if (wasRestored) {
+            console.log('♻️ Estado restaurado do banco de dados');
+        }
+        
+        socket.emit('join_session', { session_id: SESSION_ID });
+        
+        startAutoSave();
+    });
 });
 
 socket.on('session_state', (data) => {
-    console.log('📦 Estado da sessão recebido:', data);
+    console.log('📦 Estado da sessão recebido do servidor:', data);
     
-    // ✅ CORRIGIDO - Separar maps e entities corretamente
+    // ✅ VERIFICAR SE JÁ TEMOS DADOS LOCAIS
+    const localState = PersistenceManager.loadSessionState(SESSION_ID);
+    
+    if (localState && localState.images && localState.images.length > 0) {
+        console.log('⚠️ Já temos dados locais, ignorando estado vazio do servidor');
+        // Não sobrescrever com estado vazio do servidor
+        return;
+    }
+    
+    // Se não tem dados locais, usar dados do servidor
     maps = data.maps || [];
     entities = data.entities || [];
-    images = [...maps, ...entities];  // ✅ Combinar depois
+    images = [...maps, ...entities];
     
     tokens = data.tokens || [];
     drawings = data.drawings || [];
     
-    // ✅ CORRIGIDO - Inicializar scenes
     scenes = data.scenes || [];
     renderScenesList();
     console.log('🎬 Cenas carregadas:', scenes.length);
@@ -1346,54 +1504,85 @@ function addImage() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = (e) => {
+    input.onchange = async (e) => {  // ✅ ASYNC
         const file = e.target.files[0];
         if (!file) return;
         
         const name = prompt('Nome da imagem:', file.name.replace(/\.(jpg|jpeg|png|gif|webp)$/i, ''));
         if (!name) return;
         
-        showToast('Carregando imagem...');
+        showToast('🔄 Carregando e comprimindo imagem...');
         
         const reader = new FileReader();
-        reader.onload = (ev) => {
+        reader.onload = async (ev) => {  // ✅ ASYNC
             const img = new Image();
-            img.onload = () => {
-                let width = 400;
-                let height = 400;
-                
-                if (img.width > img.height) {
-                    height = (img.height / img.width) * width;
-                } else {
-                    width = (img.width / img.height) * height;
+            img.onload = async () => {  // ✅ ASYNC
+                try {
+                    // ✅ COMPRIMIR IMAGEM ANTES DE SALVAR
+                    const originalBase64 = ev.target.result;
+                    console.log('📦 Comprimindo imagem...');
+                    
+                    const compressedBase64 = await ImageCompressor.compress(
+                        originalBase64,
+                        1920,  // Max width
+                        1920,  // Max height
+                        0.85   // Qualidade 85%
+                    );
+                    
+                    // Calcular dimensões proporcionais para o canvas
+                    let width = 400;
+                    let height = 400;
+                    
+                    if (img.width > img.height) {
+                        height = (img.height / img.width) * width;
+                    } else {
+                        width = (img.width / img.height) * height;
+                    }
+                    
+                    const newImage = {
+                        id: 'img_' + Date.now(),
+                        name: name,
+                        x: CANVAS_WIDTH / 2 - width / 2,
+                        y: CANVAS_HEIGHT / 2 - height / 2,
+                        width: width,
+                        height: height,
+                        image: compressedBase64  // ✅ USAR IMAGEM COMPRIMIDA
+                    };
+                    
+                    // Criar nova imagem para carregar a comprimida
+                    const compressedImg = new Image();
+                    compressedImg.onload = () => {
+                        loadedImages.set(newImage.id, compressedImg);
+                        images.push(newImage);
+                        
+                        socket.emit('add_entity', {
+                            session_id: SESSION_ID,
+                            entity: newImage
+                        });
+                        
+                        redrawAll();
+                        renderImageList();
+                        showToast(`✅ Imagem "${name}" adicionada e comprimida!`);
+                        saveState('Adicionar Imagem');
+                        
+                        // ✅ SALVAR AUTOMATICAMENTE
+                        saveToDatabaseAsync();
+                    };
+                    compressedImg.onerror = () => {
+                        showToast('❌ Erro ao carregar imagem comprimida');
+                    };
+                    compressedImg.src = compressedBase64;
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao comprimir:', error);
+                    showToast('❌ Erro ao processar imagem');
                 }
-                
-                const newImage = {
-                    id: 'img_' + Date.now(),
-                    name: name,
-                    x: CANVAS_WIDTH / 2 - width / 2,
-                    y: CANVAS_HEIGHT / 2 - height / 2,
-                    width: width,
-                    height: height,
-                    image: ev.target.result
-                };
-                
-                loadedImages.set(newImage.id, img);
-                images.push(newImage);
-                
-                socket.emit('add_entity', {
-                    session_id: SESSION_ID,
-                    entity: newImage
-                });
-                
-                redrawAll();
-                renderImageList();
-                showToast(`Imagem "${name}" adicionada!`);
-                saveState('Adicionar Imagem');
             };
+            
             img.onerror = () => {
-                showToast('Erro ao carregar imagem');
+                showToast('❌ Erro ao carregar imagem');
             };
+            
             img.src = ev.target.result;
         };
         reader.readAsDataURL(file);
@@ -1421,43 +1610,72 @@ function createToken() {
     }
     
     if (imageInput.files.length > 0) {
-        showToast('Carregando token...');
+        showToast('🔄 Carregando e comprimindo token...');
         
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = async function(e) {  // ✅ ASYNC
             const img = new Image();
-            img.onload = () => {
-                const newToken = {
-                    id: 'token_' + Date.now(),
-                    name: name,
-                    x: CANVAS_WIDTH / 2,
-                    y: CANVAS_HEIGHT / 2,
-                    image: e.target.result,
-                    style: style
-                };
-                
-                loadedImages.set(newToken.id, img);
-                
-                tokens.push(newToken);
-                renderTokenList();
-                redrawAll();
-                
-                socket.emit('token_update', {
-                    session_id: SESSION_ID,
-                    tokens: tokens
-                });
-                
-                closeTokenModal();
-                showToast(`Token "${name}" adicionado!`);
-                saveState('Adicionar Token');
+            img.onload = async () => {  // ✅ ASYNC
+                try {
+                    // ✅ COMPRIMIR TOKEN (menor que imagens de mapa)
+                    const originalBase64 = e.target.result;
+                    console.log('📦 Comprimindo token...');
+                    
+                    const compressedBase64 = await ImageCompressor.compress(
+                        originalBase64,
+                        400,   // Tokens menores
+                        400,
+                        0.8    // Qualidade 80%
+                    );
+                    
+                    const newToken = {
+                        id: 'token_' + Date.now(),
+                        name: name,
+                        x: CANVAS_WIDTH / 2,
+                        y: CANVAS_HEIGHT / 2,
+                        image: compressedBase64,  // ✅ USAR COMPRIMIDO
+                        style: style
+                    };
+                    
+                    // Carregar imagem comprimida
+                    const compressedImg = new Image();
+                    compressedImg.onload = () => {
+                        loadedImages.set(newToken.id, compressedImg);
+                        
+                        tokens.push(newToken);
+                        renderTokenList();
+                        redrawAll();
+                        
+                        socket.emit('token_update', {
+                            session_id: SESSION_ID,
+                            tokens: tokens
+                        });
+                        
+                        closeTokenModal();
+                        showToast(`✅ Token "${name}" adicionado e comprimido!`);
+                        saveState('Adicionar Token');
+                        
+                        // ✅ SALVAR AUTOMATICAMENTE
+                       saveToDatabaseAsync();
+                    };
+                    compressedImg.onerror = () => {
+                        showToast('❌ Erro ao carregar token comprimido');
+                    };
+                    compressedImg.src = compressedBase64;
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao comprimir token:', error);
+                    showToast('❌ Erro ao processar imagem do token');
+                }
             };
             img.onerror = () => {
-                showToast('Erro ao carregar imagem do token');
+                showToast('❌ Erro ao carregar imagem do token');
             };
             img.src = e.target.result;
         };
         reader.readAsDataURL(imageInput.files[0]);
     } else {
+        // Token sem imagem (apenas cor)
         const newToken = {
             id: 'token_' + Date.now(),
             name: name,
@@ -1477,7 +1695,7 @@ function createToken() {
         });
         
         closeTokenModal();
-        showToast(`Token "${name}" adicionado!`);
+        showToast(`✅ Token "${name}" adicionado!`);
     }
 }
 
@@ -2046,6 +2264,39 @@ function toggleTokenPermission(playerId, tokenId) {
 function closeTokenPermissionsModal() {
     document.getElementById('tokenPermissionsModal').classList.remove('show');
 }
+
+// Storage
+
+function updateStorageIndicator() {
+    const size = ImageCompressor.getLocalStorageSize();
+    const indicator = document.getElementById('storageSize');
+    const container = document.getElementById('storageIndicator');
+    
+    if (indicator) {
+        indicator.textContent = size + ' MB';
+        
+        // Mudar cor baseado no uso
+        const sizeNum = parseFloat(size);
+        if (sizeNum > 4.5) {
+            container.style.borderColor = '#e74c3c';
+            container.style.background = 'rgba(231,76,60,0.2)';
+        } else if (sizeNum > 3) {
+            container.style.borderColor = '#f39c12';
+            container.style.background = 'rgba(243,156,18,0.2)';
+        } else {
+            container.style.borderColor = 'rgba(155,89,182,0.4)';
+            container.style.background = 'rgba(155,89,182,0.2)';
+        }
+    }
+}
+
+// Atualizar a cada 5 segundos
+setInterval(updateStorageIndicator, 5000);
+
+// Atualizar na primeira carga
+document.addEventListener('DOMContentLoaded', () => {
+    updateStorageIndicator();
+});
 
 // ==================
 // PAINÉIS
@@ -2783,6 +3034,19 @@ function updateUndoRedoButtons() {
     }
 }
 
+// Limpar Cache
+function clearLocalCache() {
+    if (confirm('⚠️ Limpar TODOS os dados salvos localmente?\n\nIsso removerá:\n- Estado da sessão\n- Cenas salvas\n- Histórico de ações\n\nOs dados no servidor serão mantidos.')) {
+        PersistenceManager.clearSession(SESSION_ID);
+        showToast('🗑️ Cache local limpo!');
+        
+        // Recarregar página
+        setTimeout(() => {
+            location.reload();
+        }, 1500);
+    }
+}
+
 // Atalhos de teclado
 document.addEventListener('keydown', (e) => {
     // Ctrl+Z = Undo
@@ -2806,6 +3070,28 @@ setTimeout(() => {
 
 renderImageList();
 renderTokenList();
+
+// ✅ SALVAR ANTES DE SAIR
+window.addEventListener('beforeunload', (e) => {
+    console.log('💾 Salvando antes de sair...');
+    
+    fetch('/api/session/save', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            session_id: SESSION_ID,
+            data: {
+                images: images,
+                tokens: tokens,
+                drawings: drawings,
+                fogImage: fogCanvas.toDataURL('image/jpeg', 0.7)
+            }
+        }),
+        keepalive: true  
+    });
+});
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Inicializando Map Manager...');

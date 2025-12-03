@@ -24,11 +24,25 @@
         <button class="btn" onclick="openSceneManager()">🎬 Cenas</button>
         <button class="btn" onclick="copyShareLink()">🔗 Copiar Link</button>
         <button class="btn btn-danger" onclick="clearAll()">🗑️ Limpar Tudo</button>
+        <button class="btn" onclick="clearLocalCache()" title="Limpar cache local">🗑️ Limpar Cache</button>
         <div style="display: flex; gap: 5px; align-items: center;">
             <button class="btn" onclick="zoom(-0.1)" title="Zoom Out">🔍−</button>
             <span style="color: #fff; font-size: 0.9rem; min-width: 50px; text-align: center;" id="zoomLevel">50%</span>
             <button class="btn" onclick="zoom(0.1)" title="Zoom In">🔍+</button>
             <button class="btn" onclick="currentScale = 1; applyTransform(); document.getElementById('zoomLevel').textContent = '100%';" title="Reset Zoom">↺</button>
+        </div>
+            <div id="storageIndicator" style="
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(155,89,182,0.2);
+            border: 2px solid rgba(155,89,182,0.4);
+            border-radius: 6px;
+            font-size: 0.85rem;
+        ">
+            <span>💾</span>
+            <span id="storageSize">0 MB</span>
         </div>
     </div>
 </header>
@@ -433,6 +447,9 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="{{ url_for('static', filename='js/image_compressor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/persistence.js') }}"></script>
 <script defer src="{{ url_for('static', filename='js/map_manager_enhanced.js') }}"></script>
+
 </body>
 </html>

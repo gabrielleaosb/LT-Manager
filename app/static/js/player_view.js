@@ -83,6 +83,38 @@ let playerHistory = [];
 let playerHistoryIndex = -1;
 const MAX_PLAYER_HISTORY = 30;
 
+
+// ==========================================
+// PERSISTÊNCIA DO JOGADOR
+// ==========================================
+
+function savePlayerSession() {
+    if (!SESSION_ID || !playerId) return;
+    
+    const playerData = {
+        playerId: playerId,
+        playerName: playerName,
+        timestamp: Date.now()
+    };
+    
+    localStorage.setItem('rpg_player_' + SESSION_ID, JSON.stringify(playerData));
+    console.log('💾 Dados do jogador salvos');
+}
+
+function loadPlayerSession() {
+    if (!SESSION_ID) return null;
+    
+    const data = localStorage.getItem('rpg_player_' + SESSION_ID);
+    
+    if (data) {
+        const parsed = JSON.parse(data);
+        console.log('✅ Dados do jogador carregados:', parsed.playerName);
+        return parsed;
+    }
+    
+    return null;
+}
+
 // ========== CENTRALIZAÇÃO E TRANSFORM ==========
 function centerCanvas() {
     const containerRect = canvasContainer.getBoundingClientRect();
@@ -165,6 +197,7 @@ document.getElementById('loginBtn').addEventListener('click', () => {
     
     playerName = name;
     playerId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    savePlayerSession();
     
     document.getElementById('playerNameDisplay').textContent = playerName;
     document.getElementById('loginOverlay').classList.add('hidden');
@@ -1294,6 +1327,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    const savedPlayer = loadPlayerSession();
+    
+    if (savedPlayer && savedPlayer.playerName) {
+        // Auto-preencher nome
+        const input = document.getElementById('playerNameInput');
+        if (input) {
+            input.value = savedPlayer.playerName;
+            input.focus();
+        }
+        
+        showToast('✅ Bem-vindo de volta, ' + savedPlayer.playerName + '!');
+    }
 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1302,6 +1347,18 @@ document.addEventListener('DOMContentLoaded', () => {
         chatContainer.classList.add('minimized');
         const icon = document.getElementById('chatMinimizeIcon');
         if (icon) icon.textContent = '▲';
+    }
+    const savedPlayer = loadPlayerSession();
+    
+    if (savedPlayer && savedPlayer.playerName) {
+        // Auto-preencher nome
+        const input = document.getElementById('playerNameInput');
+        if (input) {
+            input.value = savedPlayer.playerName;
+            input.focus();
+        }
+        
+        showToast('✅ Bem-vindo de volta, ' + savedPlayer.playerName + '!');
     }
 });
 
