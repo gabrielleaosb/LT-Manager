@@ -317,24 +317,31 @@ socket.on('drawings_cleared', () => {
 });
 
 function loadFogStatePlayer(imageData) {
+    console.log('🌫️ [PLAYER] loadFogStatePlayer chamado', imageData ? 'COM dados' : 'SEM dados');
+    
     if (!imageData) {
+        console.log('🌫️ [PLAYER] Sem dados - limpando fog');
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         return;
     }
     
     const img = new Image();
     img.onload = () => {
+        console.log('✅ [PLAYER] Fog image carregado - desenhando no canvas');
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         fogCtx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        console.log('✅ Névoa carregada no player');
+        
+        // ✅ FORÇAR redesenho após fog carregar
+        redrawAll();
+        console.log('✅ [PLAYER] Fog aplicado e canvas redesenhado');
     };
     img.onerror = () => {
-        console.error('❌ Erro ao carregar névoa');
+        console.error('❌ [PLAYER] Erro ao carregar fog image');
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     };
     img.src = imageData;
 }
 
-// ✅ HANDLER PRINCIPAL - Cena ativada/atualizada
 socket.on('scene_activated', (data) => {
     console.log('🎬 [PLAYER] Cena ativada:', data.scene.name);
     
@@ -345,7 +352,25 @@ socket.on('scene_activated', (data) => {
     console.log('🎬 [PLAYER] Jogadores visíveis:', scene.visible_to_players);
     console.log('🎬 [PLAYER] Tenho permissão?', isVisible);
     
-    // ✅ SEMPRE LIMPAR TUDO PRIMEIRO
+    if (!isVisible) {
+        console.log('❌ [PLAYER] Sem permissão - mostrando tela bloqueada');
+        maps = [];
+        entities = [];
+        tokens = [];
+        drawings = [];
+        loadedImages = {};
+        
+        mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        showBlockedScreen(scene.name);
+        return;
+    }
+    
+    console.log('✅ [PLAYER] Com permissão - carregando conteúdo');
+    hideBlockedScreen();
+    
     maps = [];
     entities = [];
     tokens = [];
@@ -355,15 +380,6 @@ socket.on('scene_activated', (data) => {
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    if (!isVisible) {
-        console.log('❌ [PLAYER] Sem permissão - mostrando tela bloqueada');
-        showBlockedScreen(scene.name);
-        return;
-    }
-    
-    console.log('✅ [PLAYER] Com permissão - carregando conteúdo');
-    hideBlockedScreen();
     
     // ✅ Carregar dados da cena
     maps = JSON.parse(JSON.stringify(scene.maps || []));
@@ -379,23 +395,22 @@ socket.on('scene_activated', (data) => {
         fog: scene.fog_image ? 'SIM' : 'NÃO'
     });
     
-    // ✅ CARREGAR FOG DA CENA
     if (scene.fog_image) {
         console.log('🌫️ [PLAYER] Carregando névoa da cena');
         loadFogStatePlayer(scene.fog_image);
     } else {
-        console.log('✨ [PLAYER] Sem névoa nesta cena');
+        console.log('✨ [PLAYER] Cena sem névoa - limpando fog canvas');
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
     
-    // ✅ Redesenhar tudo
     preloadAllImages();
+    
     setTimeout(() => {
         redrawAll();
         redrawDrawings();
         showToast(`📍 ${scene.name}`);
         console.log('✅ [PLAYER] Cena renderizada completamente');
-    }, 150);
+    }, 200); 
 });
 
 // ✅ NOVO HANDLER - Cena bloqueada
@@ -436,48 +451,7 @@ socket.on('no_active_scene', () => {
 });
 
 // ========== FOG OF WAR ==========
-function redrawFog() {
-    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    console.log('🌫️ [JOGADOR] Redesenhando fog. Areas:', fogAreas.length);
-    
-    if (fogAreas.length === 0) {
-        // SEM FOG AREAS = MAPA TOTALMENTE COBERTO
-        fogCtx.fillStyle = 'rgba(0, 0, 0, 1)';
-        fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        console.log('🌫️ Mapa totalmente coberto (sem áreas visíveis)');
-        return;
-    }
-    
-    // Névoa TOTALMENTE ESCURA para jogadores (opacidade 100%)
-    fogCtx.fillStyle = 'rgba(0, 0, 0, 1)';
-    fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    console.log('🌫️ Base escura aplicada');
-    
-    // "Cortar" áreas visíveis
-    fogCtx.globalCompositeOperation = 'destination-out';
-    
-    fogAreas.forEach((area, index) => {
-        console.log(`🌫️ Processando área ${index + 1}:`, area);
-        
-        if (area.shape === 'rectangle') {
-            fogCtx.fillStyle = 'rgba(255, 255, 255, 1)';
-            fogCtx.fillRect(area.x, area.y, area.width, area.height);
-            console.log(`   ✅ Retângulo desenhado em (${area.x}, ${area.y}) ${area.width}x${area.height}`);
-        } else if (area.shape === 'circle') {
-            fogCtx.fillStyle = 'rgba(255, 255, 255, 1)';
-            fogCtx.beginPath();
-            fogCtx.arc(area.x, area.y, area.radius, 0, Math.PI * 2);
-            fogCtx.fill();
-            console.log(`   ✅ Círculo desenhado em (${area.x}, ${area.y}) raio ${area.radius}`);
-        }
-    });
-    
-    fogCtx.globalCompositeOperation = 'source-over';
-    
-    console.log('🌫️ Fog redesenhado com sucesso');
-}
+
 
 // CHAT
 socket.on('chat_contacts_loaded', (data) => {
@@ -617,8 +591,10 @@ function preloadAllImages() {
 
 // ========== RENDER ==========
 function redrawAll() {
+    console.log('🎨 [PLAYER] redrawAll chamado');
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
+    // Desenhar mapas e entidades
     [...maps, ...entities].forEach(img => {
         const loadedImg = loadedImages[img.id];
         if (loadedImg && loadedImg.complete) {
@@ -626,6 +602,7 @@ function redrawAll() {
         }
     });
     
+    // Desenhar tokens
     tokens.forEach(token => {
         const img = loadedImages[token.id];
         
@@ -662,6 +639,7 @@ function redrawAll() {
             mapCtx.stroke();
         }
         
+        // Nome do token
         mapCtx.fillStyle = "#fff";
         mapCtx.font = "bold 13px Lato";
         mapCtx.textAlign = "center";
@@ -670,7 +648,8 @@ function redrawAll() {
         mapCtx.strokeText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
         mapCtx.fillText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
     });
-    redrawFog();
+    
+    console.log('✅ [PLAYER] redrawAll completo (fog mantido)');
 }
 
 function redrawDrawings() {

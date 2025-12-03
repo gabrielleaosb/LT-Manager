@@ -365,6 +365,8 @@ socket.on('maps_sync', (data) => {
     preloadAllImages();
     renderImageList();
     redrawAll();
+    // ✅ NÃO limpar fog aqui
+    console.log('✅ Maps sync completo - fog preservado');
 });
 
 socket.on('entities_sync', (data) => {
@@ -375,6 +377,8 @@ socket.on('entities_sync', (data) => {
     preloadAllImages();
     renderImageList();
     redrawAll();
+    // ✅ NÃO limpar fog aqui
+    console.log('✅ Entities sync completo - fog preservado');
 });
 
 socket.on('token_sync', (data) => {
@@ -394,7 +398,8 @@ socket.on('token_sync', (data) => {
         preloadAllImages();
         renderTokenList();
         redrawAll();
-        console.log('✅ [MESTRE] Canvas redesenhado após token_sync');
+        // ✅ NÃO limpar fog aqui
+        console.log('✅ [MESTRE] Canvas redesenhado após token_sync - fog preservado');
     });
 });
 
@@ -436,19 +441,6 @@ socket.on('scene_switched', (data) => {
 // ==================
 // FOG (NÉVOA)
 // ==================
-
-
-
-function redrawFog() {
-    // ✅ Limpar canvas primeiro
-    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    // ✅ Não fazer nada se não houver estado de fog salvo
-    // A névoa agora é baseada na imagem salva, não em fogAreas
-    console.log('🌫️ Fog canvas limpo (estado gerenciado por saveFogState)');
-}
-
-
 
 // CHAT - Socket Handlers CORRIGIDOS (substitua no início do arquivo, parte 1)
 
@@ -676,7 +668,6 @@ function redrawAll() {
             }
         }
     });
-    redrawFog();
 }
 
 function redrawDrawings() {
@@ -1228,12 +1219,30 @@ function interpolateFogPaint(x1, y1, x2, y2, erase) {
 function saveFogState() {
     const imageData = fogCanvas.toDataURL();
     
-    console.log('🌫️ Salvando fog (tamanho:', imageData.length, 'bytes)');
+    console.log('🌫️ [MESTRE] Salvando fog state');
     
     socket.emit('update_fog_state', {
         session_id: SESSION_ID,
         fog_image: imageData
     });
+}
+
+function loadFogState(imageData) {
+    if (!imageData) {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        return;
+    }
+    
+    const img = new Image();
+    img.onload = () => {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        fogCtx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        console.log('✅ Fog carregado no mestre');
+    };
+    img.onerror = () => {
+        console.error('❌ Erro ao carregar fog');
+    };
+    img.src = imageData;
 }
 
 // Limpar toda a névoa
@@ -1259,22 +1268,6 @@ function coverAllWithFog() {
         showToast('Mapa coberto com névoa!');
     }
 }
-
-// Carregar estado do fog
-function loadFogState(imageData) {
-    if (!imageData) {
-        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        return;
-    }
-    
-    const img = new Image();
-    img.onload = () => {
-        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        fogCtx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    };
-    img.src = imageData;
-}
-
 
 // Eventos do fog canvas - CORRIGIDO
 fogCanvas.addEventListener('mousedown', (e) => {
@@ -2367,7 +2360,8 @@ function saveCurrentScene() {
         scene_id: scene.id,
         maps: scene.maps.length,
         entities: scene.entities.length,
-        tokens: scene.tokens.length
+        tokens: scene.tokens.length,
+        has_fog: !!scene.fog_image
     });
     
     socket.emit('scene_update', {
@@ -2391,16 +2385,19 @@ function switchToScene(sceneId) {
         saveCurrentScene();
     }
     
+    // Limpar arrays
     images = [];
     tokens = [];
     drawings = [];
     
+    // Limpar canvases
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     currentSceneId = sceneId;
     
+    // Carregar dados da cena
     images = [
         ...JSON.parse(JSON.stringify(scene.maps || [])),
         ...JSON.parse(JSON.stringify(scene.entities || []))
@@ -2408,15 +2405,23 @@ function switchToScene(sceneId) {
     tokens = JSON.parse(JSON.stringify(scene.tokens || []));
     drawings = JSON.parse(JSON.stringify(scene.drawings || []));
     
+    // ✅ CARREGAR FOG DA CENA
     if (scene.fog_image) {
+        console.log('🌫️ Carregando fog da cena');
         loadFogState(scene.fog_image);
+    } else {
+        console.log('✨ Cena sem fog');
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
     
     preloadAllImages();
     renderImageList();
     renderTokenList();
-    redrawAll();
-    redrawDrawings();
+    
+    setTimeout(() => {
+        redrawAll();
+        redrawDrawings();
+    }, 150);
     
     socket.emit('scene_switch', {
         session_id: SESSION_ID,
