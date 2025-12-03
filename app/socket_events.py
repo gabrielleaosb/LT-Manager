@@ -18,25 +18,16 @@ def init_session(session_id):
             'permissions': {},
             'chat_conversations': {},
             'master_socket': None,
-            'fog_areas': []
+            'fog_image': None,  # ✅ ALTERADO: fog_image ao invés de fog_areas
+            'scenes': [],
+            'active_scene_id': None,
+            'grid_settings': {
+                'enabled': True,
+                'size': 50,
+                'color': 'rgba(155, 89, 182, 0.3)',
+                'lineWidth': 1
+            }
         }
-
-@socketio.on('update_grid_settings')
-def handle_update_grid_settings(data):
-    """Sincronizar configurações de grid para todos"""
-    session_id = data.get('session_id')
-    grid_settings = data.get('grid_settings')
-    
-    init_session(session_id)
-    
-    # Salvar configurações na sessão
-    active_sessions[session_id]['grid_settings'] = grid_settings
-    
-    # Broadcast para TODA A SALA
-    emit('grid_settings_sync', {'grid_settings': grid_settings}, 
-         room=session_id, include_self=True)
-    
-    print(f'📐 Grid settings atualizados na sessão {session_id}')
 
 @socketio.on('connect')
 def handle_connect():
@@ -81,19 +72,20 @@ def handle_join_session(data):
         'scenes': session_state.get('scenes', [])
     })
 
-    # Enviar névoa
+    # ✅ CORRIGIDO: Enviar fog_image
     emit('fog_state_sync', {
         'fog_image': session_state.get('fog_image')
     })
 
     # Enviar grid
-    grid_settings = session_state.get('grid_settings', {
-        'enabled': True,
-        'size': 50,
-        'color': 'rgba(155, 89, 182, 0.3)',
-        'lineWidth': 1
+    emit('grid_settings_sync', {
+        'grid_settings': session_state.get('grid_settings', {
+            'enabled': True,
+            'size': 50,
+            'color': 'rgba(155, 89, 182, 0.3)',
+            'lineWidth': 1
+        })
     })
-    emit('grid_settings_sync', {'grid_settings': grid_settings})
     
     emit('players_list', {'players': list(session_state.get('players', {}).values())})
     print(f'✅ Mestre entrou na sessão: {session_id}')
@@ -120,12 +112,10 @@ def handle_player_join(data):
         'ping': True
     }
     
-    # Verificar se há cena ativa
     session_state = active_sessions[session_id]
     active_scene_id = session_state.get('active_scene_id')
     
     if active_scene_id:
-        # Encontrar cena ativa
         scenes = session_state.get('scenes', [])
         active_scene = next((s for s in scenes if s.get('id') == active_scene_id), None)
         
@@ -134,13 +124,11 @@ def handle_player_join(data):
             is_visible = player_id in visible_players
             
             if is_visible:
-                # Enviar conteúdo da cena ativa
                 emit('scene_activated', {
                     'scene_id': active_scene_id,
                     'scene': active_scene
                 })
             else:
-                # Enviar cena vazia
                 emit('session_state', {
                     'maps': [],
                     'entities': [],
@@ -148,7 +136,6 @@ def handle_player_join(data):
                     'drawings': []
                 })
         else:
-            # Sem cena ativa, enviar conteúdo padrão
             emit('session_state', {
                 'maps': session_state.get('maps', []),
                 'entities': session_state.get('entities', []),
@@ -156,7 +143,6 @@ def handle_player_join(data):
                 'drawings': session_state.get('drawings', [])
             })
     else:
-        # Sem cena ativa, enviar conteúdo padrão
         emit('session_state', {
             'maps': session_state.get('maps', []),
             'entities': session_state.get('entities', []),
@@ -164,37 +150,35 @@ def handle_player_join(data):
             'drawings': session_state.get('drawings', [])
         })
     
-    # Enviar névoa
+    # ✅ CORRIGIDO: Sempre enviar fog_image atual
     emit('fog_state_sync', {
         'fog_image': session_state.get('fog_image')
     })
     
-    # Enviar grid
-    grid_settings = session_state.get('grid_settings', {
-        'enabled': True,
-        'size': 50,
-        'color': 'rgba(155, 89, 182, 0.3)',
-        'lineWidth': 1
+    emit('grid_settings_sync', {
+        'grid_settings': session_state.get('grid_settings', {
+            'enabled': True,
+            'size': 50,
+            'color': 'rgba(155, 89, 182, 0.3)',
+            'lineWidth': 1
+        })
     })
-    emit('grid_settings_sync', {'grid_settings': grid_settings})
         
     emit('permissions_updated', {
         'player_id': player_id,
         'permissions': active_sessions[session_id]['permissions'][player_id]
     })
     
-    # Notificar todos sobre novo jogador
     emit('player_joined', {'player_id': player_id, 'player_name': player_name}, 
          room=session_id, include_self=False)
     
-    # Atualizar lista de jogadores para todos
     emit('players_list', {'players': list(session_state['players'].values())}, 
          room=session_id)
     
     print(f'✅ Jogador {player_name} entrou na sessão: {session_id}')
 
 # ==================
-# MAPS - BROADCAST PARA TODOS
+# MAPS
 # ==================
 @socketio.on('add_map')
 def handle_add_map(data):
@@ -204,7 +188,6 @@ def handle_add_map(data):
     init_session(session_id)
     active_sessions[session_id]['maps'].append(map_data)
     
-    # BROADCAST para TODA A SALA
     emit('maps_sync', {'maps': active_sessions[session_id]['maps']}, 
          room=session_id, include_self=True)
     print(f'📍 Mapa adicionado - broadcasting para sessão {session_id}')
@@ -222,7 +205,6 @@ def handle_update_map(data):
             active_sessions[session_id]['maps'][i] = map_data
             break
     
-    # BROADCAST para TODA A SALA
     emit('maps_sync', {'maps': active_sessions[session_id]['maps']}, 
          room=session_id, include_self=True)
     print(f'📍 Mapa atualizado - broadcasting para sessão {session_id}')
@@ -236,13 +218,12 @@ def handle_delete_map(data):
     active_sessions[session_id]['maps'] = [m for m in active_sessions[session_id]['maps'] 
                                             if m['id'] != map_id]
     
-    # BROADCAST para TODA A SALA
     emit('maps_sync', {'maps': active_sessions[session_id]['maps']}, 
          room=session_id, include_self=True)
     print(f'📍 Mapa removido - broadcasting para sessão {session_id}')
 
 # ==================
-# ENTITIES - BROADCAST PARA TODOS
+# ENTITIES
 # ==================
 @socketio.on('add_entity')
 def handle_add_entity(data):
@@ -252,7 +233,6 @@ def handle_add_entity(data):
     init_session(session_id)
     active_sessions[session_id]['entities'].append(entity_data)
     
-    # BROADCAST para TODA A SALA
     emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, 
          room=session_id, include_self=True)
     print(f'🎭 Entidade adicionada - broadcasting para sessão {session_id}')
@@ -270,7 +250,6 @@ def handle_update_entity(data):
             active_sessions[session_id]['entities'][i] = entity_data
             break
     
-    # BROADCAST para TODA A SALA
     emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, 
          room=session_id, include_self=True)
     print(f'🎭 Entidade atualizada - broadcasting para sessão {session_id}')
@@ -284,13 +263,12 @@ def handle_delete_entity(data):
     active_sessions[session_id]['entities'] = [e for e in active_sessions[session_id]['entities'] 
                                                 if e['id'] != entity_id]
     
-    # BROADCAST para TODA A SALA
     emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, 
          room=session_id, include_self=True)
     print(f'🎭 Entidade removida - broadcasting para sessão {session_id}')
 
 # ==================
-# TOKENS - BROADCAST PARA TODOS
+# TOKENS
 # ==================
 @socketio.on('token_update')
 def handle_token_update(data):
@@ -301,28 +279,15 @@ def handle_token_update(data):
     init_session(session_id)
     active_sessions[session_id]['tokens'] = tokens
     
-    print('🎯 TOKEN UPDATE recebido:')
-    print(f'   - Session: {session_id}')
-    print(f'   - Sender SID: {sender_sid}')
-    print(f'   - Tokens: {len(tokens)}')
-    print(f'   - Jogadores na sessão: {list(active_sessions[session_id]["players"].keys())}')
-    print(f'   - Master socket: {active_sessions[session_id].get("master_socket")}')
+    print(f'🎯 TOKEN UPDATE: {len(tokens)} tokens na sessão {session_id}')
     
-    # Enviar para TODOS na sala, EXCETO quem enviou (ele já tem os dados)
+    # ✅ BROADCAST para TODOS na sala
     emit('token_sync', {'tokens': tokens}, 
          room=session_id, 
-         skip_sid=sender_sid)
-    
-    # IMPORTANTE: Enviar também diretamente para o mestre
-    master_socket = active_sessions[session_id].get('master_socket')
-    if master_socket and master_socket != sender_sid:
-        print(f'   📤 Enviando diretamente para o mestre: {master_socket}')
-        emit('token_sync', {'tokens': tokens}, room=master_socket)
-    
-    print('   ✅ Broadcast concluído')
+         include_self=True)  # ✅ INCLUIR o próprio remetente
 
 # ==================
-# DRAWINGS
+# DRAWINGS - ✅ CORRIGIDO
 # ==================
 @socketio.on('drawing_update')
 def handle_drawing_update(data):
@@ -332,7 +297,9 @@ def handle_drawing_update(data):
     init_session(session_id)
     active_sessions[session_id]['drawings'].append(drawing)
     
-    # BROADCAST para TODA A SALA
+    print('✏️ Desenho adicionado - broadcasting')
+    
+    # ✅ BROADCAST para TODOS
     emit('drawing_sync', {'drawing': drawing}, 
          room=session_id, include_self=True)
 
@@ -343,8 +310,62 @@ def handle_clear_drawings(data):
     init_session(session_id)
     active_sessions[session_id]['drawings'] = []
     
-    # BROADCAST para TODA A SALA
+    print('🧹 Desenhos limpos - broadcasting')
+    
+    # ✅ BROADCAST para TODOS
     emit('drawings_cleared', {}, room=session_id, include_self=True)
+
+# ==================
+# FOG OF WAR - ✅ TOTALMENTE REESCRITO
+# ==================
+@socketio.on('update_fog_state')
+def handle_update_fog_state(data):
+    """Atualizar estado da névoa (imagem completa)"""
+    session_id = data.get('session_id')
+    fog_image = data.get('fog_image')
+    
+    init_session(session_id)
+    
+    # ✅ Salvar imagem da névoa no servidor
+    active_sessions[session_id]['fog_image'] = fog_image
+    
+    print('🌫️ Fog atualizado - broadcasting para TODOS')
+    
+    # ✅ BROADCAST para TODA A SALA (incluindo mestre)
+    emit('fog_state_sync', {
+        'fog_image': fog_image
+    }, room=session_id, include_self=True)
+
+@socketio.on('clear_fog_state')
+def handle_clear_fog_state(data):
+    """Limpar toda a névoa"""
+    session_id = data.get('session_id')
+    
+    init_session(session_id)
+    active_sessions[session_id]['fog_image'] = None
+    
+    print('🌫️ Fog limpo - broadcasting para TODOS')
+    
+    # ✅ BROADCAST para TODA A SALA
+    emit('fog_state_sync', {
+        'fog_image': None
+    }, room=session_id, include_self=True)
+
+# ==================
+# GRID
+# ==================
+@socketio.on('update_grid_settings')
+def handle_update_grid_settings(data):
+    session_id = data.get('session_id')
+    grid_settings = data.get('grid_settings')
+    
+    init_session(session_id)
+    active_sessions[session_id]['grid_settings'] = grid_settings
+    
+    emit('grid_settings_sync', {'grid_settings': grid_settings}, 
+         room=session_id, include_self=True)
+    
+    print(f'📐 Grid settings atualizados na sessão {session_id}')
 
 # ==================
 # PERMISSIONS
@@ -383,17 +404,15 @@ def handle_get_players(data):
     emit('players_list', {'players': players_list})
 
 # ==================
-# CHAT - CORRIGIDO COM MESTRE VENDO TUDO
+# CHAT
 # ==================
 @socketio.on('get_chat_contacts')
 def handle_get_contacts(data):
-    """Retorna lista de contatos disponíveis com contagem de não lidas"""
     session_id = data.get('session_id')
     user_id = data.get('user_id')
     
     init_session(session_id)
     
-    # Inicializar estrutura de não lidas se não existir
     if 'unread_messages' not in active_sessions[session_id]:
         active_sessions[session_id]['unread_messages'] = {}
     
@@ -401,7 +420,6 @@ def handle_get_contacts(data):
     unread_data = active_sessions[session_id]['unread_messages']
     
     if user_id == 'master':
-        # MESTRE: Ver todos os jogadores E todas as conversas entre eles
         for player_id, player_data in active_sessions[session_id]['players'].items():
             unread_count = unread_data.get(f"{user_id}_{player_id}", 0)
             contacts.append({
@@ -411,7 +429,6 @@ def handle_get_contacts(data):
                 'type': 'player'
             })
         
-        # Adicionar conversas entre jogadores
         seen_pairs = set()
         for sender_id, conversations in active_sessions[session_id]['chat_conversations'].items():
             if sender_id == 'master':
@@ -437,7 +454,6 @@ def handle_get_contacts(data):
                             'type': 'conversation'
                         })
     else:
-        # JOGADOR: Ver mestre e outros jogadores
         unread_count = unread_data.get(f"{user_id}_master", 0)
         contacts.append({
             'id': 'master',
@@ -457,11 +473,9 @@ def handle_get_contacts(data):
                 })
     
     emit('chat_contacts_loaded', {'contacts': contacts})
-    print(f'📋 Contatos enviados para {user_id}: {len(contacts)} contatos')
 
 @socketio.on('send_private_message')
 def handle_send_message(data):
-    """Enviar mensagem privada e incrementar contador de não lidas"""
     session_id = data.get('session_id')
     sender_id = data.get('sender_id')
     recipient_id = data.get('recipient_id')
@@ -469,18 +483,15 @@ def handle_send_message(data):
     
     init_session(session_id)
     
-    # Inicializar estrutura de não lidas se não existir
     if 'unread_messages' not in active_sessions[session_id]:
         active_sessions[session_id]['unread_messages'] = {}
     
-    # Validar remetente
     if sender_id == 'master':
         sender_name = 'Mestre'
     else:
         sender_data = active_sessions[session_id]['players'].get(sender_id)
         sender_name = sender_data['name'] if sender_data else 'Desconhecido'
     
-    # Criar mensagem
     message_data = {
         'id': f"{int(time.time() * 1000)}_{sender_id}_{recipient_id}",
         'sender_id': sender_id,
@@ -490,7 +501,6 @@ def handle_send_message(data):
         'timestamp': time.time() * 1000
     }
     
-    # Salvar mensagem
     if sender_id not in active_sessions[session_id]['chat_conversations']:
         active_sessions[session_id]['chat_conversations'][sender_id] = {}
     if recipient_id not in active_sessions[session_id]['chat_conversations'][sender_id]:
@@ -504,16 +514,13 @@ def handle_send_message(data):
     active_sessions[session_id]['chat_conversations'][sender_id][recipient_id].append(message_data)
     active_sessions[session_id]['chat_conversations'][recipient_id][sender_id].append(message_data)
     
-    # INCREMENTAR contador de não lidas para o destinatário
     unread_key = f"{recipient_id}_{sender_id}"
     if unread_key not in active_sessions[session_id]['unread_messages']:
         active_sessions[session_id]['unread_messages'][unread_key] = 0
     active_sessions[session_id]['unread_messages'][unread_key] += 1
     
-    # Enviar para o remetente
     emit('new_private_message', message_data, room=request.sid)
     
-    # Enviar para o destinatário
     if recipient_id == 'master':
         master_socket = active_sessions[session_id].get('master_socket')
         if master_socket and master_socket != request.sid:
@@ -523,11 +530,9 @@ def handle_send_message(data):
         if recipient_socket:
             emit('new_private_message', message_data, room=recipient_socket)
     
-    # ENVIAR PARA O MESTRE se ele não for nem remetente nem destinatário
     if sender_id != 'master' and recipient_id != 'master':
         master_socket = active_sessions[session_id].get('master_socket')
         if master_socket:
-            # Incrementar não lidas para o mestre observando conversa
             conversation_id = '_'.join(sorted([sender_id, recipient_id]))
             mestre_unread_key = f"master_{conversation_id}"
             if mestre_unread_key not in active_sessions[session_id]['unread_messages']:
@@ -535,12 +540,9 @@ def handle_send_message(data):
             active_sessions[session_id]['unread_messages'][mestre_unread_key] += 1
             
             emit('new_private_message', message_data, room=master_socket)
-    
-    print(f'💬 Mensagem de {sender_name} para {recipient_id}')
 
 @socketio.on('get_conversation')
 def handle_get_conversation(data):
-    """Retorna conversa entre dois usuários"""
     session_id = data.get('session_id')
     user_id = data.get('user_id')
     other_user_id = data.get('other_user_id')
@@ -549,7 +551,6 @@ def handle_get_conversation(data):
     
     messages = []
     
-    # Mestre visualizando conversa entre dois jogadores
     if user_id == 'master' and '_' in other_user_id:
         player_ids = other_user_id.split('_')
         if len(player_ids) == 2:
@@ -559,7 +560,6 @@ def handle_get_conversation(data):
                 if player2_id in active_sessions[session_id]['chat_conversations'][player1_id]:
                     messages = active_sessions[session_id]['chat_conversations'][player1_id][player2_id]
     else:
-        # Conversa normal
         if user_id in active_sessions[session_id]['chat_conversations']:
             if other_user_id in active_sessions[session_id]['chat_conversations'][user_id]:
                 messages = active_sessions[session_id]['chat_conversations'][user_id][other_user_id]
@@ -568,12 +568,9 @@ def handle_get_conversation(data):
         'messages': messages,
         'other_user_id': other_user_id
     })
-    
-    print(f'💬 Conversa carregada: {user_id} <-> {other_user_id}, {len(messages)} mensagens')
 
 @socketio.on('mark_conversation_read')
 def handle_mark_read(data):
-    """Marcar conversa como lida"""
     session_id = data.get('session_id')
     user_id = data.get('user_id')
     other_user_id = data.get('other_user_id')
@@ -583,20 +580,14 @@ def handle_mark_read(data):
     if 'unread_messages' not in active_sessions[session_id]:
         active_sessions[session_id]['unread_messages'] = {}
     
-    # Zerar contador de não lidas
     unread_key = f"{user_id}_{other_user_id}"
     active_sessions[session_id]['unread_messages'][unread_key] = 0
-    
-    print(f'✅ Conversa marcada como lida: {user_id} <-> {other_user_id}')
-
 
 # ==================
-# SCENES (CENAS)
+# SCENES
 # ==================
-
 @socketio.on('scene_create')
 def handle_scene_create(data):
-    """Criar nova cena"""
     session_id = data.get('session_id')
     scene = data.get('scene')
     
@@ -605,10 +596,8 @@ def handle_scene_create(data):
     if 'scenes' not in active_sessions[session_id]:
         active_sessions[session_id]['scenes'] = []
     
-    # Adicionar cena
     active_sessions[session_id]['scenes'].append(scene)
     
-    # Broadcast para todos
     emit('scenes_sync', {
         'scenes': active_sessions[session_id]['scenes']
     }, room=session_id, include_self=True)
@@ -617,7 +606,7 @@ def handle_scene_create(data):
 
 @socketio.on('scene_update')
 def handle_scene_update(data):
-    """Atualizar cena existente"""
+    """✅ REESCRITO - Atualizar cena e notificar mudanças de visibilidade"""
     session_id = data.get('session_id')
     scene = data.get('scene')
     scene_id = scene.get('id')
@@ -627,28 +616,113 @@ def handle_scene_update(data):
     if 'scenes' not in active_sessions[session_id]:
         active_sessions[session_id]['scenes'] = []
     
-    # Encontrar e atualizar cena
+    # Encontrar cena antiga para comparar visibilidade
+    old_scene = None
     updated = False
     for i, s in enumerate(active_sessions[session_id]['scenes']):
         if s.get('id') == scene_id:
+            old_scene = active_sessions[session_id]['scenes'][i]
             active_sessions[session_id]['scenes'][i] = scene
             updated = True
             break
     
     if not updated:
-        # Se não encontrou, adicionar
         active_sessions[session_id]['scenes'].append(scene)
     
-    # Broadcast para todos
+    # ✅ Sincronizar lista de cenas para o mestre
     emit('scenes_sync', {
         'scenes': active_sessions[session_id]['scenes']
     }, room=session_id, include_self=True)
     
-    print(f'🎬 Cena atualizada: {scene.get("name")} na sessão {session_id}')
+    print(f'🎬 Cena atualizada: {scene.get("name")}')
+    
+    # ✅ SE ESTA É A CENA ATIVA, ATUALIZAR TODOS OS JOGADORES
+    if active_sessions[session_id].get('active_scene_id') == scene_id:
+        print(f'🎬 Cena ativa modificada - atualizando jogadores')
+        
+        # Pegar lista de jogadores
+        session_data = active_sessions[session_id]
+        
+        # Comparar visibilidade antiga vs nova
+        old_visible = set(old_scene.get('visible_to_players', [])) if old_scene else set()
+        new_visible = set(scene.get('visible_to_players', []))
+        
+        # Jogadores que GANHARAM acesso
+        gained_access = new_visible - old_visible
+        # Jogadores que PERDERAM acesso
+        lost_access = old_visible - new_visible
+        
+        print(f'  ✅ Ganharam acesso: {gained_access}')
+        print(f'  ❌ Perderam acesso: {lost_access}')
+        
+        # ✅ Para cada jogador conectado
+        for player_id, player_data in session_data.get('players', {}).items():
+            player_socket = player_data.get('socket_id')
+            
+            if not player_socket:
+                continue
+            
+            is_visible = player_id in new_visible
+            
+            if is_visible:
+                # ✅ JOGADOR TEM PERMISSÃO - Enviar cena completa
+                print(f'  👁️ {player_id} - Enviando cena completa')
+                emit('scene_activated', {
+                    'scene_id': scene_id,
+                    'scene': scene
+                }, room=player_socket)
+            else:
+                # ❌ JOGADOR NÃO TEM PERMISSÃO - Enviar cena vazia
+                print(f'  🚫 {player_id} - Bloqueando acesso')
+                emit('scene_blocked', {
+                    'scene_id': scene_id,
+                    'scene_name': scene.get('name')
+                }, room=player_socket)
+
+@socketio.on('request_current_scene')
+def handle_request_current_scene(data):
+    """✅ NOVO - Jogador solicita a cena atual após reconexão"""
+    session_id = data.get('session_id')
+    player_id = data.get('player_id')
+    
+    init_session(session_id)
+    
+    session_data = active_sessions[session_id]
+    active_scene_id = session_data.get('active_scene_id')
+    
+    if not active_scene_id:
+        print(f'ℹ️ Nenhuma cena ativa para {player_id}')
+        emit('no_active_scene', {})
+        return
+    
+    # Encontrar cena ativa
+    scenes = session_data.get('scenes', [])
+    active_scene = next((s for s in scenes if s.get('id') == active_scene_id), None)
+    
+    if not active_scene:
+        print(f'⚠️ Cena ativa não encontrada')
+        emit('no_active_scene', {})
+        return
+    
+    # Verificar permissão
+    visible_players = active_scene.get('visible_to_players', [])
+    is_visible = player_id in visible_players
+    
+    if is_visible:
+        print(f'✅ {player_id} tem acesso à cena {active_scene.get("name")}')
+        emit('scene_activated', {
+            'scene_id': active_scene_id,
+            'scene': active_scene
+        })
+    else:
+        print(f'❌ {player_id} não tem acesso à cena {active_scene.get("name")}')
+        emit('scene_blocked', {
+            'scene_id': active_scene_id,
+            'scene_name': active_scene.get('name')
+        })
 
 @socketio.on('scene_delete')
 def handle_scene_delete(data):
-    """Deletar cena"""
     session_id = data.get('session_id')
     scene_id = data.get('scene_id')
     
@@ -657,13 +731,11 @@ def handle_scene_delete(data):
     if 'scenes' not in active_sessions[session_id]:
         return
     
-    # Remover cena
     active_sessions[session_id]['scenes'] = [
         s for s in active_sessions[session_id]['scenes']
         if s.get('id') != scene_id
     ]
     
-    # Broadcast para todos
     emit('scenes_sync', {
         'scenes': active_sessions[session_id]['scenes']
     }, room=session_id, include_self=True)
@@ -672,7 +744,7 @@ def handle_scene_delete(data):
 
 @socketio.on('scene_switch')
 def handle_scene_switch(data):
-    """Trocar cena ativa"""
+    """✅ TOTALMENTE REESCRITO - Trocar cena ativa"""
     session_id = data.get('session_id')
     scene_id = data.get('scene_id')
     scene = data.get('scene')
@@ -682,30 +754,30 @@ def handle_scene_switch(data):
     # Salvar ID da cena ativa
     active_sessions[session_id]['active_scene_id'] = scene_id
     
-    # Enviar para CADA JOGADOR individualmente
+    print(f'🎬 Trocando para cena: {scene.get("name")}')
+    
+    # ✅ ENVIAR PARA TODOS OS JOGADORES
     session_data = active_sessions[session_id]
     
-    # Para cada jogador conectado
     for player_id, player_data in session_data.get('players', {}).items():
         player_socket = player_data.get('socket_id')
         
         if not player_socket:
             continue
         
-        # Verificar se o jogador tem permissão para ver esta cena
         visible_players = scene.get('visible_to_players', [])
         is_visible = player_id in visible_players
         
-        print(f'🎬 Jogador {player_id} pode ver cena? {is_visible}')
+        print(f'  👤 {player_id} - Visível: {is_visible}')
         
         if is_visible:
-            # Enviar cena completa
+            # ✅ Enviar cena completa COM fog
             emit('scene_activated', {
                 'scene_id': scene_id,
                 'scene': scene
             }, room=player_socket)
         else:
-            # Enviar cena vazia (limpar tudo)
+            # ✅ Enviar cena vazia
             emit('scene_activated', {
                 'scene_id': scene_id,
                 'scene': {
@@ -720,47 +792,12 @@ def handle_scene_switch(data):
                 }
             }, room=player_socket)
     
-    # Notificar outros mestres
+    # ✅ Notificar mestre
     master_socket = session_data.get('master_socket')
-    emit('scene_switched', {
-        'scene_id': scene_id,
-        'scene': scene
-    }, room=master_socket, skip_sid=request.sid)
+    if master_socket:
+        emit('scene_switched', {
+            'scene_id': scene_id,
+            'scene': scene
+        }, room=master_socket)
     
-    print(f'🎬 Cena trocada para: {scene.get("name")} na sessão {session_id}')
-
-# ==================
-# FOG OF WAR
-# ==================
-
-@socketio.on('update_fog_state')
-def handle_update_fog_state(data):
-    """Atualizar estado da névoa (imagem completa)"""
-    session_id = data.get('session_id')
-    fog_image = data.get('fog_image')
-    
-    init_session(session_id)
-    
-    # Salvar imagem da névoa
-    active_sessions[session_id]['fog_image'] = fog_image
-    
-    # Broadcast para TODOS (incluindo jogadores)
-    emit('fog_state_sync', {
-        'fog_image': fog_image
-    }, room=session_id, include_self=False)
-    
-    print(f'🌫️ Estado da névoa atualizado na sessão {session_id}')
-
-@socketio.on('clear_fog_state')
-def handle_clear_fog_state(data):
-    """Limpar toda a névoa"""
-    session_id = data.get('session_id')
-    
-    init_session(session_id)
-    active_sessions[session_id]['fog_image'] = None
-    
-    emit('fog_state_sync', {
-        'fog_image': None
-    }, room=session_id, include_self=True)
-    
-    print(f'🌫️ Névoa limpa na sessão {session_id}')
+    print('✅ Cena ativada para todos')

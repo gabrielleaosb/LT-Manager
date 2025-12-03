@@ -1,4 +1,3 @@
-// MAP MANAGER - MESTRE - PARTE 1 - INICIALIZAÇÃO E WEBSOCKETS
 const socket = io({
     transports: ['websocket', 'polling'] 
 });
@@ -27,11 +26,24 @@ fogCanvas.height = CANVAS_HEIGHT;
 mapCanvas.width = gridCanvas.width = drawingCanvas.width = CANVAS_WIDTH;
 mapCanvas.height = gridCanvas.height = drawingCanvas.height = CANVAS_HEIGHT;
 
-// Estado
+// ✅ INICIALIZAR VARIÁVEIS GLOBAIS CORRETAMENTE
+let maps = [];           // ✅ ADICIONADO
+let entities = [];       // ✅ ADICIONADO
 let images = [];
 let tokens = [];
 let drawings = [];
 let players = [];
+let scenes = [];         // ✅ ADICIONADO - Inicializar scenes ANTES de usar
+
+// FOG OF WAR - ✅ INICIALIZAR CORRETAMENTE
+let fogAreas = [];       // ✅ ADICIONADO - Array de áreas visíveis
+let fogOpacity = 1.0;    // ✅ ADICIONADO
+let fogBrushSize = 100;
+let fogBrushShape = 'circle';
+let fogDrawingActive = false;
+let fogPaintMode = false;
+let fogEraseMode = false;
+let lastFogPoint = null;
 
 // CHAT
 let chatContacts = [];
@@ -86,23 +98,18 @@ let loadedImages = new Map();
 // Sidebar
 let sidebarCollapsed = false;
 
-// Estado do Fog of War
-let fogBrushSize = 100;
-let fogBrushShape = 'circle';
-let fogDrawingActive = false;
-let fogPaintMode = false;
-let fogEraseMode = false;
-let lastFogPoint = null;
-
 // Pan temporário com espaço
 let middleMousePressed = false;
 let tempPanning = false;
+let spacePressed = false;  // ✅ ADICIONADO
 
 // Undo/Redo
 let history = [];
 let historyIndex = -1;
 const MAX_HISTORY = 50;
 
+// Scene Manager
+let currentSceneId = null;  // ✅ ADICIONADO
 
 // ==================
 // CENTRALIZAÇÃO E TRANSFORM
@@ -256,12 +263,13 @@ function preloadAllImages() {
         }
     };
 
-    [...maps, ...entities].forEach(img => {
-        if (img.image && !loadedImages[img.id]) {
+    // ✅ CORRIGIDO - Usar images ao invés de maps/entities
+    images.forEach(img => {
+        if (img.image && !loadedImages.has(img.id)) {
             imagesToLoad++;
             const i = new Image();
             i.onload = () => {
-                loadedImages[img.id] = i;
+                loadedImages.set(img.id, i);
                 checkAllLoaded();
             };
             i.onerror = () => {
@@ -273,11 +281,11 @@ function preloadAllImages() {
     });
     
     tokens.forEach(token => {
-        if (token.image && !loadedImages[token.id]) {
+        if (token.image && !loadedImages.has(token.id)) {
             imagesToLoad++;
             const i = new Image();
             i.onload = () => {
-                loadedImages[token.id] = i;
+                loadedImages.set(token.id, i);
                 checkAllLoaded();
             };
             i.onerror = () => {
@@ -305,24 +313,29 @@ socket.on('connect', () => {
 socket.on('session_state', (data) => {
     console.log('📦 Estado da sessão recebido:', data);
     
-    const maps = data.maps || [];
-    const entities = data.entities || [];
-    images = [...maps, ...entities];
+    // ✅ CORRIGIDO - Separar maps e entities corretamente
+    maps = data.maps || [];
+    entities = data.entities || [];
+    images = [...maps, ...entities];  // ✅ Combinar depois
     
     tokens = data.tokens || [];
     drawings = data.drawings || [];
     
-    preloadAllImages();
-    drawGrid();
-
+    // ✅ CORRIGIDO - Inicializar scenes
     scenes = data.scenes || [];
     renderScenesList();
     console.log('🎬 Cenas carregadas:', scenes.length);
+    
+    preloadAllImages();
+    drawGrid();
 
     renderImageList();
     renderTokenList();
-    redrawAll();
-    redrawDrawings();
+    
+    setTimeout(() => {
+        redrawAll();
+        redrawDrawings();
+    }, 100);
 });
 
 socket.on('players_list', (data) => {
@@ -427,49 +440,12 @@ socket.on('scene_switched', (data) => {
 
 
 function redrawFog() {
+    // ✅ Limpar canvas primeiro
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    if (fogAreas.length === 0) return;
-    
-    fogCtx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
-    fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    fogCtx.globalCompositeOperation = 'destination-out';
-    
-    fogAreas.forEach(area => {
-        if (area.shape === 'rectangle') {
-            fogCtx.fillStyle = 'rgba(255, 255, 255, 1)';
-            fogCtx.fillRect(area.x, area.y, area.width, area.height);
-        } else if (area.shape === 'circle') {
-            fogCtx.fillStyle = 'rgba(255, 255, 255, 1)';
-            fogCtx.beginPath();
-            fogCtx.arc(area.x, area.y, area.radius, 0, Math.PI * 2);
-            fogCtx.fill();
-        }
-    });
-    
-    fogCtx.globalCompositeOperation = 'source-over';
-    
-    if (fogCurrentArea && fogDrawingMode) {
-        fogCtx.strokeStyle = '#3498db';
-        fogCtx.lineWidth = 3;
-        fogCtx.setLineDash([10, 5]);
-        
-        if (fogShape === 'rectangle') {
-            fogCtx.strokeRect(
-                fogCurrentArea.x,
-                fogCurrentArea.y,
-                fogCurrentArea.width,
-                fogCurrentArea.height
-            );
-        } else if (fogShape === 'circle') {
-            fogCtx.beginPath();
-            fogCtx.arc(fogCurrentArea.x, fogCurrentArea.y, fogCurrentArea.radius, 0, Math.PI * 2);
-            fogCtx.stroke();
-        }
-        
-        fogCtx.setLineDash([]);
-    }
+    // ✅ Não fazer nada se não houver estado de fog salvo
+    // A névoa agora é baseada na imagem salva, não em fogAreas
+    console.log('🌫️ Fog canvas limpo (estado gerenciado por saveFogState)');
 }
 
 
@@ -1096,6 +1072,7 @@ drawingCanvas.addEventListener('mouseup', () => {
         };
         drawings.push(drawing);
         
+        // ✅ ENVIAR PARA O SERVIDOR
         socket.emit('drawing_update', {
             session_id: SESSION_ID,
             drawing: drawing
@@ -1103,6 +1080,7 @@ drawingCanvas.addEventListener('mouseup', () => {
         
         currentPath = [];
         saveState('Desenhar');
+        console.log('✏️ Desenho enviado para servidor');
     }
     isDrawing = false;
 });
@@ -1250,6 +1228,8 @@ function interpolateFogPaint(x1, y1, x2, y2, erase) {
 function saveFogState() {
     const imageData = fogCanvas.toDataURL();
     
+    console.log('🌫️ Salvando fog (tamanho:', imageData.length, 'bytes)');
+    
     socket.emit('update_fog_state', {
         session_id: SESSION_ID,
         fog_image: imageData
@@ -1295,8 +1275,6 @@ function loadFogState(imageData) {
     img.src = imageData;
 }
 
-// Inicializar
-initializeFog();
 
 // Eventos do fog canvas - CORRIGIDO
 fogCanvas.addEventListener('mousedown', (e) => {
@@ -2329,9 +2307,6 @@ document.addEventListener('keyup', (e) => {
 // SISTEMA DE CENAS REESTRUTURADO
 // ==========================================
 
-let scenes = [];
-let currentSceneId = null;
-
 function createEmptyScene(name) {
     return {
         id: `scene_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -2532,22 +2507,19 @@ function toggleSceneVisibilityForPlayer(sceneId, playerId) {
     
     if (index > -1) {
         scene.visible_to_players.splice(index, 1);
+        console.log(`❌ ${playerId} perdeu acesso à cena ${scene.name}`);
     } else {
         scene.visible_to_players.push(playerId);
+        console.log(`✅ ${playerId} ganhou acesso à cena ${scene.name}`);
     }
     
+    // ✅ ATUALIZAR NO SERVIDOR (vai notificar os jogadores)
     socket.emit('scene_update', {
         session_id: SESSION_ID,
         scene: scene
     });
     
-    if (currentSceneId === sceneId) {
-        socket.emit('scene_switch', {
-        session_id: SESSION_ID,
-        scene_id: sceneId,
-        scene: scene
-        });
-    }
+    showToast('Visibilidade atualizada!');
 }
 
 function renderScenesList() {
@@ -2604,6 +2576,12 @@ scenes.forEach(scene => {
 });
 }
 function openSceneManager() {
+    // ✅ Garantir que scenes existe antes de usar
+    if (!scenes) {
+        scenes = [];
+        console.warn('⚠️ scenes não estava inicializado, criando array vazio');
+    }
+    
     console.log('🎬 Abrindo gerenciador. Cenas:', scenes.length);
     document.getElementById('sceneManagerModal').classList.add('show');
     renderScenesList();
@@ -2823,3 +2801,21 @@ setTimeout(() => {
 
 renderImageList();
 renderTokenList();
+
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Inicializando Map Manager...');
+    
+    // Garantir que todas as variáveis estão inicializadas
+    if (!scenes) scenes = [];
+    if (!fogAreas) fogAreas = [];
+    if (!maps) maps = [];
+    if (!entities) entities = [];
+    
+    console.log('✅ Variáveis inicializadas');
+    
+    // Centralizar canvas
+    setTimeout(() => {
+        centerCanvas();
+        console.log('✅ Canvas centralizado');
+    }, 200);
+});

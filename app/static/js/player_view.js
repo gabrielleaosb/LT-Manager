@@ -188,6 +188,15 @@ document.getElementById('playerNameInput').addEventListener('keypress', (e) => {
 socket.on('connect', () => {
     console.log('✅ Conectado');
     updateStatus(true);
+    
+    // ✅ Se já fez login, solicitar cena atual
+    if (playerId && playerName) {
+        console.log('🔄 Solicitando cena atual...');
+        socket.emit('request_current_scene', {
+            session_id: SESSION_ID,
+            player_id: playerId
+        });
+    }
 });
 
 socket.on('disconnect', () => {
@@ -294,6 +303,19 @@ socket.on('fog_state_sync', (data) => {
     }
 });
 
+socket.on('drawing_sync', (data) => {
+    console.log('✏️ [PLAYER] Novo desenho recebido');
+    drawings.push(data.drawing);
+    redrawDrawings();
+});
+
+socket.on('drawings_cleared', () => {
+    console.log('🧹 [PLAYER] Desenhos limpos');
+    drawings = [];
+    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    redrawDrawings();
+});
+
 function loadFogStatePlayer(imageData) {
     if (!imageData) {
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -312,15 +334,18 @@ function loadFogStatePlayer(imageData) {
     img.src = imageData;
 }
 
+// ✅ HANDLER PRINCIPAL - Cena ativada/atualizada
 socket.on('scene_activated', (data) => {
     console.log('🎬 [PLAYER] Cena ativada:', data.scene.name);
     
     const scene = data.scene;
     const isVisible = scene.visible_to_players && scene.visible_to_players.includes(playerId);
     
-    console.log('🎬 [PLAYER] Visível?', isVisible);
+    console.log('🎬 [PLAYER] Player ID:', playerId);
+    console.log('🎬 [PLAYER] Jogadores visíveis:', scene.visible_to_players);
+    console.log('🎬 [PLAYER] Tenho permissão?', isVisible);
     
-    // SEMPRE LIMPAR TUDO PRIMEIRO
+    // ✅ SEMPRE LIMPAR TUDO PRIMEIRO
     maps = [];
     entities = [];
     tokens = [];
@@ -332,35 +357,82 @@ socket.on('scene_activated', (data) => {
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     if (!isVisible) {
-        console.log('❌ [PLAYER] Cena não visível - mantendo vazio');
-        showToast('⛔ Você não tem acesso a esta cena');
+        console.log('❌ [PLAYER] Sem permissão - mostrando tela bloqueada');
+        showBlockedScreen(scene.name);
         return;
     }
     
-    console.log('✅ [PLAYER] Carregando conteúdo da cena');
+    console.log('✅ [PLAYER] Com permissão - carregando conteúdo');
+    hideBlockedScreen();
     
+    // ✅ Carregar dados da cena
     maps = JSON.parse(JSON.stringify(scene.maps || []));
     entities = JSON.parse(JSON.stringify(scene.entities || []));
     tokens = JSON.parse(JSON.stringify(scene.tokens || []));
     drawings = JSON.parse(JSON.stringify(scene.drawings || []));
     
-    console.log('📦 Conteúdo carregado:', {
+    console.log('📦 Conteúdo da cena:', {
         maps: maps.length,
         entities: entities.length,
         tokens: tokens.length,
-        drawings: drawings.length
+        drawings: drawings.length,
+        fog: scene.fog_image ? 'SIM' : 'NÃO'
     });
     
+    // ✅ CARREGAR FOG DA CENA
     if (scene.fog_image) {
+        console.log('🌫️ [PLAYER] Carregando névoa da cena');
         loadFogStatePlayer(scene.fog_image);
+    } else {
+        console.log('✨ [PLAYER] Sem névoa nesta cena');
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
     
+    // ✅ Redesenhar tudo
     preloadAllImages();
     setTimeout(() => {
         redrawAll();
         redrawDrawings();
         showToast(`📍 ${scene.name}`);
-    }, 100);
+        console.log('✅ [PLAYER] Cena renderizada completamente');
+    }, 150);
+});
+
+// ✅ NOVO HANDLER - Cena bloqueada
+socket.on('scene_blocked', (data) => {
+    console.log('🚫 [PLAYER] Acesso bloqueado à cena:', data.scene_name);
+    
+    // ✅ Limpar tudo
+    maps = [];
+    entities = [];
+    tokens = [];
+    drawings = [];
+    loadedImages = {};
+    
+    mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // ✅ Mostrar tela de bloqueio
+    showBlockedScreen(data.scene_name);
+    showToast('🚫 Você não tem acesso a esta cena');
+});
+
+// ✅ NOVO HANDLER - Sem cena ativa
+socket.on('no_active_scene', () => {
+    console.log('ℹ️ [PLAYER] Nenhuma cena ativa');
+    
+    maps = [];
+    entities = [];
+    tokens = [];
+    drawings = [];
+    loadedImages = {};
+    
+    mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    showBlockedScreen('Aguardando...');
 });
 
 // ========== FOG OF WAR ==========
@@ -1172,6 +1244,65 @@ function sendChatMessage() {
     });
     
     input.value = '';
+}
+
+// ✅ NOVAS FUNÇÕES - Tela de bloqueio
+function showBlockedScreen(sceneName) {
+    // Criar overlay se não existir
+    let overlay = document.getElementById('blockedOverlay');
+    
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'blockedOverlay';
+        overlay.style.cssText = `
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(10, 10, 15, 0.98), rgba(5, 5, 10, 0.98));
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(10px);
+        `;
+        
+        overlay.innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+                <div style="font-size: 5rem; margin-bottom: 20px; animation: pulse 2s infinite;">🚫</div>
+                <h2 style="color: #e74c3c; font-family: 'Merriweather', serif; font-size: 2rem; margin-bottom: 15px;">
+                    Acesso Restrito
+                </h2>
+                <p style="color: #bbb; font-size: 1.2rem; margin-bottom: 10px;" id="blockedSceneName">
+                    Cena: ${sceneName}
+                </p>
+                <p style="color: #888; font-size: 0.95rem; max-width: 400px;">
+                    Você não tem permissão para visualizar esta cena.<br>
+                    Aguarde o Mestre liberar o acesso.
+                </p>
+            </div>
+            <style>
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; transform: scale(1); }
+                    50% { opacity: 0.7; transform: scale(1.1); }
+                }
+            </style>
+        `;
+        
+        document.body.appendChild(overlay);
+    } else {
+        overlay.style.display = 'flex';
+        document.getElementById('blockedSceneName').textContent = `Cena: ${sceneName}`;
+    }
+    
+    console.log('🚫 Tela de bloqueio ativada');
+}
+
+function hideBlockedScreen() {
+    const overlay = document.getElementById('blockedOverlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+        console.log('✅ Tela de bloqueio removida');
+    }
 }
 
 // Enter para enviar
