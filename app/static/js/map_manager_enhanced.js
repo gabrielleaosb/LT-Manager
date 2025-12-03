@@ -586,8 +586,6 @@ function setTool(tool) {
         canvasWrapper.classList.add('drawing-mode');
         drawingCanvas.classList.add('drawing-mode');
         canvasWrapper.style.cursor = 'not-allowed';
-    } else if (tool === 'pan') {
-        canvasWrapper.style.cursor = 'grab';
     } else {
         canvasWrapper.style.cursor = 'default';
     }
@@ -784,13 +782,18 @@ function isOnResizeHandle(img, x, y) {
 // EVENTOS DE MOUSE - CORRIGIDO
 // ==================
 
+// ==================
+// EVENTOS DE MOUSE - CORRIGIDO COM PRIORIDADES
+// ==================
+
 let isDraggingItem = false;
+let mouseDownOnCanvas = false;
 
 canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
     
-    // Pan temporário com espaço tem prioridade
-     if (e.button === 1) {
+    // Prioridade 1: Botão do meio para pan
+    if (e.button === 1) {
         e.preventDefault();
         middleMousePressed = true;
         tempPanning = true;
@@ -798,38 +801,24 @@ canvasWrapper.addEventListener('mousedown', (e) => {
         startPanX = e.clientX - panX;
         startPanY = e.clientY - panY;
         canvasWrapper.style.cursor = 'grabbing';
-        
-        const indicator = document.getElementById('panIndicator');
-        if (indicator) {
-            indicator.style.display = 'flex';
-            indicator.querySelector('span:last-child').textContent = 'Segure BOTÃO DO MEIO para mover o mapa';
-        }
         return;
     }
     
-    // Se está em modo fog, não faz nada aqui
-    if (fogDrawingMode || fogPaintMode || document.getElementById('fogEraseBtn')?.classList.contains('active')) {
+    // Prioridade 2: Modo fog (não interferir)
+    if (fogPaintMode || fogEraseMode) {
         return;
     }
     
-    // Se está em modo desenho, não faz nada aqui
+    // Prioridade 3: Modo desenho (não interferir)
     if (currentTool === 'draw' || currentTool === 'erase') {
         return;
     }
     
-    // Modo pan normal
-    if (currentTool === 'pan') {
-        isPanning = true;
-        startPanX = e.clientX - panX;
-        startPanY = e.clientY - panY;
-        canvasWrapper.style.cursor = 'grabbing';
-        return;
-    }
-    
-    // Modo select - verificar resize de imagem primeiro
+    // Prioridade 4: Modo select
     if (currentTool === 'select') {
         const found = findItemAt(pos.x, pos.y);
         
+        // 4a. Verificar resize de imagem
         if (found && found.type === 'image' && isOnResizeHandle(found.item, pos.x, pos.y)) {
             resizingImage = found.item;
             resizeStartX = pos.x;
@@ -837,26 +826,30 @@ canvasWrapper.addEventListener('mousedown', (e) => {
             resizeStartWidth = found.item.width;
             resizeStartHeight = found.item.height;
             canvasWrapper.style.cursor = 'nwse-resize';
+            mouseDownOnCanvas = true;
             e.preventDefault();
+            e.stopPropagation();
             return;
         }
         
-        // Se encontrou item, iniciar drag
+        // 4b. Verificar drag de item
         if (found) {
             selectedItem = found.item;
             selectedType = found.type;
             draggingItem = found.item;
             isDraggingItem = true;
-            mouseDown = true;
+            mouseDownOnCanvas = true;
             
             dragOffsetX = pos.x - found.item.x;
             dragOffsetY = pos.y - found.item.y;
             
             canvasWrapper.style.cursor = 'grabbing';
             e.preventDefault();
+            e.stopPropagation();
             redrawAll();
             return;
         } else {
+            // 4c. Clique no vazio = desselecionar
             selectedItem = null;
             selectedType = null;
             redrawAll();
@@ -875,21 +868,13 @@ canvasWrapper.addEventListener('mousemove', (e) => {
         return;
     }
     
-    // Desenho/fog
-    if (currentTool === 'draw' || currentTool === 'erase') {
-        return;
-    }
-    
-    // Pan normal
-    if (isPanning && currentTool === 'pan') {
-        panX = e.clientX - startPanX;
-        panY = e.clientY - startPanY;
-        applyTransform();
+    // Modo fog ou desenho - não interferir
+    if (fogPaintMode || fogEraseMode || currentTool === 'draw' || currentTool === 'erase') {
         return;
     }
     
     // Resize de imagem
-    if (resizingImage) {
+    if (resizingImage && mouseDownOnCanvas) {
         const deltaX = pos.x - resizeStartX;
         const deltaY = pos.y - resizeStartY;
         
@@ -898,11 +883,12 @@ canvasWrapper.addEventListener('mousemove', (e) => {
         
         redrawAll();
         e.preventDefault();
+        e.stopPropagation();
         return;
     }
     
     // Arrastar item
-    if (isDraggingItem && draggingItem && mouseDown) {
+    if (isDraggingItem && draggingItem && mouseDownOnCanvas) {
         const newX = pos.x - dragOffsetX;
         const newY = pos.y - dragOffsetY;
         
@@ -911,11 +897,12 @@ canvasWrapper.addEventListener('mousemove', (e) => {
         
         redrawAll();
         e.preventDefault();
+        e.stopPropagation();
         return;
     }
     
-    // Atualizar cursor baseado no que está sob o mouse
-    if (currentTool === 'select' && !mouseDown && !isDraggingItem) {
+    // Atualizar cursor no modo select
+    if (currentTool === 'select' && !mouseDownOnCanvas && !isDraggingItem) {
         const found = findItemAt(pos.x, pos.y);
         if (found && found.type === 'image' && isOnResizeHandle(found.item, pos.x, pos.y)) {
             canvasWrapper.style.cursor = 'nwse-resize';
@@ -940,6 +927,7 @@ canvasWrapper.addEventListener('mouseup', (e) => {
         }
         
         canvasWrapper.style.cursor = 'default';
+        mouseDownOnCanvas = false;
         return;
     }
     
@@ -960,11 +948,12 @@ canvasWrapper.addEventListener('mouseup', (e) => {
         }
         resizingImage = null;
         canvasWrapper.style.cursor = 'default';
+        mouseDownOnCanvas = false;
         return;
     }
     
     // Arrastar item
-    if (isDraggingItem && draggingItem && mouseDown) {
+    if (isDraggingItem && draggingItem && mouseDownOnCanvas) {
         if (selectedType === 'image') {
             if (draggingItem.id.startsWith('map_')) {
                 socket.emit('update_map', {
@@ -989,25 +978,17 @@ canvasWrapper.addEventListener('mouseup', (e) => {
         
         isDraggingItem = false;
         draggingItem = null;
-        mouseDown = false;
+        mouseDownOnCanvas = false;
         canvasWrapper.style.cursor = 'default';
         return;
     }
     
-    // Pan normal
-    isPanning = false;
-    mouseDown = false;
-    
-    if (currentTool === 'pan') {
-        canvasWrapper.style.cursor = 'grab';
-    } else {
-        canvasWrapper.style.cursor = 'default';
-    }
+    mouseDownOnCanvas = false;
+    canvasWrapper.style.cursor = 'default';
 });
 
 canvasWrapper.addEventListener('mouseleave', () => {
-    if (isDraggingItem && draggingItem && mouseDown) {
-        // Salvar posição ao sair
+    if (isDraggingItem && draggingItem && mouseDownOnCanvas) {
         if (selectedType === 'image') {
             if (draggingItem.id.startsWith('map_')) {
                 socket.emit('update_map', {
@@ -1034,13 +1015,13 @@ canvasWrapper.addEventListener('mouseleave', () => {
     resizingImage = null;
     isDraggingItem = false;
     draggingItem = null;
-    mouseDown = false;
+    mouseDownOnCanvas = false;
 });
 
 // MAP MANAGER - PARTE 3 - DESENHO, ADICIONAR ITENS E CHAT
 
 // ==================
-// DESENHO LIVRE
+// DESENHO LIVRE - CORRIGIDO
 // ==================
 
 function getDrawingPos(e) {
@@ -1056,16 +1037,6 @@ function getDrawingPos(e) {
 
 drawingCanvas.addEventListener('mousedown', (e) => {
     if (e.button === 1) {
-        middleMousePressed = false;
-        tempPanning = false;
-        isPanning = false;
-        
-        const indicator = document.getElementById('panIndicator');
-        if (indicator) {
-            indicator.style.display = 'none';
-        }
-        
-        canvasWrapper.style.cursor = 'default';
         return;
     }
     
@@ -1073,28 +1044,21 @@ drawingCanvas.addEventListener('mousedown', (e) => {
         isDrawing = true;
         const pos = getDrawingPos(e);
         currentPath = [pos];
+        e.preventDefault();
+        e.stopPropagation();
     } else if (currentTool === 'erase') {
+        isDrawing = true;
         const pos = getDrawingPos(e);
         eraseDrawingsAt(pos.x, pos.y);
+        e.preventDefault();
+        e.stopPropagation();
     }
 });
 
 drawingCanvas.addEventListener('mousemove', (e) => {
-    if (e.button === 1) {
-        middleMousePressed = false;
-        tempPanning = false;
-        isPanning = false;
-        
-        const indicator = document.getElementById('panIndicator');
-        if (indicator) {
-            indicator.style.display = 'none';
-        }
-        
-        canvasWrapper.style.cursor = 'default';
-        return;
-    }
+    if (!isDrawing) return;
     
-    if (isDrawing && currentTool === 'draw') {
+    if (currentTool === 'draw') {
         const pos = getDrawingPos(e);
         currentPath.push(pos);
         
@@ -1112,14 +1076,18 @@ drawingCanvas.addEventListener('mousemove', (e) => {
             drawCtx.lineTo(curr.x, curr.y);
             drawCtx.stroke();
         }
-    } else if (currentTool === 'erase' && e.buttons === 1) {
+        e.preventDefault();
+        e.stopPropagation();
+    } else if (currentTool === 'erase') {
         const pos = getDrawingPos(e);
         eraseDrawingsAt(pos.x, pos.y);
+        e.preventDefault();
+        e.stopPropagation();
     }
 });
 
 drawingCanvas.addEventListener('mouseup', () => {
-    if (isDrawing && currentPath.length > 0 && !spacePressed) {
+    if (isDrawing && currentPath.length > 0 && currentTool === 'draw') {
         const drawing = {
             id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
             path: currentPath,
@@ -1140,8 +1108,49 @@ drawingCanvas.addEventListener('mouseup', () => {
 });
 
 drawingCanvas.addEventListener('mouseleave', () => {
+    if (isDrawing && currentPath.length > 0 && currentTool === 'draw') {
+        const drawing = {
+            id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+            path: currentPath,
+            color: drawingColor,
+            size: brushSize
+        };
+        drawings.push(drawing);
+        
+        socket.emit('drawing_update', {
+            session_id: SESSION_ID,
+            drawing: drawing
+        });
+        
+        currentPath = [];
+    }
     isDrawing = false;
 });
+
+function eraseDrawingsAt(x, y) {
+    const eraseRadius = brushSize * 5;
+    let changed = false;
+    
+    const newDrawings = [];
+    
+    drawings.forEach(drawing => {
+        const hasPointInRadius = drawing.path.some(point => {
+            const dist = Math.hypot(point.x - x, point.y - y);
+            return dist < eraseRadius;
+        });
+        
+        if (!hasPointInRadius) {
+            newDrawings.push(drawing);
+        } else {
+            changed = true;
+        }
+    });
+    
+    if (changed) {
+        drawings = newDrawings;
+        redrawDrawings();
+    }
+}
 
 // ==================
 // FOG CANVAS EVENTS
