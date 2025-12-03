@@ -128,41 +128,47 @@
                 </div>
             </div>
             <div class="tools-section">
-                <h4>🌫️ Névoa</h4>
+                <h4>🌫️ Névoa (Fog of War)</h4>
                 
-                <div id="fogModeIndicator" class="fog-mode-indicator" style="display: none;">
-                    🌫️ Desenhando Névoa
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                    <button class="tool-btn" id="fogPaintBtn" onclick="toggleFogPaintMode()">
+                        🖌️ Pintar Névoa
+                    </button>
+                    <button class="tool-btn" id="fogEraseBtn" onclick="toggleFogEraseMode()">
+                        ✨ Apagar Névoa
+                    </button>
                 </div>
                 
-                <button class="action-btn" onclick="toggleFogMode()">
-                    🌫️ Ativar/Desativar Modo Névoa
-                </button>
-                
-                <div style="margin-top: 12px;">
-                    <h4 style="color: #c49bdb; font-size: 0.85rem; margin-bottom: 8px;">Forma da Área</h4>
-                    <div class="fog-shape-selector">
-                        <button class="tool-btn active" onclick="setFogShape('rectangle')">⬜</button>
-                        <button class="tool-btn" onclick="setFogShape('circle')">🔵</button>
+                <div style="margin-bottom: 12px;">
+                    <h4 style="color: #c49bdb; font-size: 0.85rem; margin-bottom: 8px;">Forma do Pincel</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <button class="tool-btn fog-shape-btn active" onclick="setFogBrushShape('circle')">
+                            🔵 Círculo
+                        </button>
+                        <button class="tool-btn fog-shape-btn" onclick="setFogBrushShape('square')">
+                            ⬜ Quadrado
+                        </button>
                     </div>
                 </div>
                 
-                <div class="control-row" style="margin-top: 12px;">
-                    <label>Opacidade (Visual do Mestre)</label>
-                    <input type="range" min="0.1" max="1" value="0.5" step="0.05" onchange="setFogOpacity(this.value)">
-                    <span class="grid-size-value" id="fogOpacityValue">50%</span>
+                <div class="control-row" style="margin-bottom: 12px;">
+                    <label>Tamanho do Pincel</label>
+                    <input type="range" min="20" max="300" value="100" step="10" onchange="setFogBrushSize(this.value)">
+                    <span class="grid-size-value" id="fogBrushSizeValue">100px</span>
                 </div>
                 
-                <button class="action-btn" onclick="clearAllFog()" style="margin-top: 12px; background: linear-gradient(135deg, #3498db, #2980b9);">
-                    ✨ Limpar Névoa
+                <button class="action-btn" onclick="coverAllWithFog()" style="margin-bottom: 8px; background: linear-gradient(135deg, #34495e, #2c3e50);">
+                    🌫️ Cobrir Tudo com Névoa
                 </button>
                 
-                <h4 style="color: #c49bdb; font-size: 0.85rem; margin: 15px 0 8px 0;">Áreas Reveladas</h4>
-                <div class="item-list" id="fogAreasList">
-                    <div class="empty-state">Nenhuma área revelada</div>
-                </div>
+                <button class="action-btn" onclick="clearAllFog()" style="background: linear-gradient(135deg, #3498db, #2980b9);">
+                    ✨ Limpar Toda a Névoa
+                </button>
                 
-                <div class="fog-preview">
-                    💡 Desenhe no mapa para criar áreas visíveis
+                <div style="margin-top: 12px; padding: 10px; background: rgba(52, 152, 219, 0.1); border-radius: 8px; border: 1px solid rgba(52, 152, 219, 0.3);">
+                    <p style="color: #3498db; font-size: 0.8rem; margin: 0;">
+                        💡 <strong>Dica:</strong> Clique e arraste para pintar/apagar névoa no mapa
+                    </p>
                 </div>
             </div>
         </div>
@@ -377,11 +383,22 @@
 </div>
 <!-- Modal de Gerenciador de Cenas -->
 <div class="modal" id="sceneManagerModal">
-    <div class="modal-content" style="max-width: 800px;">
+    <div class="modal-content" style="max-width: 900px;">
         <h3>🎬 Gerenciador de Cenas</h3>
         
-        <button class="action-btn" onclick="createNewScene()" style="margin-bottom: 20px;">
-            + Criar Nova Cena
+        <div style="background: rgba(46, 213, 115, 0.1); border: 2px solid rgba(46, 213, 115, 0.3); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+            <h4 style="color: #2ed573; margin-bottom: 8px; font-size: 0.95rem;">ℹ️ Como Usar o Sistema de Cenas</h4>
+            <ul style="color: #bbb; font-size: 0.85rem; margin: 0; padding-left: 20px; line-height: 1.6;">
+                <li><strong>Criar Cena:</strong> Clique em "Nova Cena" e dê um nome</li>
+                <li><strong>Ativar Cena:</strong> Clique em "🔄 Ativar" para trocar para essa cena</li>
+                <li><strong>Salvar:</strong> A cena ativa é salva automaticamente a cada 10 segundos</li>
+                <li><strong>Visibilidade:</strong> Controle quais jogadores veem cada cena</li>
+                <li><strong>⚠️ Importante:</strong> Sempre salve antes de trocar de cena!</li>
+            </ul>
+        </div>
+        
+        <button class="action-btn" onclick="createNewScene()" style="margin-bottom: 20px; width: 100%;">
+            ➕ Criar Nova Cena
         </button>
         
         <div class="item-list" id="scenesList" style="max-height: 500px;">
@@ -416,7 +433,5 @@
 <div class="toast" id="toast"></div>
 
 <script defer src="{{ url_for('static', filename='js/map_manager_enhanced.js') }}"></script>
-<script defer src="{{ url_for('static', filename='js/scene_manager.js') }}"></script>
-
 </body>
 </html>

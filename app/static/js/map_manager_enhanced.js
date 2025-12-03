@@ -87,17 +87,11 @@ let loadedImages = new Map();
 let sidebarCollapsed = false;
 
 // Estado do Fog of War
-let fogAreas = [];
-let fogDrawingMode = false;
-let fogShape = 'rectangle';
-let fogDrawStart = null;
-let fogCurrentArea = null;
-let fogOpacity = 0.5;
-
-// SCENES
-let scenes = [];
-let currentSceneId = null;
-let currentScene = null;
+let fogBrushSize = 100;
+let fogBrushShape = 'circle';
+let fogDrawingActive = false;
+let fogPaintMode = false;
+let lastFogPoint = null;
 
 // Pan temporário com espaço
 let spacePressed = false;
@@ -396,11 +390,13 @@ socket.on('drawings_cleared', () => {
     redrawAll();
 });
 
-socket.on('fog_areas_sync', (data) => {
-    console.log('🌫️ FOG SYNC recebido:', data);
-    fogAreas = data.fog_areas || [];
-    redrawFog();
-    renderFogList();
+socket.on('fog_state_sync', (data) => {
+    console.log('🌫️ Fog state recebido');
+    if (data.fog_image) {
+        loadFogState(data.fog_image);
+    } else {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
 });
 
 socket.on('scenes_sync', (data) => {
@@ -421,82 +417,7 @@ socket.on('scene_switched', (data) => {
 // FOG (NÉVOA)
 // ==================
 
-function toggleFogMode() {
-    fogDrawingMode = !fogDrawingMode;
-    
-    const btn = document.querySelector('[onclick="toggleFogMode()"]');
-    const indicator = document.getElementById('fogModeIndicator');
-    
-    if (fogDrawingMode) {
-        currentTool = 'select'; 
-        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-        
-        fogCanvas.classList.add('fog-drawing-mode');
-        if (btn) btn.classList.add('active');
-        if (indicator) {
-            indicator.style.display = 'block';
-            indicator.textContent = `🌫️ Desenhando Névoa - ${fogShape === 'rectangle' ? 'Retângulo' : 'Círculo'}`;
-        }
-        canvasWrapper.style.cursor = 'crosshair';
-        
-        canvasWrapper.style.pointerEvents = 'none';
-        fogCanvas.style.pointerEvents = 'auto';
-        
-        showToast('Modo Névoa ATIVADO - Desenhe no mapa');
-    } else {
-        fogCanvas.classList.remove('fog-drawing-mode');
-        if (btn) btn.classList.remove('active');
-        if (indicator) indicator.style.display = 'none';
-        canvasWrapper.style.cursor = 'default';
-        
-        canvasWrapper.style.pointerEvents = 'auto';
-        fogCanvas.style.pointerEvents = 'none';
-        
-        showToast('Modo Névoa DESATIVADO');
-    }
-}
 
-function setFogShape(shape) {
-    fogShape = shape;
-    document.querySelectorAll('.fog-shape-selector .tool-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    event.target.classList.add('active');
-    
-    const indicator = document.getElementById('fogModeIndicator');
-    if (indicator && fogDrawingMode) {
-        indicator.textContent = `🌫️ Desenhando Névoa - ${shape === 'rectangle' ? 'Retângulo' : 'Círculo'}`;
-    }
-}
-
-function setFogOpacity(value) {
-    fogOpacity = parseFloat(value);
-    document.getElementById('fogOpacityValue').textContent = Math.round(fogOpacity * 100) + '%';
-    redrawFog();
-}
-
-function clearAllFog() {
-    if (confirm('Remover toda a névoa e revelar o mapa?')) {
-        fogAreas = [];
-        socket.emit('clear_all_fog', {
-            session_id: SESSION_ID
-        });
-        redrawFog();
-        renderFogList();
-        showToast('Mapa revelado!');
-    }
-}
-
-function removeFogArea(areaId) {
-    fogAreas = fogAreas.filter(area => area.id !== areaId);
-    socket.emit('delete_fog_area', {
-        session_id: SESSION_ID,
-        fog_id: areaId
-    });
-    redrawFog();
-    renderFogList();
-    showToast('Área de névoa removida');
-}
 
 function redrawFog() {
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -544,36 +465,6 @@ function redrawFog() {
     }
 }
 
-function renderFogList() {
-    const list = document.getElementById('fogAreasList');
-    if (!list) return;
-    
-    list.innerHTML = '';
-    
-    if (fogAreas.length === 0) {
-        list.innerHTML = '<div class="empty-state">Nenhuma área revelada</div>';
-        return;
-    }
-    
-    fogAreas.forEach((area, index) => {
-        const item = document.createElement('div');
-        item.className = 'item-card';
-        
-        const shapeIcon = area.shape === 'rectangle' ? '⬜' : '🔵';
-        const shapeName = area.shape === 'rectangle' ? 'Retângulo' : 'Círculo';
-        
-        item.innerHTML = `
-            <div style="flex: 1;">
-                <div class="item-name">${shapeIcon} Área ${index + 1} - ${shapeName}</div>
-            </div>
-            <div class="item-actions">
-                <button class="item-action-btn" onclick="removeFogArea('${area.id}'); event.stopPropagation();">🗑️</button>
-            </div>
-        `;
-        
-        list.appendChild(item);
-    });
-}
 
 
 // CHAT - Socket Handlers CORRIGIDOS (substitua no início do arquivo, parte 1)
@@ -1173,8 +1064,167 @@ drawingCanvas.addEventListener('mouseleave', () => {
 // FOG CANVAS EVENTS
 // ==================
 
+// ==========================================
+// NOVO SISTEMA DE FOG OF WAR - PINCEL
+// ==========================================
+
+// Inicializar fog canvas vazio
+function initializeFog() {
+    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+}
+
+// Ativar modo de pintura de névoa
+function toggleFogPaintMode() {
+    fogPaintMode = !fogPaintMode;
+    
+    const paintBtn = document.getElementById('fogPaintBtn');
+    const eraseBtn = document.getElementById('fogEraseBtn');
+    
+    if (fogPaintMode) {
+        if (paintBtn) paintBtn.classList.add('active');
+        if (eraseBtn) eraseBtn.classList.remove('active');
+        fogCanvas.style.cursor = 'crosshair';
+        fogCanvas.classList.add('fog-drawing-mode');
+        showToast('🌫️ Modo: Pintar Névoa');
+    } else {
+        if (paintBtn) paintBtn.classList.remove('active');
+        fogCanvas.classList.remove('fog-drawing-mode');
+        fogCanvas.style.cursor = 'default';
+    }
+}
+
+// Ativar modo de apagar névoa
+function toggleFogEraseMode() {
+    fogPaintMode = false;
+    
+    const paintBtn = document.getElementById('fogPaintBtn');
+    const eraseBtn = document.getElementById('fogEraseBtn');
+    
+    const isErasing = eraseBtn && eraseBtn.classList.contains('active');
+    
+    if (paintBtn) paintBtn.classList.remove('active');
+    
+    if (!isErasing) {
+        if (eraseBtn) eraseBtn.classList.add('active');
+        fogCanvas.classList.add('fog-drawing-mode');
+        fogCanvas.style.cursor = 'not-allowed';
+        showToast('✨ Modo: Apagar Névoa');
+    } else {
+        if (eraseBtn) eraseBtn.classList.remove('active');
+        fogCanvas.classList.remove('fog-drawing-mode');
+        fogCanvas.style.cursor = 'default';
+    }
+}
+
+// Definir forma do pincel
+function setFogBrushShape(shape) {
+    fogBrushShape = shape;
+    document.querySelectorAll('.fog-shape-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+}
+
+// Atualizar tamanho do pincel
+function setFogBrushSize(size) {
+    fogBrushSize = parseInt(size);
+    document.getElementById('fogBrushSizeValue').textContent = fogBrushSize + 'px';
+}
+
+// Desenhar névoa com pincel
+function paintFog(x, y, erase = false) {
+    fogCtx.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+    
+    if (fogBrushShape === 'circle') {
+        fogCtx.fillStyle = erase ? 'rgba(255, 255, 255, 1)' : 'rgba(0, 0, 0, 0.9)';
+        fogCtx.beginPath();
+        fogCtx.arc(x, y, fogBrushSize / 2, 0, Math.PI * 2);
+        fogCtx.fill();
+    } else if (fogBrushShape === 'square') {
+        fogCtx.fillStyle = erase ? 'rgba(255, 255, 255, 1)' : 'rgba(0, 0, 0, 0.9)';
+        fogCtx.fillRect(
+            x - fogBrushSize / 2,
+            y - fogBrushSize / 2,
+            fogBrushSize,
+            fogBrushSize
+        );
+    }
+    
+    fogCtx.globalCompositeOperation = 'source-over';
+}
+
+// Interpolar entre dois pontos para pincel suave
+function interpolateFogPaint(x1, y1, x2, y2, erase) {
+    const dist = Math.hypot(x2 - x1, y2 - y1);
+    const steps = Math.max(1, Math.floor(dist / 5));
+    
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const x = x1 + (x2 - x1) * t;
+        const y = y1 + (y2 - y1) * t;
+        paintFog(x, y, erase);
+    }
+}
+
+// Salvar estado do fog
+function saveFogState() {
+    const imageData = fogCanvas.toDataURL();
+    
+    socket.emit('update_fog_state', {
+        session_id: SESSION_ID,
+        fog_image: imageData
+    });
+}
+
+// Limpar toda a névoa
+function clearAllFog() {
+    if (confirm('Remover toda a névoa do mapa?')) {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        socket.emit('clear_fog_state', {
+            session_id: SESSION_ID
+        });
+        
+        showToast('Névoa removida!');
+    }
+}
+
+// Cobrir todo o mapa com névoa
+function coverAllWithFog() {
+    if (confirm('Cobrir todo o mapa com névoa?')) {
+        fogCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        saveFogState();
+        showToast('Mapa coberto com névoa!');
+    }
+}
+
+// Carregar estado do fog
+function loadFogState(imageData) {
+    if (!imageData) {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        return;
+    }
+    
+    const img = new Image();
+    img.onload = () => {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        fogCtx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    };
+    img.src = imageData;
+}
+
+// Inicializar
+initializeFog();
+
+// Eventos do fog canvas
 fogCanvas.addEventListener('mousedown', (e) => {
-    if (!fogDrawingMode || spacePressed) return;
+    if (!fogPaintMode && !document.getElementById('fogEraseBtn')?.classList.contains('active')) {
+        return;
+    }
+    
+    if (spacePressed) return;
     
     e.preventDefault();
     e.stopPropagation();
@@ -1186,30 +1236,16 @@ fogCanvas.addEventListener('mousedown', (e) => {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
     
-    fogDrawStart = { x, y };
+    fogDrawingActive = true;
+    lastFogPoint = { x, y };
     
-    if (fogShape === 'rectangle') {
-        fogCurrentArea = {
-            shape: 'rectangle',
-            x: x,
-            y: y,
-            width: 0,
-            height: 0
-        };
-    } else if (fogShape === 'circle') {
-        fogCurrentArea = {
-            shape: 'circle',
-            x: x,
-            y: y,
-            radius: 0
-        };
-    }
-    
-    console.log('🌫️ Fog drawing started:', fogCurrentArea);
+    const isErasing = document.getElementById('fogEraseBtn')?.classList.contains('active');
+    paintFog(x, y, isErasing);
 });
 
 fogCanvas.addEventListener('mousemove', (e) => {
-    if (!fogDrawingMode || !fogDrawStart || !fogCurrentArea || spacePressed) return;
+    if (!fogDrawingActive) return;
+    if (spacePressed) return;
     
     e.preventDefault();
     e.stopPropagation();
@@ -1221,76 +1257,25 @@ fogCanvas.addEventListener('mousemove', (e) => {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
     
-    if (fogShape === 'rectangle') {
-        fogCurrentArea.width = x - fogDrawStart.x;
-        fogCurrentArea.height = y - fogDrawStart.y;
-    } else if (fogShape === 'circle') {
-        const dx = x - fogDrawStart.x;
-        const dy = y - fogDrawStart.y;
-        fogCurrentArea.radius = Math.sqrt(dx * dx + dy * dy);
+    if (lastFogPoint) {
+        const isErasing = document.getElementById('fogEraseBtn')?.classList.contains('active');
+        interpolateFogPaint(lastFogPoint.x, lastFogPoint.y, x, y, isErasing);
     }
     
-    redrawFog();
+    lastFogPoint = { x, y };
 });
 
-fogCanvas.addEventListener('mouseup', (e) => {
-    if (!fogDrawingMode || !fogCurrentArea || spacePressed) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (fogShape === 'rectangle') {
-        if (fogCurrentArea.width < 0) {
-            fogCurrentArea.x += fogCurrentArea.width;
-            fogCurrentArea.width = Math.abs(fogCurrentArea.width);
-        }
-        if (fogCurrentArea.height < 0) {
-            fogCurrentArea.y += fogCurrentArea.height;
-            fogCurrentArea.height = Math.abs(fogCurrentArea.height);
-        }
-        
-        if (fogCurrentArea.width < 20 || fogCurrentArea.height < 20) {
-            fogCurrentArea = null;
-            fogDrawStart = null;
-            redrawFog();
-            showToast('Área muito pequena - desenhe uma área maior');
-            return;
-        }
-    } else if (fogShape === 'circle') {
-        if (fogCurrentArea.radius < 10) {
-            fogCurrentArea = null;
-            fogDrawStart = null;
-            redrawFog();
-            showToast('Área muito pequena - desenhe uma área maior');
-            return;
-        }
+fogCanvas.addEventListener('mouseup', () => {
+    if (fogDrawingActive) {
+        fogDrawingActive = false;
+        lastFogPoint = null;
+        saveFogState();
     }
-    
-    fogCurrentArea.id = Date.now() + '_' + Math.random().toString(36).substr(2, 9); 
-    fogAreas.push(fogCurrentArea);
-    
-    console.log('🌫️ Fog area adicionada:', fogCurrentArea);
-    console.log('🌫️ Total fog areas:', fogAreas.length);
-    
-    socket.emit('add_fog_area', {
-        session_id: SESSION_ID,
-        fog_area: fogCurrentArea
-    });
-    
-    fogCurrentArea = null;
-    fogDrawStart = null;
-    
-    redrawFog();
-    renderFogList();
-    showToast('Área de névoa adicionada!');
 });
 
 fogCanvas.addEventListener('mouseleave', () => {
-    if (fogDrawingMode && fogCurrentArea) {
-        fogCurrentArea = null;
-        fogDrawStart = null;
-        redrawFog();
-    }
+    fogDrawingActive = false;
+    lastFogPoint = null;
 });
 
 function eraseDrawingsAt(x, y) {
@@ -2284,6 +2269,321 @@ document.addEventListener('keyup', (e) => {
             canvasWrapper.style.cursor = 'default';
         }
     }
+});
+
+// ==========================================
+// SISTEMA DE CENAS REESTRUTURADO
+// ==========================================
+
+let scenes = [];
+let currentSceneId = null;
+
+function createEmptyScene(name) {
+    return {
+        id: `scene_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: name,
+        created_at: Date.now(),
+        maps: [],
+        entities: [],
+        tokens: [],
+        drawings: [],
+        fog_image: null,
+        visible_to_players: []
+    };
+}
+
+function createNewScene() {
+    const name = prompt('📝 Nome da nova cena:');
+    
+    if (!name || !name.trim()) {
+        return;
+    }
+    
+    console.log('🎬 Criando cena:', name.trim());
+    
+    const newScene = createEmptyScene(name.trim());
+    scenes.push(newScene);
+    
+    socket.emit('scene_create', {
+        session_id: SESSION_ID,
+        scene: newScene
+    });
+    
+    renderScenesList();
+    showToast(`Cena "${name}" criada!`);
+}
+
+function saveCurrentScene() {
+    if (!currentSceneId) {
+        console.log('⚠️ Nenhuma cena ativa para salvar');
+        return;
+    }
+    
+    const scene = scenes.find(s => s.id === currentSceneId);
+    if (!scene) {
+        console.log('❌ Cena não encontrada:', currentSceneId);
+        return;
+    }
+    
+    const mapsOnly = images.filter(img => img.id.startsWith('map_'));
+    const entitiesOnly = images.filter(img => !img.id.startsWith('map_'));
+    
+    scene.maps = JSON.parse(JSON.stringify(mapsOnly));
+    scene.entities = JSON.parse(JSON.stringify(entitiesOnly));
+    scene.tokens = JSON.parse(JSON.stringify(tokens));
+    scene.drawings = JSON.parse(JSON.stringify(drawings));
+    scene.fog_image = fogCanvas.toDataURL();
+    
+    console.log('💾 Cena salva:', {
+        scene_id: scene.id,
+        maps: scene.maps.length,
+        entities: scene.entities.length,
+        tokens: scene.tokens.length
+    });
+    
+    socket.emit('scene_update', {
+        session_id: SESSION_ID,
+        scene: scene
+    });
+    
+    showToast(`💾 Cena "${scene.name}" salva`);
+}
+
+function switchToScene(sceneId) {
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene) {
+        console.error('❌ Cena não encontrada:', sceneId);
+        return;
+    }
+    
+    console.log('🎬 Trocando para cena:', scene.name);
+    
+    if (currentSceneId) {
+        saveCurrentScene();
+    }
+    
+    images = [];
+    tokens = [];
+    drawings = [];
+    
+    mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    currentSceneId = sceneId;
+    
+    images = [
+        ...JSON.parse(JSON.stringify(scene.maps || [])),
+        ...JSON.parse(JSON.stringify(scene.entities || []))
+    ];
+    tokens = JSON.parse(JSON.stringify(scene.tokens || []));
+    drawings = JSON.parse(JSON.stringify(scene.drawings || []));
+    
+    if (scene.fog_image) {
+        loadFogState(scene.fog_image);
+    }
+    
+    preloadAllImages();
+    renderImageList();
+    renderTokenList();
+    redrawAll();
+    redrawDrawings();
+    
+    socket.emit('scene_switch', {
+        session_id: SESSION_ID,
+        scene_id: sceneId,
+        scene: scene
+    });
+    
+    renderScenesList();
+    showToast(`Cena ativada: ${scene.name}`);
+    closeSceneManager();
+}
+
+function deleteScene(sceneId) {
+    const scene = scenes.find(s => s.id === sceneId);
+    
+    if (!scene) return;
+    
+    if (currentSceneId === sceneId) {
+        alert('⚠️ Não é possível deletar a cena ativa. Troque para outra cena primeiro.');
+        return;
+    }
+    
+    if (!confirm(`🗑️ Tem certeza que deseja excluir a cena "${scene.name}"?`)) {
+        return;
+    }
+    
+    scenes = scenes.filter(s => s.id !== sceneId);
+    
+    socket.emit('scene_delete', {
+        session_id: SESSION_ID,
+        scene_id: sceneId
+    });
+    
+    renderScenesList();
+    showToast('Cena deletada');
+}
+
+function openSceneVisibility(sceneId) {
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene) return;
+    
+    document.getElementById('currentSceneIdForVisibility').value = sceneId;
+    document.getElementById('sceneVisibilityTitle').textContent = `Visibilidade: ${scene.name}`;
+    
+    renderSceneVisibilityList(scene);
+    document.getElementById('sceneVisibilityModal').classList.add('show');
+}
+
+function renderSceneVisibilityList(scene) {
+    const list = document.getElementById('sceneVisibilityList');
+    list.innerHTML = '';
+    
+    if (players.length === 0) {
+        list.innerHTML = '<div class="empty-state">Nenhum jogador conectado</div>';
+        return;
+    }
+    
+    players.forEach(player => {
+        const isVisible = scene.visible_to_players && scene.visible_to_players.includes(player.id);
+        
+        const item = document.createElement('div');
+        item.className = 'item-card';
+        
+        item.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
+                <span>👤 ${player.name}</span>
+            </div>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" ${isVisible ? 'checked' : ''} 
+                       onchange="toggleSceneVisibilityForPlayer('${scene.id}', '${player.id}')">
+                <span>${isVisible ? '👁️ Visível' : '🚫 Oculta'}</span>
+            </label>
+        `;
+        
+        list.appendChild(item);
+    });
+}
+
+function toggleSceneVisibilityForPlayer(sceneId, playerId) {
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene) return;
+    
+    if (!scene.visible_to_players) {
+        scene.visible_to_players = [];
+    }
+    
+    const index = scene.visible_to_players.indexOf(playerId);
+    
+    if (index > -1) {
+        scene.visible_to_players.splice(index, 1);
+    } else {
+        scene.visible_to_players.push(playerId);
+    }
+    
+    socket.emit('scene_update', {
+        session_id: SESSION_ID,
+        scene: scene
+    });
+    
+    if (currentSceneId === sceneId) {
+        socket.emit('scene_switch', {
+        session_id: SESSION_ID,
+        scene_id: sceneId,
+        scene: scene
+        });
+    }
+}
+
+function renderScenesList() {
+const list = document.getElementById('scenesList');
+if (!list) {
+    console.error('❌ Container scenesList não encontrado!');
+    return;
+}
+
+list.innerHTML = '';
+
+if (!scenes || scenes.length === 0) {
+    list.innerHTML = '<div class="empty-state">Nenhuma cena criada</div>';
+    return;
+}
+
+scenes.forEach(scene => {
+    const isActive = scene.id === currentSceneId;
+    
+    const item = document.createElement('div');
+    item.className = 'scene-item' + (isActive ? ' active' : '');
+    
+    const visibleCount = scene.visible_to_players ? scene.visible_to_players.length : 0;
+    
+    item.innerHTML = `
+        <div class="scene-info">
+            <div class="scene-name">
+                ${isActive ? '▶️' : '🎬'} ${scene.name}
+            </div>
+            <div class="scene-stats">
+                <span>🖼️ ${(scene.maps?.length || 0) + (scene.entities?.length || 0)} imagens</span>
+                <span>🎭 ${scene.tokens?.length || 0} tokens</span>
+                <span>👁️ ${visibleCount} jogador(es)</span>
+            </div>
+        </div>
+        <div class="scene-actions">
+            ${!isActive ? 
+                `<button class="scene-action-btn" onclick="switchToScene('${scene.id}')">🔄 Ativar</button>` : 
+                '<span style="color: #2ed573; font-weight: bold;">✅ Ativa</span>'
+            }
+            ${isActive ? 
+                `<button class="scene-action-btn" onclick="saveCurrentScene()">💾 Salvar</button>` : 
+                ''
+            }
+            <button class="scene-action-btn" onclick="openSceneVisibility('${scene.id}')">👁️ Visibilidade</button>
+            ${!isActive ? 
+                `<button class="scene-action-btn delete" onclick="deleteScene('${scene.id}'); event.stopPropagation();">🗑️</button>` : 
+                ''
+            }
+        </div>
+    `;
+    
+    list.appendChild(item);
+});
+}
+function openSceneManager() {
+    console.log('🎬 Abrindo gerenciador. Cenas:', scenes.length);
+    document.getElementById('sceneManagerModal').classList.add('show');
+    renderScenesList();
+}
+
+function closeSceneManager() {
+    document.getElementById('sceneManagerModal').classList.remove('show');
+}
+
+function closeSceneVisibilityModal() {
+    document.getElementById('sceneVisibilityModal').classList.remove('show');
+}
+
+
+setInterval(() => {
+    if (currentSceneId) {
+    saveCurrentScene();
+    console.log('🔄 Auto-save da cena');
+    }
+}, 10000);
+
+socket.on('scenes_sync', (data) => {
+console.log('🎬 Sincronização de cenas recebida:', data);
+if (data.scenes && Array.isArray(data.scenes)) {
+    scenes = data.scenes;
+    renderScenesList();
+}
+});
+socket.on('scene_switched', (data) => {
+console.log('🎬 Outro cliente trocou de cena:', data);
+const scene = scenes.find(s => s.id === data.scene_id);
+if (scene && data.scene) {
+    Object.assign(scene, data.scene);
+}
 });
 
 setTool('select');

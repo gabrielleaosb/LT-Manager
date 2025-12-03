@@ -268,46 +268,57 @@ socket.on('player_joined', (data) => {
     loadChatContacts();
 });
 
-socket.on('fog_areas_sync', (data) => {
-    console.log('🌫️ [JOGADOR] FOG SYNC recebido:', data);
-    console.log('🌫️ Fog areas:', data.fog_areas);
-    fogAreas = data.fog_areas || [];
-    console.log('🌫️ fogAreas atualizado:', fogAreas.length, 'áreas');
-    redrawFog();
+socket.on('fog_state_sync', (data) => {
+    console.log('🌫️ [JOGADOR] Fog state recebido');
     
-    if (fogAreas.length > 0) {
-        showToast(`Mapa atualizado - ${fogAreas.length} área(s) visível(is)`);
+    if (data.fog_image) {
+        loadFogStatePlayer(data.fog_image);
+    } else {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
 });
+
+function loadFogStatePlayer(imageData) {
+    if (!imageData) {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        return;
+    }
+    
+    const img = new Image();
+    img.onload = () => {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        fogCtx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        console.log('✅ Névoa carregada no player');
+    };
+    img.onerror = () => {
+        console.error('❌ Erro ao carregar névoa');
+    };
+    img.src = imageData;
+}
 
 socket.on('scene_activated', (data) => {
     console.log('🎬 [PLAYER] Cena ativada pelo mestre:', data.scene.name);
     
     const scene = data.scene;
+    
     const isVisible = scene.visible_to_players && scene.visible_to_players.includes(playerId);
     
     console.log('🎬 [PLAYER] Sou visível nesta cena?', isVisible);
-    console.log('🎬 [PLAYER] Lista de visíveis:', scene.visible_to_players);
-    console.log('🎬 [PLAYER] Meu ID:', playerId);
     
     if (!isVisible) {
         console.log('❌ [PLAYER] Cena não visível - limpando canvas');
         
-        // Limpar tudo
         maps = [];
         entities = [];
         tokens = [];
         drawings = [];
-        fogAreas = [];
         
-        // Limpar canvas
         mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
         redrawAll();
         redrawDrawings();
-        redrawFog();
         
         showToast('⛔ Você não tem acesso a esta cena');
         return;
@@ -315,32 +326,31 @@ socket.on('scene_activated', (data) => {
     
     console.log('✅ [PLAYER] Cena visível - carregando conteúdo');
     
-    const content = scene.content || {};
+    maps = JSON.parse(JSON.stringify(scene.maps || []));
+    entities = JSON.parse(JSON.stringify(scene.entities || []));
+    tokens = JSON.parse(JSON.stringify(scene.tokens || []));
+    drawings = JSON.parse(JSON.stringify(scene.drawings || []));
     
-    // Carregar conteúdo
-    maps = JSON.parse(JSON.stringify(content.maps || []));
-    entities = JSON.parse(JSON.stringify(content.entities || []));
-    tokens = JSON.parse(JSON.stringify(content.tokens || []));
-    drawings = JSON.parse(JSON.stringify(content.drawings || []));
-    fogAreas = JSON.parse(JSON.stringify(content.fog_areas || []));
+    if (scene.fog_image) {
+        loadFogStatePlayer(scene.fog_image);
+    } else {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
     
     console.log('🎬 [PLAYER] Conteúdo carregado:', {
         maps: maps.length,
         entities: entities.length,
         tokens: tokens.length,
-        fog: fogAreas.length
+        fog: scene.fog_image ? 'Sim' : 'Não'
     });
     
-    // Redesenhar
     preloadAllImages();
     
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     redrawAll();
     redrawDrawings();
-    redrawFog();
     
     showToast(`📍 Cena: ${scene.name}`);
 });
