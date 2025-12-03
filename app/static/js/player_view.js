@@ -76,6 +76,13 @@ let gridEnabled = true;
 let gridSize = 50;
 let gridColor = 'rgba(155, 89, 182, 0.3)';
 
+let middleMousePressed = false;
+
+// Undo/Redo
+let playerHistory = [];
+let playerHistoryIndex = -1;
+const MAX_PLAYER_HISTORY = 30;
+
 // ========== CENTRALIZAÇÃO E TRANSFORM ==========
 function centerCanvas() {
     const containerRect = canvasContainer.getBoundingClientRect();
@@ -190,12 +197,21 @@ socket.on('disconnect', () => {
 
 socket.on('session_state', (data) => {
     console.log('📦 Estado da sessão recebido:', data);
+    
+    loadedImages = {};
+    
     maps = data.maps || [];
     entities = data.entities || [];
     tokens = data.tokens || [];
     drawings = data.drawings || [];
+    
     preloadAllImages();
     drawGrid();
+    
+    setTimeout(() => {
+        redrawAll();
+        redrawDrawings();
+    }, 100);
 });
 
 socket.on('permissions_updated', (data) => {
@@ -297,62 +313,54 @@ function loadFogStatePlayer(imageData) {
 }
 
 socket.on('scene_activated', (data) => {
-    console.log('🎬 [PLAYER] Cena ativada pelo mestre:', data.scene.name);
+    console.log('🎬 [PLAYER] Cena ativada:', data.scene.name);
     
     const scene = data.scene;
-    
     const isVisible = scene.visible_to_players && scene.visible_to_players.includes(playerId);
     
-    console.log('🎬 [PLAYER] Sou visível nesta cena?', isVisible);
+    console.log('🎬 [PLAYER] Visível?', isVisible);
+    
+    // SEMPRE LIMPAR TUDO PRIMEIRO
+    maps = [];
+    entities = [];
+    tokens = [];
+    drawings = [];
+    loadedImages = {};
+    
+    mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     if (!isVisible) {
-        console.log('❌ [PLAYER] Cena não visível - limpando canvas');
-        
-        maps = [];
-        entities = [];
-        tokens = [];
-        drawings = [];
-        
-        mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        
-        redrawAll();
-        redrawDrawings();
-        
+        console.log('❌ [PLAYER] Cena não visível - mantendo vazio');
         showToast('⛔ Você não tem acesso a esta cena');
         return;
     }
     
-    console.log('✅ [PLAYER] Cena visível - carregando conteúdo');
+    console.log('✅ [PLAYER] Carregando conteúdo da cena');
     
     maps = JSON.parse(JSON.stringify(scene.maps || []));
     entities = JSON.parse(JSON.stringify(scene.entities || []));
     tokens = JSON.parse(JSON.stringify(scene.tokens || []));
     drawings = JSON.parse(JSON.stringify(scene.drawings || []));
     
-    if (scene.fog_image) {
-        loadFogStatePlayer(scene.fog_image);
-    } else {
-        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    }
-    
-    console.log('🎬 [PLAYER] Conteúdo carregado:', {
+    console.log('📦 Conteúdo carregado:', {
         maps: maps.length,
         entities: entities.length,
         tokens: tokens.length,
-        fog: scene.fog_image ? 'Sim' : 'Não'
+        drawings: drawings.length
     });
     
+    if (scene.fog_image) {
+        loadFogStatePlayer(scene.fog_image);
+    }
+    
     preloadAllImages();
-    
-    mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    redrawAll();
-    redrawDrawings();
-    
-    showToast(`📍 Cena: ${scene.name}`);
+    setTimeout(() => {
+        redrawAll();
+        redrawDrawings();
+        showToast(`📍 ${scene.name}`);
+    }, 100);
 });
 
 // ========== FOG OF WAR ==========
@@ -639,6 +647,16 @@ function findTokenAt(x, y) {
 canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
     
+    if (e.button === 1) {
+        e.preventDefault();
+        middleMousePressed = true;
+        isPanning = true;
+        startPanX = e.clientX - panX;
+        startPanY = e.clientY - panY;
+        canvasWrapper.classList.add('grabbing');
+        return;
+    }
+
     if (permissions.draw && (drawTool === 'draw' || drawTool === 'erase')) {
         return;
     }
@@ -680,6 +698,15 @@ canvasWrapper.addEventListener('mousemove', (e) => {
 });
 
 canvasWrapper.addEventListener('mouseup', () => {
+
+    if (e.button === 1) {
+        middleMousePressed = false;
+        isPanning = false;
+        canvasWrapper.classList.remove('grabbing');
+        canvasWrapper.style.cursor = 'grab';
+        return;
+    }
+
     if (draggingToken) {
         const tokensCopy = JSON.parse(JSON.stringify(tokens));
         
@@ -848,7 +875,104 @@ function eraseDrawingsAt(x, y) {
     }
 }
 
-// ========== CHAT - CORRIGIDO ==========
+// ==================
+// SISTEMA DE UNDO/REDO - PLAYER
+// ==================
+
+function savePlayerState(action) {
+    if (!permissions.draw) return;
+    
+    if (playerHistoryIndex < playerHistory.length - 1) {
+        playerHistory = playerHistory.slice(0, playerHistoryIndex + 1);
+    }
+    
+    const state = {
+        action: action,
+        drawings: JSON.parse(JSON.stringify(drawings))
+    };
+    
+    playerHistory.push(state);
+    playerHistoryIndex++;
+    
+    if (playerHistory.length > MAX_PLAYER_HISTORY) {
+        playerHistory.shift();
+        playerHistoryIndex--;
+    }
+}
+
+function playerUndo() {
+    if (!permissions.draw || playerHistoryIndex <= 0) {
+        showToast('⚠️ Nada para desfazer');
+        return;
+    }
+    
+    playerHistoryIndex--;
+    const state = playerHistory[playerHistoryIndex];
+    
+    drawings = JSON.parse(JSON.stringify(state.drawings));
+    redrawDrawings();
+    
+    // Sincronizar
+    socket.emit('clear_drawings', { session_id: SESSION_ID });
+    drawings.forEach(d => {
+        socket.emit('drawing_update', {
+            session_id: SESSION_ID,
+            drawing: d
+        });
+    });
+    
+    showToast('↩️ Desfeito');
+}
+
+function playerRedo() {
+    if (!permissions.draw || playerHistoryIndex >= playerHistory.length - 1) {
+        showToast('⚠️ Nada para refazer');
+        return;
+    }
+    
+    playerHistoryIndex++;
+    const state = playerHistory[playerHistoryIndex];
+    
+    drawings = JSON.parse(JSON.stringify(state.drawings));
+    redrawDrawings();
+    
+    // Sincronizar
+    socket.emit('clear_drawings', { session_id: SESSION_ID });
+    drawings.forEach(d => {
+        socket.emit('drawing_update', {
+            session_id: SESSION_ID,
+            drawing: d
+        });
+    });
+    
+    showToast('↪️ Refeito');
+}
+
+// Atalhos
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        playerUndo();
+    }
+    
+    if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        playerRedo();
+    }
+});
+
+// Modificar o mouseup de desenho:
+drawingCanvas.addEventListener('mouseup', () => {
+    if (isDrawing && currentPath.length > 0) {
+        // ... código existente ...
+        
+        // ADICIONAR:
+        savePlayerState('Desenhar');
+    }
+    isDrawing = false;
+});
+
+// ========== CHAT ==========
 function toggleChatMinimize() {
     chatMinimized = !chatMinimized;
     const chatContainer = document.getElementById('chatContainer');

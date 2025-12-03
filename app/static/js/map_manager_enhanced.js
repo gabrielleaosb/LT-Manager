@@ -94,8 +94,14 @@ let fogPaintMode = false;
 let lastFogPoint = null;
 
 // Pan temporário com espaço
-let spacePressed = false;
+let middleMousePressed = false;
 let tempPanning = false;
+
+// Undo/Redo
+let history = [];
+let historyIndex = -1;
+const MAX_HISTORY = 50;
+
 
 // ==================
 // CENTRALIZAÇÃO E TRANSFORM
@@ -773,26 +779,44 @@ function isOnResizeHandle(img, x, y) {
            y >= handleY - handleSize && y <= handleY + handleSize;
 }
 
+// ==================
+// EVENTOS DE MOUSE - CORRIGIDO
+// ==================
+
+let isDraggingItem = false;
+
 canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
     
-    if (spacePressed) {
+    // Pan temporário com espaço tem prioridade
+     if (e.button === 1) {
+        e.preventDefault();
+        middleMousePressed = true;
         tempPanning = true;
         isPanning = true;
         startPanX = e.clientX - panX;
         startPanY = e.clientY - panY;
         canvasWrapper.style.cursor = 'grabbing';
+        
+        const indicator = document.getElementById('panIndicator');
+        if (indicator) {
+            indicator.style.display = 'flex';
+            indicator.querySelector('span:last-child').textContent = 'Segure BOTÃO DO MEIO para mover o mapa';
+        }
         return;
     }
     
-    if (fogDrawingMode) {
+    // Se está em modo fog, não faz nada aqui
+    if (fogDrawingMode || fogPaintMode || document.getElementById('fogEraseBtn')?.classList.contains('active')) {
         return;
     }
     
+    // Se está em modo desenho, não faz nada aqui
     if (currentTool === 'draw' || currentTool === 'erase') {
         return;
     }
     
+    // Modo pan normal
     if (currentTool === 'pan') {
         isPanning = true;
         startPanX = e.clientX - panX;
@@ -801,6 +825,7 @@ canvasWrapper.addEventListener('mousedown', (e) => {
         return;
     }
     
+    // Modo select - verificar resize de imagem primeiro
     if (currentTool === 'select') {
         const found = findItemAt(pos.x, pos.y);
         
@@ -811,37 +836,37 @@ canvasWrapper.addEventListener('mousedown', (e) => {
             resizeStartWidth = found.item.width;
             resizeStartHeight = found.item.height;
             canvasWrapper.style.cursor = 'nwse-resize';
+            e.preventDefault();
             return;
         }
         
+        // Se encontrou item, iniciar drag
         if (found) {
             selectedItem = found.item;
             selectedType = found.type;
             draggingItem = found.item;
+            isDraggingItem = true;
             mouseDown = true;
             
-            if (found.type === 'token' && found.item.style === 'square') {
-                const tokenSize = TOKEN_RADIUS * 1.8;
-                dragOffsetX = pos.x - found.item.x;
-                dragOffsetY = pos.y - found.item.y;
-            } else {
-                dragOffsetX = pos.x - found.item.x;
-                dragOffsetY = pos.y - found.item.y;
-            }
+            dragOffsetX = pos.x - found.item.x;
+            dragOffsetY = pos.y - found.item.y;
             
             canvasWrapper.style.cursor = 'grabbing';
+            e.preventDefault();
+            redrawAll();
+            return;
         } else {
             selectedItem = null;
             selectedType = null;
+            redrawAll();
         }
-        
-        redrawAll();
     }
 });
 
 canvasWrapper.addEventListener('mousemove', (e) => {
     const pos = getMousePos(e);
     
+    // Pan temporário
     if (tempPanning && isPanning) {
         panX = e.clientX - startPanX;
         panY = e.clientY - startPanY;
@@ -849,10 +874,12 @@ canvasWrapper.addEventListener('mousemove', (e) => {
         return;
     }
     
+    // Desenho/fog
     if (currentTool === 'draw' || currentTool === 'erase') {
         return;
     }
     
+    // Pan normal
     if (isPanning && currentTool === 'pan') {
         panX = e.clientX - startPanX;
         panY = e.clientY - startPanY;
@@ -860,6 +887,7 @@ canvasWrapper.addEventListener('mousemove', (e) => {
         return;
     }
     
+    // Resize de imagem
     if (resizingImage) {
         const deltaX = pos.x - resizeStartX;
         const deltaY = pos.y - resizeStartY;
@@ -868,49 +896,53 @@ canvasWrapper.addEventListener('mousemove', (e) => {
         resizingImage.height = Math.max(50, resizeStartHeight + deltaY);
         
         redrawAll();
+        e.preventDefault();
         return;
     }
     
-    if (mouseDown && draggingItem && currentTool === 'select') {
+    // Arrastar item
+    if (isDraggingItem && draggingItem && mouseDown) {
         const newX = pos.x - dragOffsetX;
         const newY = pos.y - dragOffsetY;
         
         draggingItem.x = newX;
         draggingItem.y = newY;
-  
+        
         redrawAll();
-    } else if (currentTool === 'select' && !mouseDown) {
+        e.preventDefault();
+        return;
+    }
+    
+    // Atualizar cursor baseado no que está sob o mouse
+    if (currentTool === 'select' && !mouseDown && !isDraggingItem) {
         const found = findItemAt(pos.x, pos.y);
         if (found && found.type === 'image' && isOnResizeHandle(found.item, pos.x, pos.y)) {
             canvasWrapper.style.cursor = 'nwse-resize';
-        } else {
-            if (spacePressed) {
-                canvasWrapper.style.cursor = 'grab';
-            } else {
-                canvasWrapper.style.cursor = found ? 'grab' : 'default';
-            }
-        }
-    }
-});
-
-canvasWrapper.addEventListener('mouseup', () => {
-    // Pan temporário
-    if (tempPanning) {
-        tempPanning = false;
-        isPanning = false;
-        
-        if (spacePressed) {
-            canvasWrapper.style.cursor = 'grab';
-        } else if (fogDrawingMode) {
-            canvasWrapper.style.cursor = 'crosshair';
-        } else if (currentTool === 'pan') {
+        } else if (found) {
             canvasWrapper.style.cursor = 'grab';
         } else {
             canvasWrapper.style.cursor = 'default';
         }
+    }
+});
+
+canvasWrapper.addEventListener('mouseup', (e) => {
+    // Pan temporário
+    if (e.button === 1) {
+        middleMousePressed = false;
+        tempPanning = false;
+        isPanning = false;
+        
+        const indicator = document.getElementById('panIndicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+        
+        canvasWrapper.style.cursor = 'default';
         return;
     }
     
+    // Resize
     if (resizingImage) {
         if (resizingImage.id.startsWith('map_')) {
             socket.emit('update_map', {
@@ -930,7 +962,51 @@ canvasWrapper.addEventListener('mouseup', () => {
         return;
     }
     
-    if (draggingItem && mouseDown) {
+    // Arrastar item
+    if (isDraggingItem && draggingItem && mouseDown) {
+        if (selectedType === 'image') {
+            if (draggingItem.id.startsWith('map_')) {
+                socket.emit('update_map', {
+                    session_id: SESSION_ID,
+                    map_id: draggingItem.id,
+                    map: draggingItem
+                });
+            } else {
+                socket.emit('update_entity', {
+                    session_id: SESSION_ID,
+                    entity_id: draggingItem.id,
+                    entity: draggingItem
+                });
+            }
+        } else if (selectedType === 'token') {
+            socket.emit('token_update', {
+                session_id: SESSION_ID,
+                tokens: tokens
+            });
+        }
+        saveState(selectedType === 'image' ? 'Mover Imagem' : 'Mover Token');
+        
+        isDraggingItem = false;
+        draggingItem = null;
+        mouseDown = false;
+        canvasWrapper.style.cursor = 'default';
+        return;
+    }
+    
+    // Pan normal
+    isPanning = false;
+    mouseDown = false;
+    
+    if (currentTool === 'pan') {
+        canvasWrapper.style.cursor = 'grab';
+    } else {
+        canvasWrapper.style.cursor = 'default';
+    }
+});
+
+canvasWrapper.addEventListener('mouseleave', () => {
+    if (isDraggingItem && draggingItem && mouseDown) {
+        // Salvar posição ao sair
         if (selectedType === 'image') {
             if (draggingItem.id.startsWith('map_')) {
                 socket.emit('update_map', {
@@ -954,25 +1030,10 @@ canvasWrapper.addEventListener('mouseup', () => {
     }
     
     isPanning = false;
+    resizingImage = null;
+    isDraggingItem = false;
     draggingItem = null;
     mouseDown = false;
-    
-    if (currentTool === 'pan') {
-        canvasWrapper.style.cursor = 'grab';
-    } else if (spacePressed) {
-        canvasWrapper.style.cursor = 'grab';
-    } else {
-        canvasWrapper.style.cursor = 'default';
-    }
-});
-
-canvasWrapper.addEventListener('mouseleave', () => {
-    isPanning = false;
-    resizingImage = null;
-    if (draggingItem && mouseDown) {
-        draggingItem = null;
-        mouseDown = false;
-    }
 });
 
 // MAP MANAGER - PARTE 3 - DESENHO, ADICIONAR ITENS E CHAT
@@ -993,7 +1054,17 @@ function getDrawingPos(e) {
 }
 
 drawingCanvas.addEventListener('mousedown', (e) => {
-    if (spacePressed) {
+    if (e.button === 1) {
+        middleMousePressed = false;
+        tempPanning = false;
+        isPanning = false;
+        
+        const indicator = document.getElementById('panIndicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+        
+        canvasWrapper.style.cursor = 'default';
         return;
     }
     
@@ -1008,7 +1079,17 @@ drawingCanvas.addEventListener('mousedown', (e) => {
 });
 
 drawingCanvas.addEventListener('mousemove', (e) => {
-    if (spacePressed) {
+    if (e.button === 1) {
+        middleMousePressed = false;
+        tempPanning = false;
+        isPanning = false;
+        
+        const indicator = document.getElementById('panIndicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+        
+        canvasWrapper.style.cursor = 'default';
         return;
     }
     
@@ -1052,6 +1133,7 @@ drawingCanvas.addEventListener('mouseup', () => {
         });
         
         currentPath = [];
+        saveState('Desenhar');
     }
     isDrawing = false;
 });
@@ -1174,6 +1256,7 @@ function saveFogState() {
         session_id: SESSION_ID,
         fog_image: imageData
     });
+    saveState('Editar Névoa');
 }
 
 // Limpar toda a névoa
@@ -1313,6 +1396,7 @@ function clearDrawings() {
         redrawDrawings();
         socket.emit('clear_drawings', { session_id: SESSION_ID });
         showToast('Desenhos limpos!');
+        saveState('Limpar Desenhos');
     }
 }
 
@@ -1367,6 +1451,7 @@ function addImage() {
                 redrawAll();
                 renderImageList();
                 showToast(`Imagem "${name}" adicionada!`);
+                saveState('Adicionar Imagem');
             };
             img.onerror = () => {
                 showToast('Erro ao carregar imagem');
@@ -1426,6 +1511,7 @@ function createToken() {
                 
                 closeTokenModal();
                 showToast(`Token "${name}" adicionado!`);
+                saveState('Adicionar Token');
             };
             img.onerror = () => {
                 showToast('Erro ao carregar imagem do token');
@@ -1679,6 +1765,7 @@ function deleteItemById(itemId, type) {
         
         redrawAll();
         showToast('Item removido!');
+        saveState(type === 'image' ? 'Remover Imagem' : 'Remover Token');
     }
 }
 
@@ -2584,6 +2671,181 @@ const scene = scenes.find(s => s.id === data.scene_id);
 if (scene && data.scene) {
     Object.assign(scene, data.scene);
 }
+});
+
+// ==================
+// SISTEMA DE UNDO/REDO
+// ==================
+
+function saveState(action) {
+    // Remover estados futuros se estivermos no meio da história
+    if (historyIndex < history.length - 1) {
+        history = history.slice(0, historyIndex + 1);
+    }
+    
+    // Salvar estado atual
+    const state = {
+        action: action,
+        timestamp: Date.now(),
+        images: JSON.parse(JSON.stringify(images)),
+        tokens: JSON.parse(JSON.stringify(tokens)),
+        drawings: JSON.parse(JSON.stringify(drawings)),
+        fogImage: fogCanvas.toDataURL()
+    };
+    
+    history.push(state);
+    historyIndex++;
+    
+    // Limitar histórico
+    if (history.length > MAX_HISTORY) {
+        history.shift();
+        historyIndex--;
+    }
+    
+    console.log(`💾 Estado salvo: ${action} (${historyIndex + 1}/${history.length})`);
+    updateUndoRedoButtons();
+}
+
+function undo() {
+    if (historyIndex <= 0) {
+        showToast('⚠️ Nada para desfazer');
+        return;
+    }
+    
+    historyIndex--;
+    const state = history[historyIndex];
+    
+    // Restaurar estado
+    images = JSON.parse(JSON.stringify(state.images));
+    tokens = JSON.parse(JSON.stringify(state.tokens));
+    drawings = JSON.parse(JSON.stringify(state.drawings));
+    
+    // Restaurar fog
+    if (state.fogImage) {
+        loadFogState(state.fogImage);
+    } else {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
+    
+    // Atualizar displays
+    renderImageList();
+    renderTokenList();
+    preloadAllImages();
+    redrawAll();
+    redrawDrawings();
+    
+    // Sincronizar com servidor
+    syncStateToServer();
+    
+    showToast(`↩️ Desfeito: ${state.action}`);
+    updateUndoRedoButtons();
+    console.log(`↩️ Undo: ${historyIndex + 1}/${history.length}`);
+}
+
+function redo() {
+    if (historyIndex >= history.length - 1) {
+        showToast('⚠️ Nada para refazer');
+        return;
+    }
+    
+    historyIndex++;
+    const state = history[historyIndex];
+    
+    // Restaurar estado
+    images = JSON.parse(JSON.stringify(state.images));
+    tokens = JSON.parse(JSON.stringify(state.tokens));
+    drawings = JSON.parse(JSON.stringify(state.drawings));
+    
+    // Restaurar fog
+    if (state.fogImage) {
+        loadFogState(state.fogImage);
+    } else {
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
+    
+    // Atualizar displays
+    renderImageList();
+    renderTokenList();
+    preloadAllImages();
+    redrawAll();
+    redrawDrawings();
+    
+    // Sincronizar com servidor
+    syncStateToServer();
+    
+    showToast(`↪️ Refeito: ${state.action}`);
+    updateUndoRedoButtons();
+    console.log(`↪️ Redo: ${historyIndex + 1}/${history.length}`);
+}
+
+function syncStateToServer() {
+    // Sincronizar imagens
+    images.forEach(img => {
+        if (img.id.startsWith('map_')) {
+            socket.emit('update_map', {
+                session_id: SESSION_ID,
+                map_id: img.id,
+                map: img
+            });
+        } else {
+            socket.emit('update_entity', {
+                session_id: SESSION_ID,
+                entity_id: img.id,
+                entity: img
+            });
+        }
+    });
+    
+    // Sincronizar tokens
+    socket.emit('token_update', {
+        session_id: SESSION_ID,
+        tokens: tokens
+    });
+    
+    // Sincronizar desenhos
+    socket.emit('clear_drawings', { session_id: SESSION_ID });
+    drawings.forEach(d => {
+        socket.emit('drawing_update', {
+            session_id: SESSION_ID,
+            drawing: d
+        });
+    });
+    
+    // Sincronizar fog
+    socket.emit('update_fog_state', {
+        session_id: SESSION_ID,
+        fog_image: fogCanvas.toDataURL()
+    });
+}
+
+function updateUndoRedoButtons() {
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    
+    if (undoBtn) {
+        undoBtn.disabled = historyIndex <= 0;
+        undoBtn.style.opacity = historyIndex <= 0 ? '0.5' : '1';
+    }
+    
+    if (redoBtn) {
+        redoBtn.disabled = historyIndex >= history.length - 1;
+        redoBtn.style.opacity = historyIndex >= history.length - 1 ? '0.5' : '1';
+    }
+}
+
+// Atalhos de teclado
+document.addEventListener('keydown', (e) => {
+    // Ctrl+Z = Undo
+    if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+    }
+    
+    // Ctrl+Y ou Ctrl+Shift+Z = Redo
+    if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        redo();
+    }
 });
 
 setTool('select');

@@ -19,6 +19,8 @@
         <h1>🗺️ Gerenciador de Mapas</h1>
     </div>
     <div class="header-actions">
+        <button class="btn" id="undoBtn" onclick="undo()" title="Desfazer (Ctrl+Z)">↩️ Desfazer</button>
+        <button class="btn" id="redoBtn" onclick="redo()" title="Refazer (Ctrl+Y)">↪️ Refazer</button>
         <button class="btn" onclick="openSceneManager()">🎬 Cenas</button>
         <button class="btn" onclick="copyShareLink()">🔗 Copiar Link</button>
         <button class="btn btn-danger" onclick="clearAll()">🗑️ Limpar Tudo</button>
@@ -49,7 +51,7 @@
     border: 2px solid rgba(255,255,255,0.2);
 ">
     <span>🤚</span>
-    <span>Segure ESPAÇO para mover o mapa</span>
+    <span>Segure o BOTÃO DO MEIO para mover o mapa</span>
 </div>
 <div class="main-layout">
     <!-- Sidebar Esquerda Retrátil -->
