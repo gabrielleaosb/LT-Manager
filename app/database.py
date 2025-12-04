@@ -2,224 +2,204 @@ import sqlite3
 import json
 import os
 from datetime import datetime
+import threading
 
 class Database:
     def __init__(self):
-        # Criar pasta data se não existir
         if not os.path.exists('data'):
             os.makedirs('data')
         
         self.db_path = 'data/rpg_manager.db'
+        self._local = threading.local()
         self.init_database()
     
     def get_connection(self):
-        """Criar conexão com banco"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row  # Retornar resultados como dicionários
-        return conn
+        """Thread-safe connection"""
+        if not hasattr(self._local, 'conn') or self._local.conn is None:
+            self._local.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            self._local.conn.row_factory = sqlite3.Row
+        return self._local.conn
     
     def init_database(self):
-        """Inicializar tabelas do banco"""
+        """Inicializar tabelas com índices"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Tabela de Sessões
+        # Tabela de Sessões (simplificada)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                data TEXT,
-                active_scene_id TEXT
+                data TEXT NOT NULL,
+                version INTEGER DEFAULT 1
             )
         ''')
         
-        # Tabela de Cenas
+        # Índice para busca rápida
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS scenes (
-                id TEXT PRIMARY KEY,
-                session_id TEXT,
-                name TEXT,
-                data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (session_id) REFERENCES sessions(session_id)
-            )
-        ''')
-        
-        # Tabela de Grid Settings
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS grid_settings (
-                session_id TEXT PRIMARY KEY,
-                settings TEXT,
-                FOREIGN KEY (session_id) REFERENCES sessions(session_id)
-            )
+            CREATE INDEX IF NOT EXISTS idx_sessions_updated 
+            ON sessions(updated_at DESC)
         ''')
         
         conn.commit()
-        conn.close()
-        
         print('✅ Banco de dados inicializado')
     
     # ==================
-    # SESSÕES
+    # SESSÕES - CRUD SIMPLES
     # ==================
     
     def save_session(self, session_id, data):
-        """Salvar/atualizar estado da sessão"""
+        """
+        Salvar/atualizar estado completo da sessão
+        
+        Args:
+            session_id: ID da sessão
+            data: Dict contendo {images, tokens, drawings, fogImage, scenes, grid_settings}
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        data_json = json.dumps(data)
-        
-        cursor.execute('''
-            INSERT OR REPLACE INTO sessions (session_id, data, updated_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
-        ''', (session_id, data_json))
-        
-        conn.commit()
-        conn.close()
-        
-        print(f'💾 Sessão {session_id} salva no banco')
+        try:
+            # Serializar dados
+            data_json = json.dumps(data, ensure_ascii=False)
+            
+            # Verificar se existe
+            cursor.execute('SELECT version FROM sessions WHERE session_id = ?', (session_id,))
+            result = cursor.fetchone()
+            
+            if result:
+                # Update com versionamento
+                new_version = result['version'] + 1
+                cursor.execute('''
+                    UPDATE sessions 
+                    SET data = ?, updated_at = CURRENT_TIMESTAMP, version = ?
+                    WHERE session_id = ?
+                ''', (data_json, new_version, session_id))
+            else:
+                # Insert novo
+                cursor.execute('''
+                    INSERT INTO sessions (session_id, data, version)
+                    VALUES (?, ?, 1)
+                ''', (session_id, data_json))
+            
+            conn.commit()
+            print(f'💾 Sessão {session_id} salva (versão {new_version if result else 1})')
+            return True
+            
+        except Exception as e:
+            print(f'❌ Erro ao salvar sessão: {e}')
+            conn.rollback()
+            return False
     
     def load_session(self, session_id):
         """Carregar estado da sessão"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT data FROM sessions WHERE session_id = ?', (session_id,))
-        result = cursor.fetchone()
-        
-        conn.close()
-        
-        if result:
-            print(f'✅ Sessão {session_id} carregada do banco')
-            return json.loads(result['data'])
-        
-        print(f'ℹ️ Sessão {session_id} não encontrada')
-        return None
+        try:
+            cursor.execute('''
+                SELECT data, version, updated_at 
+                FROM sessions 
+                WHERE session_id = ?
+            ''', (session_id,))
+            
+            result = cursor.fetchone()
+            
+            if result:
+                data = json.loads(result['data'])
+                print(f'✅ Sessão {session_id} carregada (versão {result["version"]})')
+                return {
+                    'data': data,
+                    'version': result['version'],
+                    'updated_at': result['updated_at']
+                }
+            
+            print(f'ℹ️ Sessão {session_id} não encontrada')
+            return None
+            
+        except Exception as e:
+            print(f'❌ Erro ao carregar sessão: {e}')
+            return None
     
     def delete_session(self, session_id):
-        """Deletar sessão e seus dados"""
+        """Deletar sessão"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('DELETE FROM sessions WHERE session_id = ?', (session_id,))
-        cursor.execute('DELETE FROM scenes WHERE session_id = ?', (session_id,))
-        cursor.execute('DELETE FROM grid_settings WHERE session_id = ?', (session_id,))
-        
-        conn.commit()
-        conn.close()
-        
-        print(f'🗑️ Sessão {session_id} deletada')
+        try:
+            cursor.execute('DELETE FROM sessions WHERE session_id = ?', (session_id,))
+            conn.commit()
+            print(f'🗑️ Sessão {session_id} deletada')
+            return True
+            
+        except Exception as e:
+            print(f'❌ Erro ao deletar sessão: {e}')
+            conn.rollback()
+            return False
     
-    # ==================
-    # CENAS
-    # ==================
-    
-    def save_scenes(self, session_id, scenes):
-        """Salvar cenas da sessão"""
+    def list_sessions(self, limit=50):
+        """Listar sessões recentes"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Deletar cenas antigas
-        cursor.execute('DELETE FROM scenes WHERE session_id = ?', (session_id,))
-        
-        # Inserir novas
-        for scene in scenes:
-            scene_data = json.dumps(scene)
+        try:
             cursor.execute('''
-                INSERT INTO scenes (id, session_id, name, data)
-                VALUES (?, ?, ?, ?)
-            ''', (scene['id'], session_id, scene.get('name', 'Sem nome'), scene_data))
-        
-        conn.commit()
-        conn.close()
-        
-        print(f'💾 {len(scenes)} cenas salvas para sessão {session_id}')
-    
-    def load_scenes(self, session_id):
-        """Carregar cenas da sessão"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT data FROM scenes WHERE session_id = ?', (session_id,))
-        results = cursor.fetchall()
-        
-        conn.close()
-        
-        scenes = [json.loads(row['data']) for row in results]
-        
-        if scenes:
-            print(f'✅ {len(scenes)} cenas carregadas')
-        
-        return scenes
-    
-    # ==================
-    # GRID
-    # ==================
-    
-    def save_grid_settings(self, session_id, settings):
-        """Salvar configurações de grid"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        settings_json = json.dumps(settings)
-        
-        cursor.execute('''
-            INSERT OR REPLACE INTO grid_settings (session_id, settings)
-            VALUES (?, ?)
-        ''', (session_id, settings_json))
-        
-        conn.commit()
-        conn.close()
-    
-    def load_grid_settings(self, session_id):
-        """Carregar configurações de grid"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT settings FROM grid_settings WHERE session_id = ?', (session_id,))
-        result = cursor.fetchone()
-        
-        conn.close()
-        
-        if result:
-            return json.loads(result['settings'])
-        
-        return None
-    
-    # ==================
-    # UTILITÁRIOS
-    # ==================
-    
-    def get_all_sessions(self):
-        """Listar todas as sessões"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT session_id, created_at, updated_at FROM sessions ORDER BY updated_at DESC')
-        results = cursor.fetchall()
-        
-        conn.close()
-        
-        return [dict(row) for row in results]
+                SELECT session_id, created_at, updated_at, version
+                FROM sessions 
+                ORDER BY updated_at DESC 
+                LIMIT ?
+            ''', (limit,))
+            
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
+            
+        except Exception as e:
+            print(f'❌ Erro ao listar sessões: {e}')
+            return []
     
     def cleanup_old_sessions(self, days=30):
         """Limpar sessões antigas"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('''
-            DELETE FROM sessions 
-            WHERE updated_at < datetime('now', '-' || ? || ' days')
-        ''', (days,))
+        try:
+            cursor.execute('''
+                DELETE FROM sessions 
+                WHERE updated_at < datetime('now', '-' || ? || ' days')
+            ''', (days,))
+            
+            deleted = cursor.rowcount
+            conn.commit()
+            print(f'🧹 {deleted} sessões antigas removidas')
+            return deleted
+            
+        except Exception as e:
+            print(f'❌ Erro ao limpar sessões: {e}')
+            conn.rollback()
+            return 0
+    
+    def get_session_size(self, session_id):
+        """Obter tamanho da sessão em MB"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         
-        deleted = cursor.rowcount
-        conn.commit()
-        conn.close()
-        
-        print(f'🧹 {deleted} sessões antigas removidas')
-        return deleted
+        try:
+            cursor.execute('''
+                SELECT length(data) as size 
+                FROM sessions 
+                WHERE session_id = ?
+            ''', (session_id,))
+            
+            result = cursor.fetchone()
+            if result:
+                size_mb = result['size'] / (1024 * 1024)
+                return round(size_mb, 2)
+            
+            return 0
+            
+        except Exception as e:
+            print(f'❌ Erro ao calcular tamanho: {e}')
+            return 0
 
-# Instância global
 db = Database()

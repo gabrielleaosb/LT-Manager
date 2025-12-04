@@ -10,6 +10,11 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/map_manager_enhanced.css') }}">
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
+<style>
+    body.overlay-active {
+        overflow: hidden;
+    }
+</style>
 <body>
 
 <input type="hidden" id="sessionId" value="{{ session_id }}">
@@ -451,7 +456,7 @@
 <script src="{{ url_for('static', filename='js/canvas_optimizer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/image_compressor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/persistence.js') }}"></script>
-<script src="{{ url_for('static', filename='js/map_manager_enhanced.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/map_manager_enhanced.js') }}"></script>
 
 </body>
 </html>

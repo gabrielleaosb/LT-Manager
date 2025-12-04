@@ -77,21 +77,45 @@ def player_view(session_id):
 
 @app.route("/api/session/save", methods=["POST"])
 def save_session_data():
-    """Salvar estado completo da sessão"""
+    """
+    Salvar estado COMPLETO da sessão
+    
+    Body:
+    {
+        "session_id": "abc123",
+        "data": {
+            "images": [...],
+            "tokens": [...],
+            "drawings": [...],
+            "fogImage": "data:image/...",
+            "scenes": [...],
+            "grid_settings": {...}
+        }
+    }
+    """
     try:
-        data = request.json
-        session_id = data.get('session_id')
-        session_data = data.get('data')
+        payload = request.json
+        session_id = payload.get('session_id')
+        data = payload.get('data')
         
-        if not session_id or not session_data:
-            return jsonify({"error": "Dados inválidos"}), 400
+        if not session_id:
+            return jsonify({"error": "session_id obrigatório"}), 400
         
-        db.save_session(session_id, session_data)
+        if not data or not isinstance(data, dict):
+            return jsonify({"error": "data inválido"}), 400
         
-        return jsonify({
-            "status": "success",
-            "message": "Sessão salva com sucesso"
-        })
+        # Salvar no database
+        success = db.save_session(session_id, data)
+        
+        if success:
+            size_mb = db.get_session_size(session_id)
+            return jsonify({
+                "status": "success",
+                "message": "Sessão salva com sucesso",
+                "size_mb": size_mb
+            })
+        else:
+            return jsonify({"error": "Erro ao salvar no banco"}), 500
     
     except Exception as e:
         print(f"❌ Erro ao salvar sessão: {e}")
@@ -101,94 +125,53 @@ def save_session_data():
 def load_session_data(session_id):
     """Carregar estado da sessão"""
     try:
-        data = db.load_session(session_id)
+        result = db.load_session(session_id)
         
-        if data:
+        if result:
             return jsonify({
                 "status": "success",
-                "data": data
+                "data": result['data'],
+                "version": result['version'],
+                "updated_at": result['updated_at']
             })
         
         return jsonify({
             "status": "not_found",
             "data": None
-        })
+        }), 404
     
     except Exception as e:
         print(f"❌ Erro ao carregar sessão: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route("/api/scenes/save", methods=["POST"])
-def save_scenes_data():
-    """Salvar cenas"""
+@app.route("/api/session/delete/<session_id>", methods=["DELETE"])
+def delete_session_data(session_id):
+    """Deletar sessão"""
     try:
-        data = request.json
-        session_id = data.get('session_id')
-        scenes = data.get('scenes')
+        success = db.delete_session(session_id)
         
-        if not session_id or not scenes:
-            return jsonify({"error": "Dados inválidos"}), 400
-        
-        db.save_scenes(session_id, scenes)
-        
-        return jsonify({
-            "status": "success",
-            "message": f"{len(scenes)} cenas salvas"
-        })
+        if success:
+            return jsonify({
+                "status": "success",
+                "message": "Sessão deletada"
+            })
+        else:
+            return jsonify({"error": "Erro ao deletar"}), 500
     
     except Exception as e:
-        print(f"❌ Erro ao salvar cenas: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/scenes/load/<session_id>", methods=["GET"])
-def load_scenes_data(session_id):
-    """Carregar cenas"""
-    try:
-        scenes = db.load_scenes(session_id)
-        
-        return jsonify({
-            "status": "success",
-            "scenes": scenes
-        })
-    
-    except Exception as e:
-        print(f"❌ Erro ao carregar cenas: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/grid/save", methods=["POST"])
-def save_grid_data():
-    """Salvar grid settings"""
-    try:
-        data = request.json
-        session_id = data.get('session_id')
-        settings = data.get('settings')
-        
-        db.save_grid_settings(session_id, settings)
-        
-        return jsonify({"status": "success"})
-    
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/grid/load/<session_id>", methods=["GET"])
-def load_grid_data(session_id):
-    """Carregar grid settings"""
-    try:
-        settings = db.load_grid_settings(session_id)
-        
-        return jsonify({
-            "status": "success",
-            "settings": settings
-        })
-    
-    except Exception as e:
+        print(f"❌ Erro ao deletar sessão: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/sessions/list", methods=["GET"])
 def list_sessions():
     """Listar todas as sessões"""
     try:
-        sessions = db.get_all_sessions()
+        limit = request.args.get('limit', 50, type=int)
+        sessions = db.list_sessions(limit)
+        
+        # Adicionar tamanho para cada sessão
+        for s in sessions:
+            s['size_mb'] = db.get_session_size(s['session_id'])
         
         return jsonify({
             "status": "success",
@@ -196,5 +179,23 @@ def list_sessions():
         })
     
     except Exception as e:
+        print(f"❌ Erro ao listar sessões: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/sessions/cleanup", methods=["POST"])
+def cleanup_sessions():
+    """Limpar sessões antigas"""
+    try:
+        days = request.json.get('days', 30)
+        deleted = db.cleanup_old_sessions(days)
+        
+        return jsonify({
+            "status": "success",
+            "deleted": deleted,
+            "message": f"{deleted} sessões removidas"
+        })
+    
+    except Exception as e:
+        print(f"❌ Erro ao limpar sessões: {e}")
         return jsonify({"error": str(e)}), 500
     
