@@ -125,6 +125,135 @@ function loadPlayerSession() {
     return null;
 }
 
+// ==========================================
+// SISTEMA DE DADOS COMPARTILHADO
+// ==========================================
+const SharedDiceSystem = {
+    overlay: null,
+    isShowing: false,
+    
+    init() {
+        this.overlay = document.getElementById('sharedDiceOverlay');
+        
+        if (this.overlay) {
+            this.overlay.addEventListener('click', () => {
+                this.hide();
+            });
+        }
+    },
+    
+    show(data) {
+        if (this.isShowing) return;
+        
+        console.log('🎲 Mostrando rolagem:', data);
+        
+        this.isShowing = true;
+        const overlay = this.overlay;
+        
+        // Definir nome
+        document.getElementById('diceRollerName').textContent = 
+            `🎲 ${data.roller_name} rolou os dados`;
+        
+        // Definir valor do dado (para animação)
+        document.getElementById('diceFaceValue').textContent = data.result;
+        
+        // Resetar classes
+        overlay.className = 'dice-roll-overlay show';
+        
+        // Adicionar classe especial
+        if (data.is_critical) {
+            overlay.classList.add('critical-success');
+        } else if (data.is_failure) {
+            overlay.classList.add('critical-failure');
+        }
+        
+        // Criar partículas
+        this.createParticles();
+        
+        // Mostrar resultado após animação
+        setTimeout(() => {
+            document.getElementById('sharedDiceResult').textContent = data.result;
+            document.getElementById('sharedDiceFormula').textContent = data.formula;
+        }, 2000);
+        
+        // Fechar automaticamente após 5 segundos
+        setTimeout(() => {
+            this.hide();
+        }, 5000);
+    },
+    
+    hide() {
+        if (!this.isShowing) return;
+        
+        this.overlay.style.animation = 'fadeOut 0.3s ease';
+        
+        setTimeout(() => {
+            this.overlay.classList.remove('show');
+            this.overlay.style.animation = '';
+            this.isShowing = false;
+            
+            // Limpar partículas
+            document.getElementById('diceParticles').innerHTML = '';
+        }, 300);
+    },
+    
+    createParticles() {
+        const container = document.getElementById('diceParticles');
+        container.innerHTML = '';
+        
+        for (let i = 0; i < 30; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.setProperty('--drift', (Math.random() - 0.5) * 200 + 'px');
+            particle.style.animationDelay = Math.random() * 2 + 's';
+            container.appendChild(particle);
+        }
+    }
+};
+
+function openPlayerDiceRoller() {
+    const dice = prompt('🎲 Qual dado rolar?\n\nd4, d6, d8, d10, d12, d20, d100');
+    
+    if (!dice) return;
+    
+    const sides = parseInt(dice.replace('d', ''));
+    
+    if (isNaN(sides) || sides < 2) {
+        alert('Dado inválido!');
+        return;
+    }
+    
+    rollPlayerDice(sides);
+}
+
+function rollPlayerDice(sides) {
+    const result = Math.floor(Math.random() * sides) + 1;
+    const isCritical = sides === 20 && result === 20;
+    const isFail = sides === 20 && result === 1;
+    
+    // Broadcast
+    socket.emit('roll_shared_dice', {
+        session_id: SESSION_ID,
+        roller_name: playerName,
+        dice_type: `d${sides}`,
+        result: result,
+        formula: `1d${sides}`,
+        is_critical: isCritical,
+        is_failure: isFail
+    });
+}
+
+// Adicionar fadeOut ao estilo
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
+`;
+document.head.appendChild(style);
+
 // ========== CENTRALIZAÇÃO E TRANSFORM ==========
 function centerCanvas() {
     const containerRect = canvasContainer.getBoundingClientRect();
@@ -231,8 +360,8 @@ document.getElementById('playerNameInput').addEventListener('keypress', (e) => {
 socket.on('connect', () => {
     console.log('✅ Conectado');
     updateStatus(true);
+    SharedDiceSystem.init();
     
-    // ✅ Se já fez login, solicitar cena atual
     if (playerId && playerName) {
         console.log('🔄 Solicitando cena atual...');
         socket.emit('request_current_scene', {
@@ -578,6 +707,11 @@ socket.on('new_private_message', (data) => {
     }
     
     loadChatContacts();
+});
+
+socket.on('dice_rolled_shared', (data) => {
+    console.log('🎲 [PLAYER] Dado rolado:', data);
+    SharedDiceSystem.show(data);
 });
 
 socket.on('grid_settings_sync', (data) => {

@@ -18,7 +18,7 @@ def init_session(session_id):
             'permissions': {},
             'chat_conversations': {},
             'master_socket': None,
-            'fog_image': None,  # ✅ ALTERADO: fog_image ao invés de fog_areas
+            'fog_image': None, 
             'scenes': [],
             'active_scene_id': None,
             'grid_settings': {
@@ -794,3 +794,30 @@ def handle_scene_switch(data):
         }, room=master_socket)
     
     print('✅ Cena ativada para todos')
+
+# ==================
+# SHARED DICE ROLLS
+# ==================
+@socketio.on('roll_shared_dice')
+def handle_shared_dice_roll(data):
+    """Broadcast de rolagem de dados para toda a sessão"""
+    session_id = data.get('session_id')
+    roller_name = data.get('roller_name', 'Desconhecido')
+    dice_type = data.get('dice_type', 'd20')
+    result = data.get('result', 0)
+    formula = data.get('formula', '')
+    is_critical = data.get('is_critical', False)
+    is_failure = data.get('is_failure', False)
+    
+    print(f'🎲 {roller_name} rolou {formula}: {result}')
+    
+    # Broadcast para TODA a sala
+    emit('dice_rolled_shared', {
+        'roller_name': roller_name,
+        'dice_type': dice_type,
+        'result': result,
+        'formula': formula,
+        'is_critical': is_critical,
+        'is_failure': is_failure,
+        'timestamp': time.time()
+    }, room=session_id, include_self=True)

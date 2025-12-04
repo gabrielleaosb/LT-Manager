@@ -157,6 +157,221 @@ const debouncedEntityUpdate = CanvasOptimizer.debounce((entityId, entityData) =>
 let isCurrentlyDrawing = false;
 
 // ==========================================
+// GERENCIADOR DE FERRAMENTAS
+// ==========================================
+const ToolManager = {
+    deactivateAll() {
+        console.log('🔄 Desativando todas as ferramentas');
+        
+        // Fog
+        window.fogPaintMode = false;
+        window.fogEraseMode = false;
+        
+        // Drawing
+        window.currentTool = 'select';
+        
+        // Remover classes ativas
+        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+        
+        // Limpar cursores e classes
+        const drawingCanvas = document.getElementById('drawingCanvas');
+        const canvasWrapper = document.getElementById('canvasWrapper');
+        const fogCanvas = document.getElementById('fogCanvas');
+        
+        if (drawingCanvas) {
+            drawingCanvas.classList.remove('drawing-mode');
+            drawingCanvas.style.cursor = 'default';
+        }
+        
+        if (canvasWrapper) {
+            canvasWrapper.classList.remove('drawing-mode');
+            canvasWrapper.style.cursor = 'default';
+        }
+        
+        if (fogCanvas) {
+            fogCanvas.classList.remove('fog-drawing-mode');
+            fogCanvas.style.cursor = 'default';
+        }
+    }
+};
+
+// ==========================================
+// SISTEMA DE DADOS COMPARTILHADO - PREMIUM
+// ==========================================
+const SharedDiceSystem = {
+    overlay: null,
+    isShowing: false,
+    hideTimeout: null,
+    
+    init() {
+        this.overlay = document.getElementById('sharedDiceOverlay');
+        
+        if (this.overlay) {
+            // Remover listener antigo se existir
+            this.overlay.replaceWith(this.overlay.cloneNode(true));
+            this.overlay = document.getElementById('sharedDiceOverlay');
+            
+            this.overlay.addEventListener('click', () => {
+                this.hide();
+            });
+        }
+    },
+    
+    show(data) {
+        if (this.isShowing) {
+            this.hide();
+            setTimeout(() => this.show(data), 600);
+            return;
+        }
+        
+        console.log('🎲 Exibindo rolagem premium:', data);
+        
+        this.isShowing = true;
+        const overlay = this.overlay;
+        
+        // Limpar timeout anterior
+        if (this.hideTimeout) {
+            clearTimeout(this.hideTimeout);
+        }
+        
+        // Resetar classes
+        overlay.className = 'dice-roll-overlay show';
+        
+        // Nome do jogador
+        const rollerNameEl = document.getElementById('diceRollerName');
+        rollerNameEl.textContent = `${data.roller_name} rolou os dados`;
+        
+        // Valor do dado
+        const diceFaceValue = document.getElementById('diceFaceValue');
+        diceFaceValue.textContent = data.result;
+        
+        // Adicionar classe especial
+        if (data.is_critical) {
+            overlay.classList.add('critical-success');
+        } else if (data.is_failure) {
+            overlay.classList.add('critical-failure');
+        }
+        
+        // Criar partículas suaves
+        this.createSmoothParticles();
+        
+        // Resultado (aparece depois da animação)
+        setTimeout(() => {
+            const resultEl = document.getElementById('sharedDiceResult');
+            const formulaEl = document.getElementById('sharedDiceFormula');
+            
+            resultEl.textContent = data.result;
+            formulaEl.textContent = data.formula;
+            
+            // Efeito sonoro visual (opcional)
+            if (data.is_critical || data.is_failure) {
+                this.createBurst();
+            }
+        }, 2200);
+        
+        // Auto-hide após 6 segundos
+        this.hideTimeout = setTimeout(() => {
+            this.hide();
+        }, 6000);
+    },
+    
+    hide() {
+        if (!this.isShowing) return;
+        
+        const overlay = this.overlay;
+        
+        // Adicionar classe de saída
+        overlay.classList.add('hiding');
+        
+        setTimeout(() => {
+            overlay.classList.remove('show', 'hiding', 'critical-success', 'critical-failure');
+            this.isShowing = false;
+            
+            // Limpar partículas
+            const particlesContainer = document.getElementById('diceParticles');
+            if (particlesContainer) {
+                particlesContainer.innerHTML = '';
+            }
+        }, 500);
+    },
+    
+    createSmoothParticles() {
+        const container = document.getElementById('diceParticles');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        // Criar 40 partículas com movimento suave
+        for (let i = 0; i < 40; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            
+            // Posição inicial aleatória
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.bottom = '0';
+            
+            // Drift aleatório (movimento horizontal)
+            const driftStart = (Math.random() - 0.5) * 100;
+            const driftEnd = driftStart + (Math.random() - 0.5) * 200;
+            
+            particle.style.setProperty('--drift-start', driftStart + 'px');
+            particle.style.setProperty('--drift-end', driftEnd + 'px');
+            
+            // Delay aleatório
+            particle.style.animationDelay = Math.random() * 3 + 's';
+            
+            container.appendChild(particle);
+        }
+    },
+    
+    createBurst() {
+        const container = document.getElementById('diceParticles');
+        if (!container) return;
+        
+        // Criar burst de partículas no centro
+        for (let i = 0; i < 20; i++) {
+            const burst = document.createElement('div');
+            burst.className = 'particle';
+            burst.style.left = '50%';
+            burst.style.top = '50%';
+            burst.style.width = '8px';
+            burst.style.height = '8px';
+            
+            const angle = (Math.PI * 2 * i) / 20;
+            const distance = 100 + Math.random() * 100;
+            const endX = Math.cos(angle) * distance;
+            const endY = Math.sin(angle) * distance;
+            
+            burst.style.setProperty('--drift-start', '0px');
+            burst.style.setProperty('--drift-end', endX + 'px');
+            burst.style.animation = `burstParticle 1s ease-out forwards`;
+            burst.style.transform = `translate(-50%, -50%)`;
+            
+            container.appendChild(burst);
+            
+            // Remover após animação
+            setTimeout(() => burst.remove(), 1000);
+        }
+    }
+};
+
+// Adicionar animação de burst
+const burstStyle = document.createElement('style');
+burstStyle.textContent = `
+    @keyframes burstParticle {
+        0% {
+            opacity: 1;
+            transform: translate(-50%, -50%) translate(0, 0) scale(1);
+        }
+        100% {
+            opacity: 0;
+            transform: translate(-50%, -50%) translate(var(--drift-end), var(--drift-end)) scale(0);
+        }
+    }
+`;
+document.head.appendChild(burstStyle);
+
+// ==========================================
 // DEBUG: MOSTRAR INFO DA SESSÃO
 // ==========================================
 
@@ -491,7 +706,8 @@ function preloadAllImages() {
 
 socket.on('connect', () => {
     console.log('✅ Conectado ao servidor');
-    
+   
+     SharedDiceSystem.init();
     loadSavedState().then(wasRestored => {
         if (wasRestored) {
             console.log('♻️ Estado restaurado');
@@ -766,38 +982,39 @@ socket.on('grid_settings_sync', (data) => {
 // ==================
 
 function setTool(tool) {
+    console.log('🔧 Ativando ferramenta:', tool);
+    
+    // ✅ DESATIVAR TUDO PRIMEIRO
+    ToolManager.deactivateAll();
+    
+    // Ativar ferramenta selecionada
     currentTool = tool;
     
-    // ✅ CORRIGIDO: Remover active de todos primeiro
+    // Remover active de todos
     document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
     
-    // ✅ CORRIGIDO: Verificar se event existe antes de usar
+    // Ativar botão clicado
     if (typeof event !== 'undefined' && event.target) {
         event.target.classList.add('active');
-    } else {
-        // Se não há evento (chamada programática), ativar o botão correspondente
-        const toolButtons = document.querySelectorAll('.tool-btn');
-        toolButtons.forEach(btn => {
-            if (btn.textContent.toLowerCase().includes(tool.toLowerCase())) {
-                btn.classList.add('active');
-            }
-        });
     }
     
-    canvasWrapper.classList.remove('drawing-mode');
-    drawingCanvas.classList.remove('drawing-mode');
+    const canvasWrapper = document.querySelector('.canvas-wrapper');
+    const drawingCanvas = document.getElementById('drawingCanvas');
     
+    // Aplicar modo específico
     if (tool === 'draw') {
-        canvasWrapper.classList.add('drawing-mode');
         drawingCanvas.classList.add('drawing-mode');
+        canvasWrapper.classList.add('drawing-mode');
         canvasWrapper.style.cursor = 'crosshair';
     } else if (tool === 'erase') {
-        canvasWrapper.classList.add('drawing-mode');
         drawingCanvas.classList.add('drawing-mode');
+        canvasWrapper.classList.add('drawing-mode');
         canvasWrapper.style.cursor = 'not-allowed';
     } else {
         canvasWrapper.style.cursor = 'default';
     }
+    
+    console.log('✅ Ferramenta ativada:', tool);
 }
 
 function setDrawingColor(color) {
@@ -1035,8 +1252,12 @@ let mouseDownOnCanvas = false;
 
 canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
+
+    if (fogPaintMode || fogEraseMode) {
+        console.log('🚫 Bloqueado: modo fog ativo');
+        return;
+    }
     
-    // Prioridade 1: Botão do meio para pan
     if (e.button === 1) {
         e.preventDefault();
         middleMousePressed = true;
@@ -1589,42 +1810,62 @@ function clearDrawings() {
 
 // Inicializar fog canvas vazio
 function toggleFogPaintMode() {
-    fogPaintMode = !fogPaintMode;
+    console.log('🌫️ Toggle Fog Paint');
     
     if (fogPaintMode) {
-        fogEraseMode = false;
-        document.getElementById('fogPaintBtn')?.classList.add('active');
-        document.getElementById('fogEraseBtn')?.classList.remove('active');
-        fogCanvas.classList.add('fog-drawing-mode');
-        fogCanvas.style.cursor = 'crosshair';
-        canvasWrapper.style.cursor = 'crosshair';
-        showToast('🌫️ Modo: Pintar Névoa');
-    } else {
-        document.getElementById('fogPaintBtn')?.classList.remove('active');
-        fogCanvas.classList.remove('fog-drawing-mode');
-        fogCanvas.style.cursor = 'default';
-        canvasWrapper.style.cursor = 'default';
+        // Desativar
+        ToolManager.deactivateAll();
+        showToast('🌫️ Modo névoa desativado');
+        return;
     }
+    
+    // ✅ DESATIVAR TUDO PRIMEIRO
+    ToolManager.deactivateAll();
+    
+    // Ativar fog paint
+    fogPaintMode = true;
+    fogEraseMode = false;
+    
+    document.getElementById('fogPaintBtn')?.classList.add('active');
+    
+    const fogCanvas = document.getElementById('fogCanvas');
+    const canvasWrapper = document.querySelector('.canvas-wrapper');
+    
+    fogCanvas.classList.add('fog-drawing-mode');
+    fogCanvas.style.cursor = 'crosshair';
+    canvasWrapper.style.cursor = 'crosshair';
+    
+    showToast('🌫️ Modo: Pintar Névoa');
 }
 
 // Ativar modo de apagar névoa
 function toggleFogEraseMode() {
-    fogEraseMode = !fogEraseMode;
+    console.log('✨ Toggle Fog Erase');
     
     if (fogEraseMode) {
-        fogPaintMode = false;
-        document.getElementById('fogEraseBtn')?.classList.add('active');
-        document.getElementById('fogPaintBtn')?.classList.remove('active');
-        fogCanvas.classList.add('fog-drawing-mode');
-        fogCanvas.style.cursor = 'not-allowed';
-        canvasWrapper.style.cursor = 'not-allowed';
-        showToast('✨ Modo: Apagar Névoa');
-    } else {
-        document.getElementById('fogEraseBtn')?.classList.remove('active');
-        fogCanvas.classList.remove('fog-drawing-mode');
-        fogCanvas.style.cursor = 'default';
-        canvasWrapper.style.cursor = 'default';
+        // Desativar
+        ToolManager.deactivateAll();
+        showToast('✨ Modo névoa desativado');
+        return;
     }
+    
+    // ✅ DESATIVAR TUDO PRIMEIRO
+    ToolManager.deactivateAll();
+    
+    // Ativar fog erase
+    fogEraseMode = true;
+    fogPaintMode = false;
+    
+    document.getElementById('fogEraseBtn')?.classList.add('active');
+    
+    const fogCanvas = document.getElementById('fogCanvas');
+    const canvasWrapper = document.querySelector('.canvas-wrapper');
+    
+    fogCanvas.classList.add('fog-drawing-mode');
+    fogCanvas.style.cursor = 'not-allowed';
+    canvasWrapper.style.cursor = 'not-allowed';
+    
+    showToast('✨ Modo: Apagar Névoa');
 }
 
 // Definir forma do pincel
@@ -2600,24 +2841,37 @@ function rollDice(sides) {
     const result = Math.floor(Math.random() * sides) + 1;
     const resultDiv = document.getElementById('diceResult');
     
+    // Resultado local
     resultDiv.textContent = result;
     resultDiv.className = 'dice-result';
     
-    addDiceToHistory(`1d${sides}`, result, sides === 20 && result === 20, sides === 20 && result === 1);
+    const isCritical = sides === 20 && result === 20;
+    const isFail = sides === 20 && result === 1;
+    
+    addDiceToHistory(`1d${sides}`, result, isCritical, isFail);
     
     setTimeout(() => {
         resultDiv.classList.add('show');
         
-        if (sides === 20) {
-            if (result === 20) {
-                resultDiv.classList.add('critical-success');
-                showToast('🎉 CRÍTICO!');
-            } else if (result === 1) {
-                resultDiv.classList.add('critical-fail');
-                showToast('💀 FALHA CRÍTICA!');
-            }
+        if (isCritical) {
+            resultDiv.classList.add('critical-success');
+            showToast('🎉 CRÍTICO!');
+        } else if (isFail) {
+            resultDiv.classList.add('critical-fail');
+            showToast('💀 FALHA CRÍTICA!');
         }
     }, 10);
+    
+    // ✅ BROADCAST para todos
+    socket.emit('roll_shared_dice', {
+        session_id: SESSION_ID,
+        roller_name: 'Mestre',
+        dice_type: `d${sides}`,
+        result: result,
+        formula: `1d${sides}`,
+        is_critical: isCritical,
+        is_failure: isFail
+    });
 }
 
 function rollCustomDice() {
@@ -2654,6 +2908,17 @@ function rollCustomDice() {
     }
     
     addDiceToHistory(formula, total, isCrit, isFail, breakdown);
+    
+    // ✅ BROADCAST para todos
+    socket.emit('roll_shared_dice', {
+        session_id: SESSION_ID,
+        roller_name: 'Mestre',
+        dice_type: `d${sides}`,
+        result: total,
+        formula: formula,
+        is_critical: isCrit,
+        is_failure: isFail
+    });
 }
 
 function addDiceToHistory(formula, result, isCrit, isFail, breakdown = '') {
@@ -3665,26 +3930,31 @@ function promptCreateFirstScene() {
     const newScene = createEmptyScene(sceneName.trim());
     scenes.push(newScene);
     
-    // Ativar cena
+    // ✅ ATIVAR IMEDIATAMENTE
     currentSceneId = newScene.id;
     
-    // ✅ NOVO: Inicializar histórico da primeira cena
+    // Inicializar histórico
     sceneHistories[newScene.id] = {
         history: [],
         index: -1
     };
     updateUndoRedoButtons();
     
-    // Sincronizar com servidor
+    // ✅ SINCRONIZAR COM SERVIDOR
     socket.emit('scene_create', {
         session_id: SESSION_ID,
         scene: newScene
     });
     
-    // Renderizar lista de cenas
+    // ✅ ATIVAR NO SERVIDOR
+    socket.emit('scene_switch', {
+        session_id: SESSION_ID,
+        scene_id: newScene.id,
+        scene: newScene
+    });
+    
     renderScenesList();
     
-    // Marcar como criado
     hasCreatedScene = true;
     localStorage.setItem('rpg_has_scene_' + SESSION_ID, 'true');
     
@@ -3700,17 +3970,11 @@ function promptCreateFirstScene() {
         }, 300);
     }
     
-    showToast(`✅ Cena "${sceneName.trim()}" criada com sucesso!`);
-    
-    setTimeout(() => {
-        showToast('💡 Agora você pode adicionar mapas e tokens!');
-    }, 2000);
-    
-    console.log('🎉 Primeira cena criada e ativada!');
+    showToast(`✅ Cena "${sceneName.trim()}" criada e ativada!`);
+    console.log('🎉 Primeira cena ativa:', newScene.id);
 }
 
 // Adicionar animação de fadeOut
-const style = document.createElement('style');
 style.textContent = `
     @keyframes fadeOut {
         from {
@@ -3844,6 +4108,14 @@ socket.on('connect', () => {
             initializeOnce();
         }, 1200);
     }
+});
+
+// ==========================================
+// RECEBER ROLAGENS COMPARTILHADAS
+// ==========================================
+socket.on('dice_rolled_shared', (data) => {
+    console.log('🎲 Dado rolado:', data);
+    SharedDiceSystem.show(data);
 });
 
 // Session state - Atualizar flag se necessário

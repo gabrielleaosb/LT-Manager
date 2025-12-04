@@ -453,6 +453,32 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Shared Dice Roll Overlay - Premium Version -->
+<div class="dice-roll-overlay" id="sharedDiceOverlay">
+    <div class="dice-particles" id="diceParticles"></div>
+    
+    <div class="dice-roll-container">
+        <div class="dice-roller-name" id="diceRollerName">Jogador</div>
+        
+        <div class="dice-3d-wrapper">
+            <div class="dice-3d" id="dice3d">
+                <div class="dice-face">
+                    <span id="diceFaceValue">?</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="dice-result-display">
+            <div class="dice-result-label">RESULTADO</div>
+            <div class="dice-result-value" id="sharedDiceResult">0</div>
+            <div class="dice-result-formula" id="sharedDiceFormula"></div>
+        </div>
+        
+        <div class="dice-close-hint">Clique para fechar</div>
+    </div>
+</div>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/shared_dice.css') }}">
 <script src="{{ url_for('static', filename='js/canvas_optimizer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/image_compressor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/persistence.js') }}"></script>
