@@ -3,20 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Visualização do Mapa - Last Take</title>
-<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<title>Player View - Last Take</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/map_manager_enhanced.css') }}">
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <style>
-/* Estilos específicos do login */
+/* Player-specific styles */
 .login-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.95);
+    background: rgba(0, 0, 0, 0.95);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    backdrop-filter: blur(12px);
 }
 
 .login-overlay.hidden {
@@ -24,111 +27,119 @@
 }
 
 .login-box {
-    background: linear-gradient(135deg, rgba(26,26,46,0.95), rgba(16,16,30,0.95));
-    border: 2px solid #9b59b6;
-    border-radius: 16px;
-    padding: 40px;
+    background: linear-gradient(135deg, 
+        rgba(15, 23, 42, 0.98) 0%, 
+        rgba(30, 41, 59, 0.95) 100%);
+    border: 1px solid var(--dark-border);
+    border-radius: 1rem;
+    padding: 2rem;
     max-width: 400px;
     width: 90%;
-    box-shadow: 0 20px 60px rgba(155,89,182,0.3);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 .login-box h1 {
-    font-family: 'Merriweather', serif;
-    color: #c49bdb;
-    margin-bottom: 10px;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
     text-align: center;
+    font-size: 1.5rem;
+    font-weight: 600;
 }
 
 .login-box p {
-    color: #bbb;
+    color: var(--text-secondary);
     text-align: center;
-    margin-bottom: 30px;
-    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
 }
 
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 1.25rem;
 }
 
 .form-group label {
     display: block;
-    color: #bbb;
-    margin-bottom: 8px;
-    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
 }
 
 .form-group input {
     width: 100%;
-    padding: 12px 15px;
-    background: rgba(16,16,30,0.8);
-    border: 2px solid rgba(155,89,182,0.3);
-    border-radius: 8px;
-    color: #fff;
+    padding: 0.75rem 1rem;
+    background: var(--dark-surface);
+    border: 1px solid var(--dark-border);
+    border-radius: 0.5rem;
+    color: var(--text-primary);
     font-size: 1rem;
-    transition: border-color 0.3s;
+    transition: all 0.2s;
 }
 
 .form-group input:focus {
     outline: none;
-    border-color: #9b59b6;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
 .login-btn {
     width: 100%;
-    padding: 12px;
-    background: linear-gradient(135deg, #9b59b6, #8e44ad);
-    border: none;
-    border-radius: 8px;
-    color: #fff;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border: 1px solid var(--primary-light);
+    border-radius: 0.5rem;
+    color: white;
     font-size: 1rem;
-    font-weight: bold;
+    font-weight: 600;
     cursor: pointer;
-    transition: transform 0.2s;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
 }
 
 .login-btn:hover {
     transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
 }
 
-/* Ajustes específicos para player */
 .player-info-badge {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 1rem;
 }
 
 .player-name-display {
-    color: #fff;
-    font-weight: bold;
-    padding: 8px 15px;
-    background: rgba(155,89,182,0.2);
-    border-radius: 8px;
-    border: 1px solid rgba(155,89,182,0.4);
+    color: var(--text-primary);
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    background: rgba(99, 102, 241, 0.15);
+    border-radius: 0.5rem;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    font-size: 0.875rem;
 }
 
 .status-badge {
-    padding: 8px 15px;
-    background: rgba(26,26,46,0.9);
-    border: 2px solid rgba(155,89,182,0.3);
-    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    background: var(--dark-surface);
+    border: 1px solid var(--dark-border);
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .status-indicator {
-    display: inline-block;
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    margin-right: 8px;
     animation: pulse 2s infinite;
 }
 
 .status-indicator.connected {
-    background: #2ed573;
+    background: var(--success);
 }
 
 .status-indicator.disconnected {
-    background: #e74c3c;
+    background: var(--danger);
     animation: none;
 }
 
@@ -137,22 +148,30 @@
     50% { opacity: 0.5; }
 }
 
-/* Drawing Tools - Estilo igual ao mestre */
+#statusText {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* Drawing Tools for Players */
 .drawing-tools {
     position: fixed;
-    left: 20px;
+    left: 1.5rem;
     top: 80px;
-    background: rgba(26,26,46,0.98);
-    border: 2px solid #9b59b6;
-    border-radius: 12px;
-    padding: 15px;
+    background: linear-gradient(135deg, 
+        rgba(15, 23, 42, 0.98) 0%, 
+        rgba(30, 41, 59, 0.95) 100%);
+    border: 1px solid var(--dark-border);
+    border-radius: 1rem;
+    padding: 1rem;
     display: none;
     flex-direction: column;
-    gap: 10px;
+    gap: 0.75rem;
     z-index: 500;
     max-width: 200px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    transition: all 0.3s ease;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(24px);
 }
 
 .drawing-tools.show {
@@ -160,29 +179,11 @@
 }
 
 .drawing-tools h4 {
-    color: #c49bdb;
-    margin-bottom: 5px;
-    font-size: 0.9rem;
-}
-
-.color-option {
-    width: 100%;
-    aspect-ratio: 1;
-    border-radius: 8px;
-    cursor: pointer;
-    border: 2px solid transparent;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
-
-.color-option:hover {
-    transform: scale(1.15);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-}
-
-.color-option.active {
-    border-color: #fff;
-    transform: scale(1.1);
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 </style>
 </head>
@@ -193,7 +194,7 @@
 <!-- Login Overlay -->
 <div class="login-overlay" id="loginOverlay">
     <div class="login-box">
-        <h1>🗺️ Entrar na Sessão</h1>
+        <h1>Entrar na Sessão</h1>
         <p>Digite seu nome para participar</p>
         
         <div class="form-group">
@@ -201,15 +202,16 @@
             <input type="text" id="playerNameInput" placeholder="Ex: Aragorn" maxlength="20" autofocus>
         </div>
         
-        <button class="login-btn" id="loginBtn">Entrar na Sessão</button>
+        <button class="login-btn" id="loginBtn">Entrar</button>
     </div>
 </div>
 
 <!-- Header -->
 <header class="header">
     <div class="header-left">
-        <h1>🗺️ Visualização do Mapa</h1>
+        <h1>Visualização do Mapa</h1>
     </div>
+    
     <div class="header-actions">
         <div class="player-info-badge">
             <div class="player-name-display" id="playerNameDisplay">Jogador</div>
@@ -235,12 +237,13 @@
 
 <!-- Drawing Tools (aparece se tiver permissão) -->
 <div class="drawing-tools" id="drawingTools">
-    <h4>🎨 Ferramentas</h4>
-    <button class="tool-btn active" onclick="setDrawTool('draw')">✏️ Desenhar</button>
-    <button class="tool-btn" onclick="setDrawTool('erase')">🧹 Apagar</button>
-    <button class="tool-btn" onclick="setDrawTool('pan')">🤚 Mover</button>
-    <h4 style="margin-top: 5px;">Cores</h4>
-    <div class="color-palette" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px;">
+    <h4>Ferramentas</h4>
+    <button class="tool-btn active" onclick="setDrawTool('draw')">Desenhar</button>
+    <button class="tool-btn" onclick="setDrawTool('erase')">Apagar</button>
+    <button class="tool-btn" onclick="setDrawTool('pan')">Mover</button>
+    
+    <h4 style="margin-top: 0.5rem;">Cores</h4>
+    <div class="color-palette">
         <div class="color-option active" style="background: #9b59b6;" onclick="setPlayerColor('#9b59b6')"></div>
         <div class="color-option" style="background: #e74c3c;" onclick="setPlayerColor('#e74c3c')"></div>
         <div class="color-option" style="background: #3498db;" onclick="setPlayerColor('#3498db')"></div>
@@ -254,11 +257,11 @@
     </div>
 </div>
 
-<!-- Chat Container - IGUAL AO MESTRE -->
+<!-- Chat -->
 <div class="chat-container" id="chatContainer">
     <div class="chat-header" onclick="toggleChatMinimize()">
         <div class="chat-header-left">
-            <h3>💬 Chat</h3>
+            <h3>Chat</h3>
             <span class="chat-badge" id="chatBadge" style="display: none;">0</span>
         </div>
         <div class="chat-controls">
@@ -269,22 +272,18 @@
     </div>
     
     <div class="chat-body">
-        <!-- Lista de Contatos -->
         <div class="chat-contacts">
             <div id="contactsList">
                 <div class="empty-state">Nenhum contato</div>
             </div>
         </div>
         
-        <!-- Área de Conversa -->
         <div class="chat-conversation">
-            <!-- Placeholder -->
             <div class="conversation-placeholder" id="conversationPlaceholder">
                 <div class="conversation-placeholder-icon">💬</div>
                 <p>Selecione um contato</p>
             </div>
             
-            <!-- Conversa Ativa -->
             <div id="conversationArea" style="display: none; flex-direction: column; height: 100%;">
                 <div class="conversation-header">
                     <div class="contact-avatar" id="conversationContactAvatar">?</div>
@@ -296,11 +295,8 @@
                 <div class="conversation-messages" id="conversationMessages"></div>
                 
                 <div class="conversation-input-area">
-                    <input type="text" 
-                           class="conversation-input" 
-                           id="conversationInput" 
-                           placeholder="Digite sua mensagem..." 
-                           maxlength="500">
+                    <input type="text" class="conversation-input" id="conversationInput" 
+                           placeholder="Digite sua mensagem..." maxlength="500">
                     <button class="conversation-send-btn" onclick="sendChatMessage()">➤</button>
                 </div>
             </div>
@@ -310,7 +306,8 @@
 
 <div class="toast" id="toast"></div>
 
-<script defer src="{{ url_for('static', filename='js/player_view.js') }}"></script>
+<script src="{{ url_for('static', filename='js/canvas_optimizer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/player_view.js') }}"></script>
 
 </body>
 </html>

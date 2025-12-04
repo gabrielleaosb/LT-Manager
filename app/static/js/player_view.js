@@ -644,8 +644,9 @@ function redrawAll() {
         mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
         // Desenhar imagens com otimização
-        images.forEach(img => {
-            const loadedImg = loadedImages.get(img.id);
+        const allImages = [...maps, ...entities];
+        allImages.forEach(img => {
+            const loadedImg = loadedImages[img.id];
             
             if (loadedImg && loadedImg.complete && loadedImg.naturalWidth > 0) {
                 try {
@@ -910,20 +911,46 @@ canvasWrapper.addEventListener('mouseleave', () => {
 // ========== DESENHO ==========
 function updateDrawingTools() {
     const tools = document.getElementById('drawingTools');
+    
+    // ✅ VERIFICAR SE EXISTE
+    if (!tools) {
+        console.warn('⚠️ drawingTools não encontrado');
+        return;
+    }
+    
     if (permissions.draw) {
         tools.classList.add('show');
         setDrawTool('draw');
     } else {
         tools.classList.remove('show');
-        drawingCanvas.classList.remove('drawing-mode');
-        canvasWrapper.classList.remove('drawing-mode');
+        
+        // ✅ VERIFICAR SE EXISTEM
+        const drawingCanvas = document.getElementById('drawingCanvas');
+        const canvasWrapper = document.getElementById('canvasWrapper');
+        
+        if (drawingCanvas) drawingCanvas.classList.remove('drawing-mode');
+        if (canvasWrapper) canvasWrapper.classList.remove('drawing-mode');
     }
 }
 
 function setDrawTool(tool) {
     drawTool = tool;
+    
     document.querySelectorAll('.drawing-tools .tool-btn').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+    
+    // ✅ CORRIGIDO - Verificar se event existe
+    if (window.event && window.event.target) {
+        window.event.target.classList.add('active');
+    } else {
+        // Caso seja chamado programaticamente, ativar o primeiro botão
+        const firstBtn = document.querySelector('.drawing-tools .tool-btn');
+        if (firstBtn) firstBtn.classList.add('active');
+    }
+    
+    const drawingCanvas = document.getElementById('drawingCanvas');
+    const canvasWrapper = document.getElementById('canvasWrapper');
+    
+    if (!drawingCanvas || !canvasWrapper) return;
     
     if (tool === 'draw') {
         drawingCanvas.classList.add('drawing-mode');

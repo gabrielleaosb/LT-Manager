@@ -2321,32 +2321,6 @@ function closeTokenPermissionsModal() {
 
 // Storage
 
-function updateStorageIndicator() {
-    const size = ImageCompressor.getLocalStorageSize();
-    const indicator = document.getElementById('storageSize');
-    const container = document.getElementById('storageIndicator');
-    
-    if (indicator) {
-        indicator.textContent = size + ' MB';
-        
-        // Mudar cor baseado no uso
-        const sizeNum = parseFloat(size);
-        if (sizeNum > 4.5) {
-            container.style.borderColor = '#e74c3c';
-            container.style.background = 'rgba(231,76,60,0.2)';
-        } else if (sizeNum > 3) {
-            container.style.borderColor = '#f39c12';
-            container.style.background = 'rgba(243,156,18,0.2)';
-        } else {
-            container.style.borderColor = 'rgba(155,89,182,0.4)';
-            container.style.background = 'rgba(155,89,182,0.2)';
-        }
-    }
-}
-
-// Atualizar a cada 5 segundos
-setInterval(updateStorageIndicator, 5000);
-
 // Atualizar na primeira carga
 document.addEventListener('DOMContentLoaded', () => {
     updateStorageIndicator();
@@ -3157,6 +3131,55 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!entities) entities = [];
     
     console.log('✅ Variáveis inicializadas');
+    
+    // ✅ NOVO - Forçar criação de cena se não houver nenhuma
+    setTimeout(() => {
+        if (!scenes || scenes.length === 0) {
+            console.log('⚠️ Nenhuma cena encontrada - forçando criação');
+            
+            // Mostrar modal personalizado
+            const shouldCreate = confirm(
+                '🎬 Bem-vindo ao Map Manager!\n\n' +
+                'Você precisa criar uma CENA para começar.\n\n' +
+                'Cenas organizam seus mapas, tokens e névoa.\n\n' +
+                'Criar primeira cena agora?'
+            );
+            
+            if (shouldCreate) {
+                const sceneName = prompt('📝 Nome da primeira cena:', 'Cena Principal');
+                
+                if (sceneName && sceneName.trim()) {
+                    const newScene = createEmptyScene(sceneName.trim());
+                    scenes.push(newScene);
+                    
+                    // Ativar imediatamente
+                    currentSceneId = newScene.id;
+                    
+                    // Enviar para servidor
+                    socket.emit('scene_create', {
+                        session_id: SESSION_ID,
+                        scene: newScene
+                    });
+                    
+                    socket.emit('scene_switch', {
+                        session_id: SESSION_ID,
+                        scene_id: newScene.id,
+                        scene: newScene
+                    });
+                    
+                    renderScenesList();
+                    showToast(`✅ Cena "${sceneName}" criada e ativada!`);
+                    
+                    console.log('✅ Primeira cena criada:', newScene.id);
+                } else {
+                    // Se recusar, abrir gerenciador
+                    openSceneManager();
+                }
+            } else {
+                openSceneManager();
+            }
+        }
+    }, 1000); // Aguardar 1s para carregar dados do servidor
     
     // Centralizar canvas
     setTimeout(() => {

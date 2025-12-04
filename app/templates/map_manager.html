@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gerenciador de Mapas - Last Take Manager</title>
-<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<title>Map Manager - Last Take</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/map_manager_enhanced.css') }}">
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
@@ -15,76 +17,99 @@
 <!-- Header -->
 <header class="header">
     <div class="header-left">
-        <button class="back-btn" onclick="window.location.href='/dashboard'">← Voltar</button>
-        <h1>🗺️ Gerenciador de Mapas</h1>
+        <button class="back-btn btn-icon" onclick="window.location.href='/dashboard'" data-tooltip="Voltar">
+            <span>←</span>
+        </button>
+        <h1>Map Manager</h1>
     </div>
+    
     <div class="header-actions">
-        <button class="btn" id="undoBtn" onclick="undo()" title="Desfazer (Ctrl+Z)">↩️ Desfazer</button>
-        <button class="btn" id="redoBtn" onclick="redo()" title="Refazer (Ctrl+Y)">↪️ Refazer</button>
-        <button class="btn" onclick="openSceneManager()">🎬 Cenas</button>
-        <button class="btn" onclick="copyShareLink()">🔗 Copiar Link</button>
-        <button class="btn btn-danger" onclick="clearAll()">🗑️ Limpar Tudo</button>
-        <button class="btn" onclick="clearLocalCache()" title="Limpar cache local">🗑️ Limpar Cache</button>
-        <div style="display: flex; gap: 5px; align-items: center;">
-            <button class="btn" onclick="zoom(-0.1)" title="Zoom Out">🔍−</button>
-            <span style="color: #fff; font-size: 0.9rem; min-width: 50px; text-align: center;" id="zoomLevel">50%</span>
-            <button class="btn" onclick="zoom(0.1)" title="Zoom In">🔍+</button>
-            <button class="btn" onclick="currentScale = 1; applyTransform(); document.getElementById('zoomLevel').textContent = '100%';" title="Reset Zoom">↺</button>
+        <!-- History -->
+        <div class="header-group">
+            <button class="btn btn-icon" id="undoBtn" onclick="undo()" data-tooltip="Desfazer (Ctrl+Z)">
+                <span>↩</span>
+            </button>
+            <button class="btn btn-icon" id="redoBtn" onclick="redo()" data-tooltip="Refazer (Ctrl+Y)">
+                <span>↪</span>
+            </button>
         </div>
-            <div id="storageIndicator" style="
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: rgba(155,89,182,0.2);
-            border: 2px solid rgba(155,89,182,0.4);
-            border-radius: 6px;
-            font-size: 0.85rem;
-        ">
-            <span>💾</span>
-            <span id="storageSize">0 MB</span>
+        
+        <!-- Tools -->
+        <div class="header-group">
+            <button class="btn btn-icon" onclick="openSceneManager()" data-tooltip="Gerenciar Cenas">
+                <span>🎬</span>
+            </button>
+            <button class="btn btn-icon" onclick="copyShareLink()" data-tooltip="Copiar Link para Jogadores">
+                <span>🔗</span>
+            </button>
         </div>
+        
+        <!-- Zoom -->
+        <div class="header-group">
+            <div class="zoom-control">
+                <button class="btn btn-icon" onclick="zoom(-0.1)" data-tooltip="Zoom Out">
+                    <span>−</span>
+                </button>
+                <span class="zoom-level" id="zoomLevel">50%</span>
+                <button class="btn btn-icon" onclick="zoom(0.1)" data-tooltip="Zoom In">
+                    <span>+</span>
+                </button>
+                <button class="btn btn-icon" onclick="currentScale = 1; applyTransform(); document.getElementById('zoomLevel').textContent = '100%';" data-tooltip="Reset">
+                    <span>↺</span>
+                </button>
+            </div>
+        </div>     
+        <!-- Danger -->
+        <button class="btn btn-danger btn-icon" onclick="clearLocalCache()" data-tooltip="Limpar Cache">
+            <span>🗑</span>
+        </button>
     </div>
 </header>
+
+<!-- Pan Indicator -->
 <div id="panIndicator" style="
     position: fixed;
     top: 80px;
     left: 50%;
     transform: translateX(-50%);
-    background: linear-gradient(135deg, rgba(155,89,182,0.95), rgba(108,52,131,0.95));
-    color: #fff;
-    padding: 12px 24px;
-    border-radius: 8px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     z-index: 1000;
-    box-shadow: 0 4px 15px rgba(155,89,182,0.5);
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5);
     display: none;
     align-items: center;
-    gap: 8px;
-    border: 2px solid rgba(255,255,255,0.2);
+    gap: 0.625rem;
+    border: 1px solid var(--primary-light);
 ">
-    <span>🤚</span>
-    <span>Segure o BOTÃO DO MEIO para mover o mapa</span>
+    <span>🖱</span>
+    <span>Segure o BOTÃO DO MEIO para mover</span>
 </div>
+
 <div class="main-layout">
-    <!-- Sidebar Esquerda Retrátil -->
+    <!-- Sidebar -->
     <div class="tools-sidebar">
         <button class="sidebar-toggle" onclick="toggleSidebar()">◀</button>
         
-        <div class="sidebar-header">🛠️ Ferramentas</div>
+        <div class="sidebar-header">Ferramentas</div>
+        
         <div class="sidebar-content">
+            <!-- Work Mode -->
             <div class="tools-section">
-                <h4>🎯 Modo de Trabalho</h4>
+                <h4>Modo de Trabalho</h4>
                 <div class="tool-grid">
-                    <button class="tool-btn active" onclick="setTool('select')">✋ Selecionar</button>
-                    <button class="tool-btn" onclick="setTool('draw')">✏️ Desenhar</button>
-                    <button class="tool-btn" onclick="setTool('erase')">🧹 Apagar</button>
+                    <button class="tool-btn active" onclick="setTool('select')">Selecionar</button>
+                    <button class="tool-btn" onclick="setTool('draw')">Desenhar</button>
+                    <button class="tool-btn" onclick="setTool('erase')">Apagar</button>
                 </div>
             </div>
             
+            <!-- Grid -->
             <div class="tools-section">
-                <h4>📐 Grid do Mapa</h4>
+                <h4>Grid do Mapa</h4>
                 <div class="grid-controls">
                     <div class="control-row">
                         <label>
@@ -93,22 +118,23 @@
                         </label>
                     </div>
                     <div class="control-row">
-                        <label>Tamanho da Célula</label>
+                        <label>Tamanho</label>
                         <input type="range" min="20" max="100" value="50" step="5" onchange="updateGridSize(this.value)">
                         <span class="grid-size-value" id="gridSizeValue">50px</span>
                     </div>
                 </div>
             </div>
             
+            <!-- Drawing -->
             <div class="tools-section">
-                <h4>🎨 Ferramentas de Desenho</h4>
+                <h4>Desenho Livre</h4>
                 <div class="grid-controls">
                     <div class="control-row">
-                        <label>Espessura do Pincel</label>
+                        <label>Espessura</label>
                         <input type="range" min="1" max="20" value="3" onchange="setBrushSize(this.value)">
                     </div>
                 </div>
-                <div class="color-palette" style="margin-top: 12px;">
+                <div class="color-palette">
                     <div class="color-option active" style="background: #9b59b6;" onclick="setDrawingColor('#9b59b6')"></div>
                     <div class="color-option" style="background: #e74c3c;" onclick="setDrawingColor('#e74c3c')"></div>
                     <div class="color-option" style="background: #3498db;" onclick="setDrawingColor('#3498db')"></div>
@@ -120,76 +146,65 @@
                     <div class="color-option" style="background: #34495e;" onclick="setDrawingColor('#34495e')"></div>
                     <div class="color-option" style="background: #000000;" onclick="setDrawingColor('#000000')"></div>
                 </div>
-                <button class="action-btn" onclick="clearDrawings()" style="margin-top: 12px;">🧹 Limpar Todos os Desenhos</button>
+                <button class="action-btn" onclick="clearDrawings()">Limpar Desenhos</button>
             </div>
             
+            <!-- Add Elements -->
             <div class="tools-section">
-                <h4>➕ Adicionar Elementos</h4>
-                <button class="action-btn" onclick="addImage()">🖼️ Adicionar Imagem</button>
-                <button class="action-btn" onclick="addToken()">🎭 Adicionar Token</button>
+                <h4>Adicionar</h4>
+                <button class="action-btn" onclick="addImage()">+ Imagem</button>
+                <button class="action-btn" onclick="addToken()">+ Token</button>
             </div>
             
+            <!-- Images -->
             <div class="tools-section">
-                <h4>🖼️ Imagens no Mapa</h4>
+                <h4>Imagens</h4>
                 <div class="item-list" id="imageList">
-                    <div class="empty-state">Nenhuma imagem adicionada</div>
+                    <div class="empty-state">Nenhuma imagem</div>
                 </div>
             </div>
             
+            <!-- Tokens -->
             <div class="tools-section">
-                <h4>🎭 Tokens Ativos</h4>
+                <h4>Tokens</h4>
                 <div class="item-list" id="tokenList">
-                    <div class="empty-state">Nenhum token no mapa</div>
+                    <div class="empty-state">Nenhum token</div>
                 </div>
             </div>
+            
+            <!-- Fog -->
             <div class="tools-section">
-                <h4>🌫️ Névoa (Fog of War)</h4>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-                    <button class="tool-btn" id="fogPaintBtn" onclick="toggleFogPaintMode()">
-                        🖌️ Pintar Névoa
-                    </button>
-                    <button class="tool-btn" id="fogEraseBtn" onclick="toggleFogEraseMode()">
-                        ✨ Apagar Névoa
-                    </button>
+                <h4>Névoa</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <button class="tool-btn" id="fogPaintBtn" onclick="toggleFogPaintMode()">Pintar</button>
+                    <button class="tool-btn" id="fogEraseBtn" onclick="toggleFogEraseMode()">Apagar</button>
                 </div>
                 
-                <div style="margin-bottom: 12px;">
-                    <h4 style="color: #c49bdb; font-size: 0.85rem; margin-bottom: 8px;">Forma do Pincel</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                        <button class="tool-btn fog-shape-btn active" onclick="setFogBrushShape('circle')">
-                            🔵 Círculo
-                        </button>
-                        <button class="tool-btn fog-shape-btn" onclick="setFogBrushShape('square')">
-                            ⬜ Quadrado
-                        </button>
+                <div style="margin-bottom: 0.75rem;">
+                    <label style="color: var(--text-secondary); font-size: 0.75rem; display: block; margin-bottom: 0.5rem;">Forma</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                        <button class="tool-btn fog-shape-btn active" onclick="setFogBrushShape('circle')">Círculo</button>
+                        <button class="tool-btn fog-shape-btn" onclick="setFogBrushShape('square')">Quadrado</button>
                     </div>
                 </div>
                 
-                <div class="control-row" style="margin-bottom: 12px;">
-                    <label>Tamanho do Pincel</label>
+                <div class="control-row" style="margin-bottom: 0.75rem;">
+                    <label>Tamanho</label>
                     <input type="range" min="20" max="300" value="100" step="10" onchange="setFogBrushSize(this.value)">
                     <span class="grid-size-value" id="fogBrushSizeValue">100px</span>
                 </div>
                 
-                <button class="action-btn" onclick="coverAllWithFog()" style="margin-bottom: 8px; background: linear-gradient(135deg, #34495e, #2c3e50);">
-                    🌫️ Cobrir Tudo com Névoa
+                <button class="action-btn" onclick="coverAllWithFog()" style="margin-bottom: 0.5rem; background: var(--dark-surface);">
+                    Cobrir Tudo
                 </button>
-                
-                <button class="action-btn" onclick="clearAllFog()" style="background: linear-gradient(135deg, #3498db, #2980b9);">
-                    ✨ Limpar Toda a Névoa
+                <button class="action-btn" onclick="clearAllFog()" style="background: var(--dark-surface);">
+                    Limpar Névoa
                 </button>
-                
-                <div style="margin-top: 12px; padding: 10px; background: rgba(52, 152, 219, 0.1); border-radius: 8px; border: 1px solid rgba(52, 152, 219, 0.3);">
-                    <p style="color: #3498db; font-size: 0.8rem; margin: 0;">
-                        💡 <strong>Dica:</strong> Clique e arraste para pintar/apagar névoa no mapa
-                    </p>
-                </div>
             </div>
         </div>
     </div>
     
-    <!-- Canvas Container -->
+    <!-- Canvas -->
     <div class="canvas-container">
         <div class="canvas-wrapper" id="canvasWrapper">
             <canvas id="mapCanvas"></canvas>
@@ -200,16 +215,16 @@
     </div>
 </div>
 
-<!-- Botões Flutuantes -->
+<!-- Floating Buttons -->
 <div class="floating-buttons">
-    <button class="floating-btn" onclick="togglePlayersPanel()" title="Jogadores">👥</button>
-    <button class="floating-btn" onclick="toggleDiceRoller()" title="Dados">🎲</button>
+    <button class="floating-btn" onclick="togglePlayersPanel()" data-tooltip="Jogadores">👥</button>
+    <button class="floating-btn" onclick="toggleDiceRoller()" data-tooltip="Dados">🎲</button>
 </div>
 
-<!-- Painel de Jogadores -->
+<!-- Players Panel -->
 <div class="floating-panel" id="playersPanel">
     <div class="panel-header">
-        <h3>👥 Jogadores</h3>
+        <h3>Jogadores</h3>
         <button class="panel-close" onclick="togglePlayersPanel()">×</button>
     </div>
     <div class="panel-content">
@@ -219,19 +234,17 @@
     </div>
 </div>
 
-<!-- Painel de Dados -->
+<!-- Dice Panel -->
 <div class="floating-panel" id="dicePanel">
     <div class="panel-header">
-        <h3>🎲 Rolador de Dados</h3>
+        <h3>Rolador de Dados</h3>
         <button class="panel-close" onclick="toggleDiceRoller()">×</button>
     </div>
     <div class="panel-content">
-        <!-- Resultado -->
         <div class="dice-result" id="diceResult">Selecione um dado</div>
         
-        <!-- Dados Rápidos -->
-        <div style="margin-bottom: 20px;">
-            <h4 style="color: #c49bdb; margin-bottom: 10px; font-size: 0.95rem;">⚡ Dados Rápidos</h4>
+        <div style="margin-bottom: 1.25rem;">
+            <h4 style="color: var(--text-secondary); margin-bottom: 0.75rem; font-size: 0.75rem;">DADOS RÁPIDOS</h4>
             <div class="dice-grid">
                 <button class="dice-btn" onclick="rollDice(4)">d4</button>
                 <button class="dice-btn" onclick="rollDice(6)">d6</button>
@@ -243,19 +256,18 @@
             </div>
         </div>
         
-        <!-- Rolagem Customizada -->
-        <div style="background: rgba(16,16,30,0.6); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
-            <h4 style="color: #c49bdb; margin-bottom: 12px; font-size: 0.95rem;">🎯 Rolagem Personalizada</h4>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+        <div style="background: var(--dark-surface); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.25rem; border: 1px solid var(--dark-border);">
+            <h4 style="color: var(--text-secondary); margin-bottom: 0.75rem; font-size: 0.75rem;">PERSONALIZADO</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.625rem; margin-bottom: 0.75rem;">
                 <div>
-                    <label style="color: #bbb; font-size: 0.8rem; display: block; margin-bottom: 5px;">Quantidade</label>
+                    <label style="color: var(--text-muted); font-size: 0.6875rem; display: block; margin-bottom: 0.375rem;">Qtd</label>
                     <input type="number" id="customDiceCount" value="1" min="1" max="20" 
-                           style="width: 100%; padding: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(155,89,182,0.3); color: #fff; border-radius: 6px;">
+                           style="width: 100%; padding: 0.5rem; background: var(--dark-bg); border: 1px solid var(--dark-border); color: var(--text-primary); border-radius: 0.5rem; font-size: 0.8125rem;">
                 </div>
                 <div>
-                    <label style="color: #bbb; font-size: 0.8rem; display: block; margin-bottom: 5px;">Tipo</label>
+                    <label style="color: var(--text-muted); font-size: 0.6875rem; display: block; margin-bottom: 0.375rem;">Tipo</label>
                     <select id="customDiceSides" 
-                            style="width: 100%; padding: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(155,89,182,0.3); color: #fff; border-radius: 6px;">
+                            style="width: 100%; padding: 0.5rem; background: var(--dark-bg); border: 1px solid var(--dark-border); color: var(--text-primary); border-radius: 0.5rem; font-size: 0.8125rem;">
                         <option value="4">d4</option>
                         <option value="6">d6</option>
                         <option value="8">d8</option>
@@ -266,34 +278,31 @@
                     </select>
                 </div>
                 <div>
-                    <label style="color: #bbb; font-size: 0.8rem; display: block; margin-bottom: 5px;">Modificador</label>
+                    <label style="color: var(--text-muted); font-size: 0.6875rem; display: block; margin-bottom: 0.375rem;">Mod</label>
                     <input type="number" id="customDiceModifier" value="0" min="-100" max="100" 
-                           style="width: 100%; padding: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(155,89,182,0.3); color: #fff; border-radius: 6px;">
+                           style="width: 100%; padding: 0.5rem; background: var(--dark-bg); border: 1px solid var(--dark-border); color: var(--text-primary); border-radius: 0.5rem; font-size: 0.8125rem;">
                 </div>
             </div>
-            <button class="action-btn" onclick="rollCustomDice()" style="width: 100%;">🎲 Rolar</button>
+            <button class="action-btn" onclick="rollCustomDice()">Rolar</button>
         </div>
         
-        <!-- Histórico -->
         <div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h4 style="color: #c49bdb; font-size: 0.95rem; margin: 0;">📋 Histórico</h4>
-                <button onclick="clearDiceHistory()" 
-                        style="padding: 4px 10px; background: rgba(231,76,60,0.2); border: 1px solid #e74c3c; color: #fff; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
-                    🗑️ Limpar
-                </button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <h4 style="color: var(--text-secondary); font-size: 0.75rem; margin: 0;">HISTÓRICO</h4>
+                <button onclick="clearDiceHistory()" class="item-action-btn">Limpar</button>
             </div>
             <div id="diceHistoryList" style="max-height: 200px; overflow-y: auto;">
-                <div class="empty-state" style="padding: 20px; color: #666; text-align: center;">Nenhuma rolagem ainda</div>
+                <div class="empty-state">Nenhuma rolagem</div>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Chat -->
 <div class="chat-container" id="chatContainer">
     <div class="chat-header" onclick="toggleChatMinimize()">
         <div class="chat-header-left">
-            <h3>💬 Chat</h3>
+            <h3>Chat</h3>
             <span class="chat-badge" id="chatBadge" style="display: none;">0</span>
         </div>
         <div class="chat-controls">
@@ -304,22 +313,18 @@
     </div>
     
     <div class="chat-body">
-        <!-- Lista de Contatos -->
         <div class="chat-contacts">
             <div id="contactsList">
                 <div class="empty-state">Nenhum contato</div>
             </div>
         </div>
         
-        <!-- Área de Conversa -->
         <div class="chat-conversation">
-            <!-- Placeholder -->
             <div class="conversation-placeholder" id="conversationPlaceholder">
                 <div class="conversation-placeholder-icon">💬</div>
-                <p>Selecione um contato para iniciar</p>
+                <p>Selecione um contato</p>
             </div>
             
-            <!-- Conversa Ativa -->
             <div id="conversationArea" style="display: none; flex-direction: column; height: 100%;">
                 <div class="conversation-header">
                     <div class="contact-avatar" id="conversationContactAvatar">?</div>
@@ -331,11 +336,8 @@
                 <div class="conversation-messages" id="conversationMessages"></div>
                 
                 <div class="conversation-input-area">
-                    <input type="text" 
-                           class="conversation-input" 
-                           id="conversationInput" 
-                           placeholder="Digite sua mensagem..." 
-                           maxlength="500">
+                    <input type="text" class="conversation-input" id="conversationInput" 
+                           placeholder="Digite sua mensagem..." maxlength="500">
                     <button class="conversation-send-btn" onclick="sendChatMessage()">➤</button>
                 </div>
             </div>
@@ -343,7 +345,7 @@
     </div>
 </div>
 
-<!-- Modal de Token -->
+<!-- Token Modal -->
 <div class="modal" id="tokenModal">
     <div class="modal-content">
         <h3>Adicionar Token</h3>
@@ -354,15 +356,15 @@
         </div>
         
         <div class="control-group">
-            <label>Estilo do Token</label>
+            <label>Estilo</label>
             <div class="radio-group">
                 <div class="radio-option">
                     <input type="radio" id="styleRound" name="tokenStyle" value="round" checked>
-                    <label for="styleRound">🔵 Redondo</label>
+                    <label for="styleRound">Redondo</label>
                 </div>
                 <div class="radio-option">
                     <input type="radio" id="styleSquare" name="tokenStyle" value="square">
-                    <label for="styleSquare">⬜ Quadrado</label>
+                    <label for="styleSquare">Quadrado</label>
                 </div>
             </div>
         </div>
@@ -374,18 +376,18 @@
         
         <div class="modal-actions">
             <button class="btn" onclick="closeTokenModal()">Cancelar</button>
-            <button class="action-btn" onclick="createToken()">Criar Token</button>
+            <button class="action-btn" onclick="createToken()">Criar</button>
         </div>
     </div>
 </div>
 
-<!-- Modal de Permissões de Tokens -->
+<!-- Token Permissions Modal -->
 <div class="modal" id="tokenPermissionsModal">
     <div class="modal-content" style="max-width: 600px;">
         <h3 id="tokenPermModalTitle">Permissões de Tokens</h3>
         <input type="hidden" id="currentPlayerId">
         
-        <p style="color: #bbb; margin-bottom: 15px;">
+        <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.8125rem;">
             Selecione quais tokens este jogador pode mover:
         </p>
         
@@ -396,51 +398,50 @@
         </div>
     </div>
 </div>
-<!-- Modal de Gerenciador de Cenas -->
+
+<!-- Scene Manager Modal -->
 <div class="modal" id="sceneManagerModal">
     <div class="modal-content" style="max-width: 900px;">
-        <h3>🎬 Gerenciador de Cenas</h3>
+        <h3>Gerenciador de Cenas</h3>
         
-        <div style="background: rgba(46, 213, 115, 0.1); border: 2px solid rgba(46, 213, 115, 0.3); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
-            <h4 style="color: #2ed573; margin-bottom: 8px; font-size: 0.95rem;">ℹ️ Como Usar o Sistema de Cenas</h4>
-            <ul style="color: #bbb; font-size: 0.85rem; margin: 0; padding-left: 20px; line-height: 1.6;">
-                <li><strong>Criar Cena:</strong> Clique em "Nova Cena" e dê um nome</li>
-                <li><strong>Ativar Cena:</strong> Clique em "🔄 Ativar" para trocar para essa cena</li>
-                <li><strong>Salvar:</strong> A cena ativa é salva automaticamente a cada 10 segundos</li>
-                <li><strong>Visibilidade:</strong> Controle quais jogadores veem cada cena</li>
-                <li><strong>⚠️ Importante:</strong> Sempre salve antes de trocar de cena!</li>
+        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.25rem;">
+            <h4 style="color: var(--success); margin-bottom: 0.5rem; font-size: 0.875rem;">Como Usar</h4>
+            <ul style="color: var(--text-secondary); font-size: 0.8125rem; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+                <li>Crie cenas para organizar mapas e tokens</li>
+                <li>Ative uma cena para trabalhar nela</li>
+                <li>Controle a visibilidade para cada jogador</li>
+                <li>Auto-save a cada 10 segundos</li>
             </ul>
         </div>
         
-        <button class="action-btn" onclick="createNewScene()" style="margin-bottom: 20px; width: 100%;">
-            ➕ Criar Nova Cena
+        <button class="action-btn" onclick="createNewScene()" style="margin-bottom: 1.25rem; width: 100%;">
+            + Criar Nova Cena
         </button>
         
         <div class="item-list" id="scenesList" style="max-height: 500px;">
-            <div class="empty-state">Nenhuma cena criada</div>
+            <div class="empty-state">Nenhuma cena</div>
         </div>
         
-        <div class="modal-actions" style="margin-top: 20px;">
+        <div class="modal-actions">
             <button class="btn" onclick="closeSceneManager()">Fechar</button>
         </div>
     </div>
 </div>
 
-<!-- Modal de Visibilidade de Cena -->
+<!-- Scene Visibility Modal -->
 <div class="modal" id="sceneVisibilityModal">
     <div class="modal-content" style="max-width: 600px;">
-        <h3 id="sceneVisibilityTitle">👁️ Visibilidade da Cena</h3>
+        <h3 id="sceneVisibilityTitle">Visibilidade da Cena</h3>
         <input type="hidden" id="currentSceneIdForVisibility">
         
-        <p style="color: #bbb; margin-bottom: 15px; font-size: 0.95rem;">
-            ✅ = Jogador pode ver esta cena<br>
-            ❌ = Cena oculta para o jogador
+        <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.8125rem;">
+            Controle quais jogadores podem ver esta cena:
         </p>
         
         <div class="item-list" id="sceneVisibilityList" style="max-height: 400px;"></div>
         
         <div class="modal-actions">
-            <button class="action-btn" onclick="closeSceneVisibilityModal()">✔️ Fechar</button>
+            <button class="action-btn" onclick="closeSceneVisibilityModal()">Fechar</button>
         </div>
     </div>
 </div>
@@ -450,7 +451,7 @@
 <script src="{{ url_for('static', filename='js/canvas_optimizer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/image_compressor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/persistence.js') }}"></script>
-<script defer src="{{ url_for('static', filename='js/map_manager_enhanced.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map_manager_enhanced.js') }}"></script>
 
 </body>
 </html>
