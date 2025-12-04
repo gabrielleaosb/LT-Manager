@@ -515,7 +515,6 @@ socket.on('session_state', (data) => {
     
     preloadAllImages();
     drawGrid();
-
     renderImageList();
     renderTokenList();
     
@@ -3090,6 +3089,10 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// ==========================================
+// INICIALIZAÇÃO
+// ==========================================
+
 setTool('select');
 setTimeout(() => {
     drawGrid();
@@ -3121,6 +3124,190 @@ window.addEventListener('beforeunload', (e) => {
     });
 });
 
+// ==========================================
+// NOTIFICAÇÃO DE BOAS-VINDAS
+// ==========================================
+
+function showWelcomeNotification() {
+    // Verificar se já mostrou antes
+    const hasSeenWelcome = localStorage.getItem('rpg_welcome_seen_' + SESSION_ID);
+    
+    if (hasSeenWelcome) {
+        console.log('ℹ️ Usuário já viu a notificação de boas-vindas');
+        return;
+    }
+    
+    // Criar notificação
+    const notification = document.createElement('div');
+    notification.id = 'welcomeNotification';
+    notification.style.cssText = `
+        position: fixed;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-20px);
+        background: linear-gradient(135deg, rgba(155, 89, 182, 0.98), rgba(108, 52, 131, 0.95));
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        border-radius: 16px;
+        padding: 24px 32px;
+        max-width: 600px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(155, 89, 182, 0.4);
+        z-index: 10000;
+        opacity: 0;
+        animation: slideDown 0.5s ease forwards, glow 2s ease-in-out infinite;
+        backdrop-filter: blur(10px);
+    `;
+    
+    notification.innerHTML = `
+        <div style="display: flex; align-items: flex-start; gap: 20px;">
+            <div style="font-size: 3rem; flex-shrink: 0; animation: bounce 1s ease-in-out infinite;">
+                🎬
+            </div>
+            <div style="flex: 1;">
+                <h3 style="color: #fff; font-family: 'Merriweather', serif; font-size: 1.5rem; margin: 0 0 12px 0; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                    Bem-vindo ao Map Manager!
+                </h3>
+                <p style="color: rgba(255, 255, 255, 0.95); margin: 0 0 16px 0; line-height: 1.6; font-size: 1rem;">
+                    💡 <strong>Dica Importante:</strong> Para evitar bugs e organizar melhor seu jogo, 
+                    <strong>crie uma CENA</strong> antes de adicionar mapas ou tokens.
+                </p>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <button id="createSceneBtn" style="
+                        padding: 10px 24px;
+                        background: rgba(255, 255, 255, 0.95);
+                        border: none;
+                        border-radius: 8px;
+                        color: #8e44ad;
+                        font-weight: 700;
+                        font-size: 0.95rem;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0, 0, 0, 0.3)';"
+                       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(0, 0, 0, 0.2)';">
+                        🎬 Criar Cena Agora
+                    </button>
+                    <button id="dismissBtn" style="
+                        padding: 10px 20px;
+                        background: transparent;
+                        border: 2px solid rgba(255, 255, 255, 0.4);
+                        border-radius: 8px;
+                        color: rgba(255, 255, 255, 0.9);
+                        font-weight: 600;
+                        font-size: 0.9rem;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                    " onmouseover="this.style.background='rgba(255, 255, 255, 0.1)'; this.style.borderColor='rgba(255, 255, 255, 0.6)';"
+                       onmouseout="this.style.background='transparent'; this.style.borderColor='rgba(255, 255, 255, 0.4)';">
+                        Entendi
+                    </button>
+                </div>
+            </div>
+            <button id="closeBtn" style="
+                background: transparent;
+                border: none;
+                color: rgba(255, 255, 255, 0.7);
+                font-size: 1.5rem;
+                cursor: pointer;
+                padding: 0;
+                width: 32px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 6px;
+                transition: all 0.2s;
+                flex-shrink: 0;
+            " onmouseover="this.style.background='rgba(255, 255, 255, 0.2)'; this.style.color='#fff';"
+               onmouseout="this.style.background='transparent'; this.style.color='rgba(255, 255, 255, 0.7)';">
+                ×
+            </button>
+        </div>
+        
+        <style>
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    transform: translateX(-50%) translateY(-20px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(-50%) translateY(0);
+                }
+            }
+            
+            @keyframes slideUp {
+                from {
+                    opacity: 1;
+                    transform: translateX(-50%) translateY(0);
+                }
+                to {
+                    opacity: 0;
+                    transform: translateX(-50%) translateY(-20px);
+                }
+            }
+            
+            @keyframes bounce {
+                0%, 100% {
+                    transform: translateY(0);
+                }
+                50% {
+                    transform: translateY(-8px);
+                }
+            }
+            
+            @keyframes glow {
+                0%, 100% {
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(155, 89, 182, 0.4);
+                }
+                50% {
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 60px rgba(155, 89, 182, 0.6);
+                }
+            }
+        </style>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Função para fechar
+    function closeNotification() {
+        notification.style.animation = 'slideUp 0.3s ease forwards';
+        setTimeout(() => {
+            notification.remove();
+        }, 300);
+        
+        // Marcar como visto
+        localStorage.setItem('rpg_welcome_seen_' + SESSION_ID, 'true');
+    }
+    
+    // Botão de criar cena
+    document.getElementById('createSceneBtn').addEventListener('click', () => {
+        closeNotification();
+        openSceneManager();
+        showToast('💡 Clique em "Criar Nova Cena" para começar!');
+    });
+    
+    // Botão de entendi
+    document.getElementById('dismissBtn').addEventListener('click', () => {
+        closeNotification();
+    });
+    
+    // Botão de fechar (X)
+    document.getElementById('closeBtn').addEventListener('click', () => {
+        closeNotification();
+    });
+    
+    // Auto-fechar após 15 segundos
+    setTimeout(() => {
+        if (document.getElementById('welcomeNotification')) {
+            closeNotification();
+        }
+    }, 15000);
+}
+
+// ==========================================
+// DOM CONTENT LOADED
+// ==========================================
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Inicializando Map Manager...');
     
@@ -3132,58 +3319,14 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log('✅ Variáveis inicializadas');
     
-    // ✅ NOVO - Forçar criação de cena se não houver nenhuma
-    setTimeout(() => {
-        if (!scenes || scenes.length === 0) {
-            console.log('⚠️ Nenhuma cena encontrada - forçando criação');
-            
-            // Mostrar modal personalizado
-            const shouldCreate = confirm(
-                '🎬 Bem-vindo ao Map Manager!\n\n' +
-                'Você precisa criar uma CENA para começar.\n\n' +
-                'Cenas organizam seus mapas, tokens e névoa.\n\n' +
-                'Criar primeira cena agora?'
-            );
-            
-            if (shouldCreate) {
-                const sceneName = prompt('📝 Nome da primeira cena:', 'Cena Principal');
-                
-                if (sceneName && sceneName.trim()) {
-                    const newScene = createEmptyScene(sceneName.trim());
-                    scenes.push(newScene);
-                    
-                    // Ativar imediatamente
-                    currentSceneId = newScene.id;
-                    
-                    // Enviar para servidor
-                    socket.emit('scene_create', {
-                        session_id: SESSION_ID,
-                        scene: newScene
-                    });
-                    
-                    socket.emit('scene_switch', {
-                        session_id: SESSION_ID,
-                        scene_id: newScene.id,
-                        scene: newScene
-                    });
-                    
-                    renderScenesList();
-                    showToast(`✅ Cena "${sceneName}" criada e ativada!`);
-                    
-                    console.log('✅ Primeira cena criada:', newScene.id);
-                } else {
-                    // Se recusar, abrir gerenciador
-                    openSceneManager();
-                }
-            } else {
-                openSceneManager();
-            }
-        }
-    }, 1000); // Aguardar 1s para carregar dados do servidor
-    
     // Centralizar canvas
     setTimeout(() => {
         centerCanvas();
         console.log('✅ Canvas centralizado');
     }, 200);
+    
+    // ✅ MOSTRAR NOTIFICAÇÃO APÓS 1 SEGUNDO
+    setTimeout(() => {
+        showWelcomeNotification();
+    }, 1000);
 });
