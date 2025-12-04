@@ -1,29 +1,17 @@
-/* MAP MANAGER CSS - SIDEBAR RETRÁTIL + CHAT REDESENHADO */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+/* ==========================================
+   HEADER REFORMULADO - CLEAN & PROFESSIONAL
+   ========================================== */
 
-body, html {
-    width: 100%;
-    height: 100vh;
-    font-family: 'Lato', sans-serif;
-    background: #0a0a0f;
-    color: #fff;
-    overflow: hidden;
-}
-
-/* HEADER */
 .header {
-    background: linear-gradient(135deg, rgba(26,26,46,0.95), rgba(16,16,30,0.95));
-    border-bottom: 2px solid rgba(155,89,182,0.3);
+    background: linear-gradient(135deg, rgba(26,26,46,0.98), rgba(16,16,30,0.98));
+    border-bottom: 2px solid rgba(155,89,182,0.4);
     padding: 12px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     z-index: 100;
     backdrop-filter: blur(10px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
 .header-left {
@@ -36,32 +24,198 @@ body, html {
     font-family: 'Merriweather', serif;
     font-size: 1.2rem;
     color: #c49bdb;
+    font-weight: 600;
+    letter-spacing: 0.5px;
 }
 
+/* Botões do Header - Versão Compacta com Ícones */
 .back-btn, .btn {
-    background: rgba(155,89,182,0.2);
-    border: 2px solid #9b59b6;
-    border-radius: 6px;
-    color: #fff;
+    background: rgba(155,89,182,0.15);
+    border: 2px solid rgba(155,89,182,0.4);
+    border-radius: 8px;
+    color: #e9d5f5;
     cursor: pointer;
-    padding: 6px 12px;
-    transition: all 0.3s ease;
-    font-size: 0.85rem;
+    padding: 10px 14px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 1.1rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    overflow: hidden;
 }
 
-.back-btn:hover, .btn:hover {
-    background: rgba(155,89,182,0.35);
+.back-btn::before,
+.btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(155,89,182,0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.4s ease, height 0.4s ease;
+}
+
+.back-btn:hover::before,
+.btn:hover::before {
+    width: 200%;
+    height: 200%;
+}
+
+.back-btn:hover,
+.btn:hover {
+    background: rgba(155,89,182,0.3);
+    border-color: #9b59b6;
     transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(155,89,182,0.3);
 }
 
+.back-btn:active,
+.btn:active {
+    transform: translateY(0);
+}
+
+/* Botão de Perigo */
 .btn-danger {
-    background: linear-gradient(135deg, #e74c3c, #c0392b);
-    border-color: #e74c3c;
+    background: rgba(231,76,60,0.15);
+    border-color: rgba(231,76,60,0.4);
+    color: #ff6b6b;
 }
 
+.btn-danger:hover {
+    background: rgba(231,76,60,0.25);
+    border-color: #e74c3c;
+    box-shadow: 0 4px 12px rgba(231,76,60,0.3);
+}
+
+/* Header Actions - Organização em Grupos */
 .header-actions {
     display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.header-group {
+    display: flex;
+    gap: 6px;
+    padding: 0 12px;
+    border-right: 1px solid rgba(155,89,182,0.2);
+}
+
+.header-group:last-child {
+    border-right: none;
+    padding-right: 0;
+}
+
+/* Botões Apenas com Ícone */
+.btn-icon {
+    padding: 10px;
+    min-width: 42px;
+    justify-content: center;
+}
+
+.btn-icon span {
+    font-size: 1.2rem;
+}
+
+/* Tooltips */
+.btn[data-tooltip] {
+    position: relative;
+}
+
+.btn[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -35px;
+    left: 50%;
+    transform: translateX(-50%) scale(0);
+    background: rgba(16,16,30,0.95);
+    color: #e9d5f5;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(155,89,182,0.5);
+    z-index: 1000;
+}
+
+.btn[data-tooltip]:hover::after {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+}
+
+/* Indicador de Zoom */
+.zoom-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(16,16,30,0.6);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 2px solid rgba(155,89,182,0.3);
+}
+
+.zoom-level {
+    color: #c49bdb;
+    font-size: 0.85rem;
+    font-weight: 600;
+    min-width: 50px;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+}
+
+/* Storage Indicator */
+#storageIndicator {
+    display: flex;
+    align-items: center;
     gap: 8px;
+    padding: 8px 12px;
+    background: rgba(155,89,182,0.15);
+    border: 2px solid rgba(155,89,182,0.3);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+}
+
+#storageIndicator:hover {
+    background: rgba(155,89,182,0.25);
+    border-color: rgba(155,89,182,0.5);
+}
+
+#storageSize {
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+    color: #c49bdb;
+}
+
+/* Responsividade do Header */
+@media (max-width: 1400px) {
+    .header-actions {
+        flex-wrap: wrap;
+    }
+    
+    .header-group {
+        padding: 0 8px;
+    }
+}
+
+@media (max-width: 1200px) {
+    .btn span.btn-text {
+        display: none;
+    }
+    
+    .btn {
+        padding: 10px;
+        min-width: 42px;
+        justify-content: center;
+    }
 }
 
 /* LAYOUT PRINCIPAL */

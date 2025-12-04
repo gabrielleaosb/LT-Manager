@@ -110,16 +110,45 @@ const MAX_HISTORY = 50;
 // Scene Manager
 let currentSceneId = null;  // ✅ ADICIONADO
 
-
-// ==========================================
 // AUTO-SAVE E PERSISTÊNCIA
+let autoSaveInterval = null;
+
+
+// ==========================================
+// OTIMIZAÇÕES DE PERFORMANCE
 // ==========================================
 
-let autoSaveInterval = null;
+// Debounced socket emits
+const debouncedTokenUpdate = CanvasOptimizer.debounce((tokens) => {
+    socket.emit('token_update', {
+        session_id: SESSION_ID,
+        tokens: tokens
+    });
+}, 150);
+
+const debouncedMapUpdate = CanvasOptimizer.debounce((mapId, mapData) => {
+    socket.emit('update_map', {
+        session_id: SESSION_ID,
+        map_id: mapId,
+        map: mapData
+    });
+}, 150);
+
+const debouncedEntityUpdate = CanvasOptimizer.debounce((entityId, entityData) => {
+    socket.emit('update_entity', {
+        session_id: SESSION_ID,
+        entity_id: entityId,
+        entity: entityData
+    });
+}, 150);
+
+// Flag para controlar redraw
+let isCurrentlyDrawing = false;
 
 // ==========================================
 // DEBUG: MOSTRAR INFO DA SESSÃO
 // ==========================================
+
 console.log('🔍 SESSION_ID atual:', SESSION_ID);
 console.log('🔍 Verificando localStorage para:', SESSION_ID);
 
@@ -728,103 +757,136 @@ function setBrushSize(size) {
 }
 
 // ==================
-// RENDER
+// RENDER OTIMIZADO
 // ==================
 
 function redrawAll() {
-    mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    images.forEach(img => {
-        const loadedImg = loadedImages.get(img.id);
+    // Usar RequestAnimationFrame para sincronizar com o navegador
+    CanvasOptimizer.scheduleRedraw(() => {
+        isCurrentlyDrawing = true;
         
-        if (loadedImg && loadedImg.complete && loadedImg.naturalWidth > 0) {
-            try {
-                mapCtx.drawImage(loadedImg, img.x, img.y, img.width, img.height);
-                
-                if (selectedItem === img && selectedType === 'image') {
-                    mapCtx.strokeStyle = '#ffc107';
-                    mapCtx.lineWidth = 4;
-                    mapCtx.strokeRect(img.x, img.y, img.width, img.height);
-                    
-                    const handleSize = 10;
-                    mapCtx.fillStyle = '#9b59b6';
-                    
-                    mapCtx.fillRect(
-                        img.x + img.width - handleSize/2, 
-                        img.y + img.height - handleSize/2, 
-                        handleSize, 
-                        handleSize
+        mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        // Desenhar imagens com otimização
+        images.forEach(img => {
+            const loadedImg = loadedImages.get(img.id);
+            
+            if (loadedImg && loadedImg.complete && loadedImg.naturalWidth > 0) {
+                try {
+                    CanvasOptimizer.optimizeImageDraw(
+                        mapCtx, 
+                        loadedImg, 
+                        img.x, 
+                        img.y, 
+                        img.width, 
+                        img.height
                     );
+                    
+                    // Seleção
+                    if (selectedItem === img && selectedType === 'image') {
+                        mapCtx.strokeStyle = '#ffc107';
+                        mapCtx.lineWidth = 4;
+                        mapCtx.strokeRect(img.x, img.y, img.width, img.height);
+                        
+                        const handleSize = 10;
+                        mapCtx.fillStyle = '#9b59b6';
+                        mapCtx.fillRect(
+                            img.x + img.width - handleSize/2, 
+                            img.y + img.height - handleSize/2, 
+                            handleSize, 
+                            handleSize
+                        );
+                    }
+                } catch (e) {
+                    console.error('Erro ao desenhar imagem:', e);
                 }
-            } catch (e) {
-                console.error('Erro ao desenhar imagem:', e);
             }
-        }
-    });
-    
-    tokens.forEach(token => {
-        const img = loadedImages.get(token.id);
+        });
         
-        if (token.style === 'square' && img && img.complete && img.naturalWidth > 0) {
-            try {
-                const tokenSize = TOKEN_RADIUS * 1.8;
-                mapCtx.drawImage(img, token.x - tokenSize/2, token.y - tokenSize/2, tokenSize, tokenSize);
-            } catch (e) {
-                console.error('Erro ao desenhar token quadrado:', e);
-            }
-        } else if (img && img.complete && img.naturalWidth > 0) {
-            try {
-                mapCtx.save();
+        // Desenhar tokens
+        tokens.forEach(token => {
+            const img = loadedImages.get(token.id);
+            
+            if (token.style === 'square' && img && img.complete && img.naturalWidth > 0) {
+                try {
+                    const tokenSize = TOKEN_RADIUS * 1.8;
+                    CanvasOptimizer.optimizeImageDraw(
+                        mapCtx,
+                        img,
+                        token.x - tokenSize/2,
+                        token.y - tokenSize/2,
+                        tokenSize,
+                        tokenSize
+                    );
+                } catch (e) {
+                    console.error('Erro ao desenhar token quadrado:', e);
+                }
+            } else if (img && img.complete && img.naturalWidth > 0) {
+                try {
+                    mapCtx.save();
+                    mapCtx.beginPath();
+                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                    mapCtx.closePath();
+                    mapCtx.clip();
+                    
+                    CanvasOptimizer.optimizeImageDraw(
+                        mapCtx,
+                        img,
+                        token.x - TOKEN_RADIUS,
+                        token.y - TOKEN_RADIUS,
+                        TOKEN_RADIUS * 2,
+                        TOKEN_RADIUS * 2
+                    );
+                    
+                    mapCtx.restore();
+                    
+                    mapCtx.strokeStyle = "#fff";
+                    mapCtx.lineWidth = 2;
+                    mapCtx.beginPath();
+                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                    mapCtx.stroke();
+                } catch (e) {
+                    console.error('Erro ao desenhar token:', e);
+                }
+            } else if (token.color) {
+                mapCtx.fillStyle = token.color;
                 mapCtx.beginPath();
                 mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-                mapCtx.closePath();
-                mapCtx.clip();
-                mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
-                mapCtx.restore();
+                mapCtx.fill();
                 
                 mapCtx.strokeStyle = "#fff";
                 mapCtx.lineWidth = 2;
                 mapCtx.beginPath();
                 mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
                 mapCtx.stroke();
-            } catch (e) {
-                console.error('Erro ao desenhar token:', e);
             }
-        } else if (token.color) {
-            mapCtx.fillStyle = token.color;
-            mapCtx.beginPath();
-            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-            mapCtx.fill();
             
-            mapCtx.strokeStyle = "#fff";
-            mapCtx.lineWidth = 2;
-            mapCtx.beginPath();
-            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-            mapCtx.stroke();
-        }
-        
-        mapCtx.fillStyle = "#fff";
-        mapCtx.font = "bold 11px Lato";
-        mapCtx.textAlign = "center";
-        mapCtx.strokeStyle = "#000";
-        mapCtx.lineWidth = 2.5;
-        
-        const nameY = token.style === 'square' ? token.y + TOKEN_RADIUS * 1.8 / 2 + 15 : token.y + TOKEN_RADIUS + 15;
-        mapCtx.strokeText(token.name, token.x, nameY);
-        mapCtx.fillText(token.name, token.x, nameY);
+            // Nome do token
+            mapCtx.fillStyle = "#fff";
+            mapCtx.font = "bold 11px Lato";
+            mapCtx.textAlign = "center";
+            mapCtx.strokeStyle = "#000";
+            mapCtx.lineWidth = 2.5;
+            
+            const nameY = token.style === 'square' ? token.y + TOKEN_RADIUS * 1.8 / 2 + 15 : token.y + TOKEN_RADIUS + 15;
+            mapCtx.strokeText(token.name, token.x, nameY);
+            mapCtx.fillText(token.name, token.x, nameY);
 
-        if (selectedItem === token && selectedType === 'token') {
-            mapCtx.strokeStyle = "#ffc107";
-            mapCtx.lineWidth = 4;
-            mapCtx.beginPath();
-            if (token.style === 'square') {
-                const tokenSize = TOKEN_RADIUS * 1.8;
-                mapCtx.strokeRect(token.x - tokenSize/2 - 5, token.y - tokenSize/2 - 5, tokenSize + 10, tokenSize + 10);
-            } else {
-                mapCtx.arc(token.x, token.y, TOKEN_RADIUS + 5, 0, Math.PI * 2);
-                mapCtx.stroke();
+            if (selectedItem === token && selectedType === 'token') {
+                mapCtx.strokeStyle = "#ffc107";
+                mapCtx.lineWidth = 4;
+                mapCtx.beginPath();
+                if (token.style === 'square') {
+                    const tokenSize = TOKEN_RADIUS * 1.8;
+                    mapCtx.strokeRect(token.x - tokenSize/2 - 5, token.y - tokenSize/2 - 5, tokenSize + 10, tokenSize + 10);
+                } else {
+                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS + 5, 0, Math.PI * 2);
+                    mapCtx.stroke();
+                }
             }
-        }
+        });
+        
+        isCurrentlyDrawing = false;
     });
 }
 
@@ -983,60 +1045,71 @@ canvasWrapper.addEventListener('mousedown', (e) => {
 });
 
 canvasWrapper.addEventListener('mousemove', (e) => {
-    const pos = getMousePos(e);
-    
-    // Pan temporário
-    if (tempPanning && isPanning) {
-        panX = e.clientX - startPanX;
-        panY = e.clientY - startPanY;
-        applyTransform();
-        return;
-    }
-    
-    // Modo fog ou desenho - não interferir
-    if (fogPaintMode || fogEraseMode || currentTool === 'draw' || currentTool === 'erase') {
-        return;
-    }
-    
-    // Resize de imagem
-    if (resizingImage && mouseDownOnCanvas) {
-        const deltaX = pos.x - resizeStartX;
-        const deltaY = pos.y - resizeStartY;
+    // Throttle do movimento do mouse
+    CanvasOptimizer.throttleMouse(() => {
+        const pos = getMousePos(e);
         
-        resizingImage.width = Math.max(50, resizeStartWidth + deltaX);
-        resizingImage.height = Math.max(50, resizeStartHeight + deltaY);
-        
-        redrawAll();
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-    }
-    
-    // Arrastar item
-    if (isDraggingItem && draggingItem && mouseDownOnCanvas) {
-        const newX = pos.x - dragOffsetX;
-        const newY = pos.y - dragOffsetY;
-        
-        draggingItem.x = newX;
-        draggingItem.y = newY;
-        
-        redrawAll();
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-    }
-    
-    // Atualizar cursor no modo select
-    if (currentTool === 'select' && !mouseDownOnCanvas && !isDraggingItem) {
-        const found = findItemAt(pos.x, pos.y);
-        if (found && found.type === 'image' && isOnResizeHandle(found.item, pos.x, pos.y)) {
-            canvasWrapper.style.cursor = 'nwse-resize';
-        } else if (found) {
-            canvasWrapper.style.cursor = 'grab';
-        } else {
-            canvasWrapper.style.cursor = 'default';
+        // Pan temporário
+        if (tempPanning && isPanning) {
+            panX = e.clientX - startPanX;
+            panY = e.clientY - startPanY;
+            applyTransform();
+            return;
         }
-    }
+        
+        // Modo fog ou desenho - não interferir
+        if (fogPaintMode || fogEraseMode || currentTool === 'draw' || currentTool === 'erase') {
+            return;
+        }
+        
+        // Resize de imagem
+        if (resizingImage && mouseDownOnCanvas) {
+            const deltaX = pos.x - resizeStartX;
+            const deltaY = pos.y - resizeStartY;
+            
+            resizingImage.width = Math.max(50, resizeStartWidth + deltaX);
+            resizingImage.height = Math.max(50, resizeStartHeight + deltaY);
+            
+            // Redesenhar com otimização
+            if (!isCurrentlyDrawing) {
+                redrawAll();
+            }
+            
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+        
+        // Arrastar item
+        if (isDraggingItem && draggingItem && mouseDownOnCanvas) {
+            const newX = pos.x - dragOffsetX;
+            const newY = pos.y - dragOffsetY;
+            
+            draggingItem.x = newX;
+            draggingItem.y = newY;
+            
+            // Redesenhar com otimização
+            if (!isCurrentlyDrawing) {
+                redrawAll();
+            }
+            
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+        
+        // Atualizar cursor no modo select
+        if (currentTool === 'select' && !mouseDownOnCanvas && !isDraggingItem) {
+            const found = findItemAt(pos.x, pos.y);
+            if (found && found.type === 'image' && isOnResizeHandle(found.item, pos.x, pos.y)) {
+                canvasWrapper.style.cursor = 'nwse-resize';
+            } else if (found) {
+                canvasWrapper.style.cursor = 'grab';
+            } else {
+                canvasWrapper.style.cursor = 'default';
+            }
+        }
+    });
 });
 
 canvasWrapper.addEventListener('mouseup', (e) => {
@@ -1059,17 +1132,9 @@ canvasWrapper.addEventListener('mouseup', (e) => {
     // Resize
     if (resizingImage) {
         if (resizingImage.id.startsWith('map_')) {
-            socket.emit('update_map', {
-                session_id: SESSION_ID,
-                map_id: resizingImage.id,
-                map: resizingImage
-            });
+            debouncedMapUpdate(resizingImage.id, resizingImage);
         } else {
-            socket.emit('update_entity', {
-                session_id: SESSION_ID,
-                entity_id: resizingImage.id,
-                entity: resizingImage
-            });
+            debouncedEntityUpdate(resizingImage.id, resizingImage);
         }
         resizingImage = null;
         canvasWrapper.style.cursor = 'default';
@@ -1081,23 +1146,12 @@ canvasWrapper.addEventListener('mouseup', (e) => {
     if (isDraggingItem && draggingItem && mouseDownOnCanvas) {
         if (selectedType === 'image') {
             if (draggingItem.id.startsWith('map_')) {
-                socket.emit('update_map', {
-                    session_id: SESSION_ID,
-                    map_id: draggingItem.id,
-                    map: draggingItem
-                });
+                debouncedMapUpdate(draggingItem.id, draggingItem);
             } else {
-                socket.emit('update_entity', {
-                    session_id: SESSION_ID,
-                    entity_id: draggingItem.id,
-                    entity: draggingItem
-                });
+                debouncedEntityUpdate(draggingItem.id, draggingItem);
             }
         } else if (selectedType === 'token') {
-            socket.emit('token_update', {
-                session_id: SESSION_ID,
-                tokens: tokens
-            });
+            debouncedTokenUpdate(tokens);
         }
         saveState(selectedType === 'image' ? 'Mover Imagem' : 'Mover Token');
         

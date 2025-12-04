@@ -84,6 +84,16 @@ let playerHistoryIndex = -1;
 const MAX_PLAYER_HISTORY = 30;
 
 
+// Debounced socket emits
+const debouncedPlayerTokenUpdate = CanvasOptimizer.debounce((tokens) => {
+    socket.emit('token_update', {
+        session_id: SESSION_ID,
+        tokens: tokens
+    });
+}, 150);
+
+let isPlayerDrawing = false;
+
 // ==========================================
 // PERSISTÊNCIA DO JOGADOR
 // ==========================================
@@ -622,67 +632,138 @@ function preloadAllImages() {
 
 // PLAYER VIEW - PARTE 2 - RENDER, MOUSE E CHAT (FINAL)
 
-// ========== RENDER ==========
+// ==================
+// RENDER OTIMIZADO
+// ==================
+
 function redrawAll() {
-    console.log('🎨 [PLAYER] redrawAll chamado');
-    mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    // Desenhar mapas e entidades
-    [...maps, ...entities].forEach(img => {
-        const loadedImg = loadedImages[img.id];
-        if (loadedImg && loadedImg.complete) {
-            mapCtx.drawImage(loadedImg, img.x, img.y, img.width, img.height);
-        }
-    });
-    
-    // Desenhar tokens
-    tokens.forEach(token => {
-        const img = loadedImages[token.id];
+    // Usar RequestAnimationFrame para sincronizar com o navegador
+    CanvasOptimizer.scheduleRedraw(() => {
+        isCurrentlyDrawing = true;
         
-        if (token.style === 'square' && img && img.complete) {
-            mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
-            
-            mapCtx.strokeStyle = "#fff";
-            mapCtx.lineWidth = 2;
-            mapCtx.strokeRect(token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
-        } else if (img && img.complete) {
-            mapCtx.save();
-            mapCtx.beginPath();
-            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-            mapCtx.closePath();
-            mapCtx.clip();
-            mapCtx.drawImage(img, token.x - TOKEN_RADIUS, token.y - TOKEN_RADIUS, TOKEN_RADIUS * 2, TOKEN_RADIUS * 2);
-            mapCtx.restore();
-            
-            mapCtx.strokeStyle = "#fff";
-            mapCtx.lineWidth = 2;
-            mapCtx.beginPath();
-            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-            mapCtx.stroke();
-        } else if (token.color) {
-            mapCtx.fillStyle = token.color;
-            mapCtx.beginPath();
-            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-            mapCtx.fill();
-            
-            mapCtx.strokeStyle = "#fff";
-            mapCtx.lineWidth = 2;
-            mapCtx.beginPath();
-            mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-            mapCtx.stroke();
-        }
+        mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        // Nome do token
-        mapCtx.fillStyle = "#fff";
-        mapCtx.font = "bold 13px Lato";
-        mapCtx.textAlign = "center";
-        mapCtx.strokeStyle = "#000";
-        mapCtx.lineWidth = 3;
-        mapCtx.strokeText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
-        mapCtx.fillText(token.name, token.x, token.y + TOKEN_RADIUS + 18);
+        // Desenhar imagens com otimização
+        images.forEach(img => {
+            const loadedImg = loadedImages.get(img.id);
+            
+            if (loadedImg && loadedImg.complete && loadedImg.naturalWidth > 0) {
+                try {
+                    CanvasOptimizer.optimizeImageDraw(
+                        mapCtx, 
+                        loadedImg, 
+                        img.x, 
+                        img.y, 
+                        img.width, 
+                        img.height
+                    );
+                    
+                    // Seleção
+                    if (selectedItem === img && selectedType === 'image') {
+                        mapCtx.strokeStyle = '#ffc107';
+                        mapCtx.lineWidth = 4;
+                        mapCtx.strokeRect(img.x, img.y, img.width, img.height);
+                        
+                        const handleSize = 10;
+                        mapCtx.fillStyle = '#9b59b6';
+                        mapCtx.fillRect(
+                            img.x + img.width - handleSize/2, 
+                            img.y + img.height - handleSize/2, 
+                            handleSize, 
+                            handleSize
+                        );
+                    }
+                } catch (e) {
+                    console.error('Erro ao desenhar imagem:', e);
+                }
+            }
+        });
+        
+        // Desenhar tokens
+        tokens.forEach(token => {
+            const img = loadedImages.get(token.id);
+            
+            if (token.style === 'square' && img && img.complete && img.naturalWidth > 0) {
+                try {
+                    const tokenSize = TOKEN_RADIUS * 1.8;
+                    CanvasOptimizer.optimizeImageDraw(
+                        mapCtx,
+                        img,
+                        token.x - tokenSize/2,
+                        token.y - tokenSize/2,
+                        tokenSize,
+                        tokenSize
+                    );
+                } catch (e) {
+                    console.error('Erro ao desenhar token quadrado:', e);
+                }
+            } else if (img && img.complete && img.naturalWidth > 0) {
+                try {
+                    mapCtx.save();
+                    mapCtx.beginPath();
+                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                    mapCtx.closePath();
+                    mapCtx.clip();
+                    
+                    CanvasOptimizer.optimizeImageDraw(
+                        mapCtx,
+                        img,
+                        token.x - TOKEN_RADIUS,
+                        token.y - TOKEN_RADIUS,
+                        TOKEN_RADIUS * 2,
+                        TOKEN_RADIUS * 2
+                    );
+                    
+                    mapCtx.restore();
+                    
+                    mapCtx.strokeStyle = "#fff";
+                    mapCtx.lineWidth = 2;
+                    mapCtx.beginPath();
+                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                    mapCtx.stroke();
+                } catch (e) {
+                    console.error('Erro ao desenhar token:', e);
+                }
+            } else if (token.color) {
+                mapCtx.fillStyle = token.color;
+                mapCtx.beginPath();
+                mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                mapCtx.fill();
+                
+                mapCtx.strokeStyle = "#fff";
+                mapCtx.lineWidth = 2;
+                mapCtx.beginPath();
+                mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                mapCtx.stroke();
+            }
+            
+            // Nome do token
+            mapCtx.fillStyle = "#fff";
+            mapCtx.font = "bold 11px Lato";
+            mapCtx.textAlign = "center";
+            mapCtx.strokeStyle = "#000";
+            mapCtx.lineWidth = 2.5;
+            
+            const nameY = token.style === 'square' ? token.y + TOKEN_RADIUS * 1.8 / 2 + 15 : token.y + TOKEN_RADIUS + 15;
+            mapCtx.strokeText(token.name, token.x, nameY);
+            mapCtx.fillText(token.name, token.x, nameY);
+
+            if (selectedItem === token && selectedType === 'token') {
+                mapCtx.strokeStyle = "#ffc107";
+                mapCtx.lineWidth = 4;
+                mapCtx.beginPath();
+                if (token.style === 'square') {
+                    const tokenSize = TOKEN_RADIUS * 1.8;
+                    mapCtx.strokeRect(token.x - tokenSize/2 - 5, token.y - tokenSize/2 - 5, tokenSize + 10, tokenSize + 10);
+                } else {
+                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS + 5, 0, Math.PI * 2);
+                    mapCtx.stroke();
+                }
+            }
+        });
+        
+        isCurrentlyDrawing = false;
     });
-    
-    console.log('✅ [PLAYER] redrawAll completo (fog mantido)');
 }
 
 function redrawDrawings() {
