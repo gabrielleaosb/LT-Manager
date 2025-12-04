@@ -114,6 +114,14 @@ let currentSceneId = null;  // ✅ ADICIONADO
 let autoSaveInterval = null;
 
 
+// ✅ TESTE FORÇADO - REMOVER DEPOIS
+setTimeout(() => {
+    console.log('🧪 TESTE FORÇADO DA NOTIFICAÇÃO');
+    // Limpar localStorage para forçar exibição
+    localStorage.removeItem('rpg_welcome_seen_' + SESSION_ID);
+    showWelcomeNotification();
+}, 3000);
+
 // ==========================================
 // OTIMIZAÇÕES DE PERFORMANCE
 // ==========================================
@@ -2318,13 +2326,6 @@ function closeTokenPermissionsModal() {
     document.getElementById('tokenPermissionsModal').classList.remove('show');
 }
 
-// Storage
-
-// Atualizar na primeira carga
-document.addEventListener('DOMContentLoaded', () => {
-    updateStorageIndicator();
-});
-
 // ==================
 // PAINÉIS
 // ==================
@@ -3125,16 +3126,37 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 // ==========================================
-// NOTIFICAÇÃO DE BOAS-VINDAS
+// NOTIFICAÇÃO DE BOAS-VINDAS - VERSÃO CORRIGIDA
 // ==========================================
 
 function showWelcomeNotification() {
-    // Verificar se já mostrou antes
-    const hasSeenWelcome = localStorage.getItem('rpg_welcome_seen_' + SESSION_ID);
+    console.log('🎬 showWelcomeNotification() INICIADO');
     
-    if (hasSeenWelcome) {
+    // Verificar SESSION_ID
+    if (!SESSION_ID) {
+        console.error('❌ SESSION_ID não definido!');
+        return;
+    }
+    
+    // Verificar se já mostrou antes
+    const storageKey = 'rpg_welcome_seen_' + SESSION_ID;
+    const hasSeenWelcome = localStorage.getItem(storageKey);
+    
+    console.log('🔍 Storage Key:', storageKey);
+    console.log('🔍 Has Seen?', hasSeenWelcome);
+    
+    if (hasSeenWelcome === 'true') {
         console.log('ℹ️ Usuário já viu a notificação de boas-vindas');
         return;
+    }
+    
+    console.log('✅ Criando notificação...');
+    
+    // Remover notificação antiga se existir
+    const oldNotification = document.getElementById('welcomeNotification');
+    if (oldNotification) {
+        oldNotification.remove();
+        console.log('🗑️ Notificação antiga removida');
     }
     
     // Criar notificação
@@ -3182,8 +3204,7 @@ function showWelcomeNotification() {
                         cursor: pointer;
                         transition: all 0.2s;
                         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0, 0, 0, 0.3)';"
-                       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(0, 0, 0, 0.2)';">
+                    ">
                         🎬 Criar Cena Agora
                     </button>
                     <button id="dismissBtn" style="
@@ -3196,8 +3217,7 @@ function showWelcomeNotification() {
                         font-size: 0.9rem;
                         cursor: pointer;
                         transition: all 0.2s;
-                    " onmouseover="this.style.background='rgba(255, 255, 255, 0.1)'; this.style.borderColor='rgba(255, 255, 255, 0.6)';"
-                       onmouseout="this.style.background='transparent'; this.style.borderColor='rgba(255, 255, 255, 0.4)';">
+                    ">
                         Entendi
                     </button>
                 </div>
@@ -3217,8 +3237,7 @@ function showWelcomeNotification() {
                 border-radius: 6px;
                 transition: all 0.2s;
                 flex-shrink: 0;
-            " onmouseover="this.style.background='rgba(255, 255, 255, 0.2)'; this.style.color='#fff';"
-               onmouseout="this.style.background='transparent'; this.style.color='rgba(255, 255, 255, 0.7)';">
+            ">
                 ×
             </button>
         </div>
@@ -3263,46 +3282,105 @@ function showWelcomeNotification() {
                     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 60px rgba(155, 89, 182, 0.6);
                 }
             }
+            
+            #createSceneBtn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+            }
+            
+            #dismissBtn:hover {
+                background: rgba(255, 255, 255, 0.1);
+                border-color: rgba(255, 255, 255, 0.6);
+            }
+            
+            #closeBtn:hover {
+                background: rgba(255, 255, 255, 0.2);
+                color: #fff;
+            }
         </style>
     `;
     
     document.body.appendChild(notification);
+    console.log('✅ Notificação adicionada ao DOM');
     
     // Função para fechar
     function closeNotification() {
+        console.log('🚪 Fechando notificação...');
         notification.style.animation = 'slideUp 0.3s ease forwards';
         setTimeout(() => {
             notification.remove();
+            console.log('🗑️ Notificação removida');
         }, 300);
         
         // Marcar como visto
-        localStorage.setItem('rpg_welcome_seen_' + SESSION_ID, 'true');
+        localStorage.setItem(storageKey, 'true');
+        console.log('💾 Preferência salva');
     }
     
-    // Botão de criar cena
-    document.getElementById('createSceneBtn').addEventListener('click', () => {
-        closeNotification();
-        openSceneManager();
-        showToast('💡 Clique em "Criar Nova Cena" para começar!');
-    });
+    // Event listeners
+    const createBtn = document.getElementById('createSceneBtn');
+    const dismissBtn = document.getElementById('dismissBtn');
+    const closeBtn = document.getElementById('closeBtn');
     
-    // Botão de entendi
-    document.getElementById('dismissBtn').addEventListener('click', () => {
-        closeNotification();
-    });
+    if (createBtn) {
+        createBtn.addEventListener('click', () => {
+            console.log('🎬 Botão criar cena clicado');
+            closeNotification();
+            openSceneManager();
+            showToast('💡 Clique em "Criar Nova Cena" para começar!');
+        });
+    }
     
-    // Botão de fechar (X)
-    document.getElementById('closeBtn').addEventListener('click', () => {
-        closeNotification();
-    });
+    if (dismissBtn) {
+        dismissBtn.addEventListener('click', () => {
+            console.log('✅ Botão entendi clicado');
+            closeNotification();
+        });
+    }
     
-    // Auto-fechar após 15 segundos
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            console.log('❌ Botão fechar clicado');
+            closeNotification();
+        });
+    }
+    
+    // Auto-fechar após 20 segundos
     setTimeout(() => {
         if (document.getElementById('welcomeNotification')) {
+            console.log('⏱️ Tempo esgotado - fechando automaticamente');
             closeNotification();
         }
-    }, 15000);
+    }, 20000);
+    
+    console.log('✅ Notificação configurada com sucesso!');
 }
+
+// ==========================================
+// CHAMADA DA NOTIFICAÇÃO
+// ==========================================
+
+// Executar quando a página carregar completamente
+window.addEventListener('load', () => {
+    console.log('🌐 Window load event disparado');
+    setTimeout(() => {
+        console.log('⏰ Chamando showWelcomeNotification()...');
+        showWelcomeNotification();
+    }, 1500);
+});
+
+// TAMBÉM tentar no socket connect como backup
+socket.on('connect', () => {
+    console.log('✅ Socket conectado');
+    
+    // Backup: tentar mostrar notificação aqui também
+    setTimeout(() => {
+        if (!document.getElementById('welcomeNotification')) {
+            console.log('🔄 Backup: tentando mostrar notificação pelo socket');
+            showWelcomeNotification();
+        }
+    }, 2000);
+});
 
 // ==========================================
 // DOM CONTENT LOADED
@@ -3324,9 +3402,13 @@ document.addEventListener('DOMContentLoaded', () => {
         centerCanvas();
         console.log('✅ Canvas centralizado');
     }, 200);
-    
-    // ✅ MOSTRAR NOTIFICAÇÃO APÓS 1 SEGUNDO
+});
+
+// ✅ EXECUTAR APÓS O DOM ESTAR COMPLETAMENTE CARREGADO
+window.addEventListener('load', () => {
+    // ✅ MOSTRAR NOTIFICAÇÃO APÓS 1.5 SEGUNDOS
     setTimeout(() => {
         showWelcomeNotification();
-    }, 1000);
+        console.log('🎉 showWelcomeNotification() chamado');
+    }, 1500);
 });
