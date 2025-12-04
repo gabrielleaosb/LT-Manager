@@ -1,0 +1,126 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+.env
+*.env
+
+# PyInstaller
+*.spec
+build/
+dist/
+*.exe
+*.manifest
+*.manifest.tmp
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+data/
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Ngrok config
+ngrok.yml
+.ngrok2/
+ngrok-*.log
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Flask cache
+flask_session/
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# PyInstaller
+*.spec
+build/
+dist/
+*.exe
+*.app
+*.dmg
+*.msi
+
+uploads/
+media/
+static/uploads/
+
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# Chaves e tokens
+*.pem
+*.key
+*.cert
+secrets.py
+config_local.py
+
+# Variáveis de ambiente
+.env
+.env.local
+.env.*.local
+
+# Backup files
+*.bak
+*.backup
+*-backup
+*.old
