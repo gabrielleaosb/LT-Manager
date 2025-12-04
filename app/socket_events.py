@@ -642,6 +642,20 @@ def handle_scene_update(data):
         # Pegar lista de jogadores
         session_data = active_sessions[session_id]
         
+        # ✅ NOVA LÓGICA: Verificar mudanças de visibilidade
+        old_visible = set(old_scene.get('visible_to_players', [])) if old_scene else set()
+        new_visible = set(scene.get('visible_to_players', []))
+        
+        # Jogadores que PERDERAM acesso
+        lost_access = old_visible - new_visible
+        
+        # Jogadores que GANHARAM acesso
+        gained_access = new_visible - old_visible
+        
+        print(f'📊 Mudanças de acesso:')
+        print(f'   ✅ Ganharam: {gained_access}')
+        print(f'   ❌ Perderam: {lost_access}')
+        
         # ✅ Para cada jogador conectado
         for player_id, player_data in session_data.get('players', {}).items():
             player_socket = player_data.get('socket_id')
@@ -649,23 +663,24 @@ def handle_scene_update(data):
             if not player_socket:
                 continue
             
-            visible_players = scene.get('visible_to_players', [])
-            is_visible = player_id in visible_players
+            is_visible = player_id in new_visible
             
             if is_visible:
-                # ✅ JOGADOR TEM PERMISSÃO - Enviar cena completa COM fog
-                print(f'  👁️ {player_id} - Enviando cena completa com fog')
+                # ✅ JOGADOR TEM PERMISSÃO - Enviar cena completa
+                print(f'  👁️ {player_id} - Enviando cena completa')
                 emit('scene_activated', {
                     'scene_id': scene_id,
                     'scene': scene
                 }, room=player_socket)
             else:
-                # ❌ JOGADOR NÃO TEM PERMISSÃO - Enviar cena bloqueada
+                # ❌ JOGADOR NÃO TEM PERMISSÃO - Bloquear
                 print(f'  🚫 {player_id} - Bloqueando acesso')
                 emit('scene_blocked', {
                     'scene_id': scene_id,
                     'scene_name': scene.get('name')
                 }, room=player_socket)
+        
+        print('✅ Todos os jogadores atualizados')
 
 @socketio.on('request_current_scene')
 def handle_request_current_scene(data):

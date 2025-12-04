@@ -1306,8 +1306,10 @@ drawingCanvas.addEventListener('mouseup', () => {
         });
         
         currentPath = [];
+        
         saveState('Desenhar');
-        console.log('✏️ Desenho enviado para servidor');
+        
+        console.log('✏️ Desenho salvo no histórico');
     }
     isDrawing = false;
 });
@@ -1328,6 +1330,9 @@ drawingCanvas.addEventListener('mouseleave', () => {
         });
         
         currentPath = [];
+        
+        // ✅ ADICIONAR: Salvar no histórico
+        saveState('Desenhar');
     }
     isDrawing = false;
 });
@@ -3324,9 +3329,7 @@ function showSceneCreationOverlay() {
 }
 
 function promptCreateFirstScene() {
-    const sceneName = prompt(
-        '🎬 Digite o nome da sua primeira cena:\n\n' +
-    );
+    const sceneName = prompt('🎬 Digite o nome da sua primeira cena:');
     
     if (!sceneName || !sceneName.trim()) {
         alert('❌ Você precisa dar um nome para a cena!');

@@ -386,17 +386,36 @@ function loadFogStatePlayer(imageData) {
 }
 
 socket.on('scene_activated', (data) => {
-    console.log('🎬 [PLAYER] Cena ativada:', data.scene.name);
+    console.log('🎬 [PLAYER] Cena ativada:', data.scene?.name);
+    
+    if (!data.scene) {
+        console.error('❌ [PLAYER] Dados da cena inválidos');
+        return;
+    }
     
     const scene = data.scene;
-    const isVisible = scene.visible_to_players && scene.visible_to_players.includes(playerId);
     
-    console.log('🎬 [PLAYER] Player ID:', playerId);
-    console.log('🎬 [PLAYER] Jogadores visíveis:', scene.visible_to_players);
-    console.log('🎬 [PLAYER] Tenho permissão?', isVisible);
+    // ✅ VERIFICAR se playerId está definido
+    if (!playerId) {
+        console.error('❌ [PLAYER] playerId não definido ainda');
+        return;
+    }
     
-    if (!isVisible) {
-        console.log('❌ [PLAYER] Sem permissão - mostrando tela bloqueada');
+    // ✅ VERIFICAR permissão
+    const visiblePlayers = scene.visible_to_players || [];
+    const hasPermission = visiblePlayers.includes(playerId);
+    
+    console.log('🎬 [PLAYER] Verificação de permissão:', {
+        playerId: playerId,
+        visiblePlayers: visiblePlayers,
+        hasPermission: hasPermission
+    });
+    
+    // ✅ SE NÃO TEM PERMISSÃO - Bloquear
+    if (!hasPermission) {
+        console.log('🚫 [PLAYER] SEM permissão - bloqueando acesso');
+        
+        // Limpar tudo
         maps = [];
         entities = [];
         tokens = [];
@@ -408,12 +427,15 @@ socket.on('scene_activated', (data) => {
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
         showBlockedScreen(scene.name);
+        showToast('🚫 Acesso negado a esta cena');
         return;
     }
     
-    console.log('✅ [PLAYER] Com permissão - carregando conteúdo');
+    // ✅ TEM PERMISSÃO - Carregar conteúdo
+    console.log('✅ [PLAYER] COM permissão - carregando cena');
     hideBlockedScreen();
     
+    // Limpar estado anterior
     maps = [];
     entities = [];
     tokens = [];
@@ -424,36 +446,38 @@ socket.on('scene_activated', (data) => {
     drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // ✅ Carregar dados da cena
+    // ✅ Carregar dados da cena (DEEP COPY para evitar referências)
     maps = JSON.parse(JSON.stringify(scene.maps || []));
     entities = JSON.parse(JSON.stringify(scene.entities || []));
     tokens = JSON.parse(JSON.stringify(scene.tokens || []));
     drawings = JSON.parse(JSON.stringify(scene.drawings || []));
     
-    console.log('📦 Conteúdo da cena:', {
+    console.log('📦 Conteúdo carregado:', {
         maps: maps.length,
         entities: entities.length,
         tokens: tokens.length,
         drawings: drawings.length,
-        fog: scene.fog_image ? 'SIM' : 'NÃO'
+        hasFog: !!scene.fog_image
     });
     
+    // ✅ Carregar névoa
     if (scene.fog_image) {
         console.log('🌫️ [PLAYER] Carregando névoa da cena');
         loadFogStatePlayer(scene.fog_image);
     } else {
-        console.log('✨ [PLAYER] Cena sem névoa - limpando fog canvas');
+        console.log('✨ [PLAYER] Cena sem névoa');
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
     
+    // ✅ Renderizar
     preloadAllImages();
     
     setTimeout(() => {
         redrawAll();
         redrawDrawings();
         showToast(`📍 ${scene.name}`);
-        console.log('✅ [PLAYER] Cena renderizada completamente');
-    }, 200); 
+        console.log('✅ [PLAYER] Cena renderizada');
+    }, 200);
 });
 
 // ✅ NOVO HANDLER - Cena bloqueada
