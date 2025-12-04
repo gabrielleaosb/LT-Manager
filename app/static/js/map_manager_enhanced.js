@@ -3153,162 +3153,118 @@ window.addEventListener('beforeunload', (e) => {
 
 let hasCreatedScene = false;
 let sceneCreationOverlay = null;
+let overlayInitialized = false; // ✅ NOVO - Prevenir múltiplas inicializações
 
 function showSceneCreationOverlay() {
+    // ✅ Verificar se já foi inicializado
+    if (overlayInitialized) {
+        console.log('⚠️ Overlay já inicializado - ignorando');
+        return;
+    }
+    
     console.log('🚨 Mostrando overlay obrigatório de criação de cena');
+    overlayInitialized = true;
     
     // Remover overlay antigo se existir
     if (sceneCreationOverlay) {
         sceneCreationOverlay.remove();
     }
     
-    // Criar overlay que bloqueia TUDO
+    // Criar overlay minimalista
     sceneCreationOverlay = document.createElement('div');
     sceneCreationOverlay.id = 'sceneCreationOverlay';
     sceneCreationOverlay.style.cssText = `
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.95);
+        background: rgba(10, 15, 26, 0.98);
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 99999;
-        backdrop-filter: blur(20px);
-        animation: fadeIn 0.5s ease;
+        backdrop-filter: blur(24px);
+        animation: fadeIn 0.3s ease;
     `;
     
     sceneCreationOverlay.innerHTML = `
         <div style="
-            background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.95));
-            border: 3px solid rgba(155, 89, 182, 0.6);
-            border-radius: 24px;
-            padding: 48px 40px;
-            max-width: 600px;
+            max-width: 480px;
             width: 90%;
-            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 60px rgba(155, 89, 182, 0.4);
-            text-align: center;
-            animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 16px;
+            padding: 48px 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         ">
-            <!-- Ícone animado -->
+            <!-- Ícone -->
             <div style="
-                font-size: 5rem;
-                margin-bottom: 24px;
-                animation: bounce 2s ease-in-out infinite;
-                filter: drop-shadow(0 0 20px rgba(155, 89, 182, 0.6));
+                width: 80px;
+                height: 80px;
+                margin: 0 auto 24px;
+                background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
+                border: 2px solid rgba(99, 102, 241, 0.4);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 2.5rem;
+                box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
             ">
                 🎬
             </div>
             
             <!-- Título -->
             <h1 style="
-                color: #fff;
-                font-family: 'Merriweather', serif;
-                font-size: 2rem;
-                margin: 0 0 16px 0;
-                font-weight: 900;
-                text-shadow: 0 0 20px rgba(155, 89, 182, 0.5);
+                color: #f1f5f9;
+                font-size: 1.75rem;
+                font-weight: 600;
+                text-align: center;
+                margin: 0 0 12px 0;
                 letter-spacing: -0.02em;
             ">
-                Bem-vindo ao Map Manager!
+                Criar Primeira Cena
             </h1>
             
-            <!-- Linha decorativa -->
-            <div style="
-                width: 80px;
-                height: 4px;
-                background: linear-gradient(90deg, transparent, #9b59b6, transparent);
-                margin: 0 auto 24px;
-                border-radius: 2px;
-            "></div>
-            
-            <!-- Aviso -->
-            <div style="
-                background: rgba(239, 68, 68, 0.15);
-                border: 2px solid rgba(239, 68, 68, 0.4);
-                border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 32px;
+            <!-- Descrição -->
+            <p style="
+                color: #94a3b8;
+                font-size: 0.9375rem;
+                text-align: center;
+                line-height: 1.6;
+                margin: 0 0 32px 0;
             ">
-                <div style="
-                    color: #ef4444;
-                    font-size: 2.5rem;
-                    margin-bottom: 12px;
-                ">
-                    ⚠️
-                </div>
-                <p style="
-                    color: rgba(255, 255, 255, 0.95);
-                    margin: 0;
-                    line-height: 1.7;
-                    font-size: 1.1rem;
-                ">
-                    <strong>Ação Obrigatória:</strong><br>
-                    Você <strong>DEVE</strong> criar uma cena antes de usar o Map Manager.<br>
-                    Isso evita bugs e organiza melhor seu jogo.
-                </p>
-            </div>
+                As cenas organizam mapas, tokens e elementos do seu jogo.<br>
+                Crie uma cena para começar a usar o Map Manager.
+            </p>
             
-            <!-- Instruções -->
-            <div style="
-                background: rgba(99, 102, 241, 0.1);
-                border: 2px solid rgba(99, 102, 241, 0.3);
-                border-radius: 12px;
-                padding: 24px;
-                margin-bottom: 32px;
-                text-align: left;
-            ">
-                <h3 style="
-                    color: #9b59b6;
-                    margin: 0 0 16px 0;
-                    font-size: 1.1rem;
-                    font-weight: 700;
-                ">
-                    📋 O que são Cenas?
-                </h3>
-                <ul style="
-                    color: rgba(255, 255, 255, 0.9);
-                    margin: 0;
-                    padding-left: 24px;
-                    line-height: 1.8;
-                ">
-                    <li>Organizam mapas, tokens e elementos</li>
-                    <li>Permitem trocar cenários rapidamente</li>
-                    <li>Controlam visibilidade para jogadores</li>
-                    <li>Auto-salvamento a cada 30 segundos</li>
-                </ul>
-            </div>
-            
-            <!-- Botão GRANDE -->
+            <!-- Botão -->
             <button id="createFirstSceneBtn" style="
                 width: 100%;
-                padding: 20px 32px;
-                background: linear-gradient(135deg, #9b59b6, #8e44ad);
-                border: 3px solid #c49bdb;
+                padding: 16px;
+                background: linear-gradient(135deg, #6366f1, #4f46e5);
+                border: none;
                 border-radius: 12px;
                 color: white;
-                font-size: 1.3rem;
-                font-weight: 900;
+                font-size: 1rem;
+                font-weight: 600;
                 cursor: pointer;
-                transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-                box-shadow: 0 8px 24px rgba(155, 89, 182, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.1);
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
+                transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+                box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
                 position: relative;
                 overflow: hidden;
             ">
-                <span style="position: relative; z-index: 1;">
-                    🎬 Criar Minha Primeira Cena
-                </span>
+                <span style="position: relative; z-index: 1;">Criar Cena</span>
             </button>
             
-            <!-- Info adicional -->
+            <!-- Dica -->
             <p style="
-                color: rgba(255, 255, 255, 0.5);
-                font-size: 0.85rem;
-                margin: 20px 0 0 0;
+                color: #64748b;
+                font-size: 0.8125rem;
+                text-align: center;
+                margin: 16px 0 0 0;
                 font-style: italic;
             ">
-                💡 Dica: Dê um nome descritivo como "Taverna do Dragão" ou "Floresta Sombria"
+                💡 Exemplo: "Mapa buxa de Vitor Cabral"
             </p>
         </div>
         
@@ -3321,49 +3277,29 @@ function showSceneCreationOverlay() {
             @keyframes slideUp {
                 from {
                     opacity: 0;
-                    transform: translateY(40px) scale(0.9);
+                    transform: translateY(20px);
                 }
                 to {
                     opacity: 1;
-                    transform: translateY(0) scale(1);
-                }
-            }
-            
-            @keyframes bounce {
-                0%, 100% {
-                    transform: translateY(0) scale(1);
-                }
-                50% {
-                    transform: translateY(-20px) scale(1.1);
-                }
-            }
-            
-            @keyframes pulse {
-                0%, 100% {
-                    transform: scale(1);
-                    box-shadow: 0 8px 24px rgba(155, 89, 182, 0.6);
-                }
-                50% {
-                    transform: scale(1.05);
-                    box-shadow: 0 12px 32px rgba(155, 89, 182, 0.8);
+                    transform: translateY(0);
                 }
             }
             
             #createFirstSceneBtn:hover {
-                transform: translateY(-4px);
-                box-shadow: 0 12px 32px rgba(155, 89, 182, 0.8), inset 0 0 30px rgba(255, 255, 255, 0.2);
-                animation: pulse 2s ease-in-out infinite;
+                transform: translateY(-2px);
+                box-shadow: 0 8px 24px rgba(99, 102, 241, 0.6);
+                background: linear-gradient(135deg, #818cf8, #6366f1);
             }
             
             #createFirstSceneBtn:active {
-                transform: translateY(-2px);
+                transform: translateY(0);
             }
             
             #createFirstSceneBtn::before {
                 content: '';
                 position: absolute;
                 inset: 0;
-                background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+                background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
                 transform: translateX(-100%);
                 transition: transform 0.6s;
             }
@@ -3388,14 +3324,8 @@ function showSceneCreationOverlay() {
 }
 
 function promptCreateFirstScene() {
-    // Prompt customizado
     const sceneName = prompt(
         '🎬 Digite o nome da sua primeira cena:\n\n' +
-        'Exemplos:\n' +
-        '• Taverna do Dragão Dourado\n' +
-        '• Floresta Sombria\n' +
-        '• Masmorra do Lich\n' +
-        '• Cidade de Waterdeep'
     );
     
     if (!sceneName || !sceneName.trim()) {
@@ -3427,19 +3357,21 @@ function promptCreateFirstScene() {
     // Salvar preferência no localStorage
     localStorage.setItem('rpg_has_scene_' + SESSION_ID, 'true');
     
-    // Remover overlay
+    // Remover overlay com animação
     if (sceneCreationOverlay) {
-        sceneCreationOverlay.style.animation = 'fadeOut 0.5s ease';
+        sceneCreationOverlay.style.animation = 'fadeOut 0.3s ease';
         setTimeout(() => {
-            sceneCreationOverlay.remove();
-            sceneCreationOverlay = null;
-        }, 500);
+            if (sceneCreationOverlay) {
+                sceneCreationOverlay.remove();
+                sceneCreationOverlay = null;
+                overlayInitialized = false;
+            }
+        }, 300);
     }
     
     // Mostrar mensagem de sucesso
     showToast(`✅ Cena "${sceneName.trim()}" criada com sucesso!`);
     
-    // Mostrar toast informativo
     setTimeout(() => {
         showToast('💡 Agora você pode adicionar mapas e tokens!');
     }, 2000);
@@ -3447,7 +3379,7 @@ function promptCreateFirstScene() {
     console.log('🎉 Primeira cena criada e ativada!');
 }
 
-// Adicionar animação de fadeOut ao CSS
+// Adicionar animação de fadeOut
 const style = document.createElement('style');
 style.textContent = `
     @keyframes fadeOut {
@@ -3457,14 +3389,14 @@ style.textContent = `
         }
         to {
             opacity: 0;
-            transform: scale(0.9);
+            transform: scale(0.95);
         }
     }
 `;
 document.head.appendChild(style);
 
 // ==========================================
-// VERIFICAÇÃO INICIAL
+// VERIFICAÇÃO INICIAL - SIMPLIFICADA
 // ==========================================
 
 function checkIfSceneExists() {
@@ -3479,6 +3411,7 @@ function checkIfSceneExists() {
     if (hasSceneFlag === 'true' || hasScenesInMemory) {
         console.log('✅ Cena já existe - permitindo acesso');
         hasCreatedScene = true;
+        overlayInitialized = true; // ✅ Marcar como inicializado para não abrir
         return true;
     }
     
@@ -3490,17 +3423,21 @@ function checkIfSceneExists() {
 function initializeSceneSystem() {
     console.log('🎬 Inicializando sistema de cenas...');
     
-    // Aguardar um momento para garantir que tudo carregou
-    setTimeout(() => {
-        const exists = checkIfSceneExists();
-        
-        if (!exists) {
-            console.log('🚨 Mostrando overlay obrigatório');
-            showSceneCreationOverlay();
-        } else {
-            console.log('✅ Sistema de cenas OK');
-        }
-    }, 1000);
+    // ✅ Verificar se já foi inicializado
+    if (overlayInitialized) {
+        console.log('⚠️ Sistema já inicializado - ignorando');
+        return;
+    }
+    
+    const exists = checkIfSceneExists();
+    
+    if (!exists) {
+        console.log('🚨 Mostrando overlay obrigatório');
+        showSceneCreationOverlay();
+    } else {
+        console.log('✅ Sistema de cenas OK');
+        overlayInitialized = true;
+    }
 }
 
 // ==========================================
@@ -3530,44 +3467,69 @@ window.addToken = function() {
 };
 
 // ==========================================
-// EXECUTAR NA INICIALIZAÇÃO
+// EXECUTAR NA INICIALIZAÇÃO - ÚNICA VEZ
 // ==========================================
 
-// Método 1: DOMContentLoaded
+let systemInitialized = false; // ✅ NOVO - Prevenir múltiplas inicializações
+
+// ✅ Método único de inicialização
+function initializeOnce() {
+    if (systemInitialized) {
+        console.log('⚠️ Sistema já foi inicializado - ignorando');
+        return;
+    }
+    
+    systemInitialized = true;
+    console.log('🎬 Inicializando sistema pela primeira vez...');
+    
+    // Aguardar um momento para garantir que tudo carregou
+    setTimeout(() => {
+        initializeSceneSystem();
+    }, 800);
+}
+
+// DOMContentLoaded - Inicializar apenas uma vez
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('📄 DOM pronto - inicializando sistema de cenas');
-    initializeSceneSystem();
+    console.log('📄 DOM pronto');
+    initializeOnce();
 });
 
-// Método 2: Socket conectado (backup)
+// Socket conectado - Backup (só executa se ainda não inicializou)
 socket.on('connect', () => {
-    console.log('🔌 Socket conectado - verificando cenas');
+    console.log('🔌 Socket conectado');
     
-    // Só inicializa se ainda não inicializou
-    if (!hasCreatedScene) {
+    // Só tenta inicializar se ainda não foi feito
+    if (!systemInitialized && !overlayInitialized) {
+        console.log('🔄 Tentando inicializar via socket...');
         setTimeout(() => {
-            initializeSceneSystem();
-        }, 1500);
+            initializeOnce();
+        }, 1200);
     }
 });
 
-// Método 3: Após carregar sessão do banco
+// Session state - Atualizar flag se necessário
 socket.on('session_state', (data) => {
-    console.log('📦 Estado da sessão recebido - verificando cenas');
+    console.log('📦 Estado da sessão recebido');
     
     // Se recebeu cenas do servidor
     if (data.scenes && data.scenes.length > 0) {
         console.log('✅ Cenas encontradas no servidor:', data.scenes.length);
         scenes = data.scenes;
         hasCreatedScene = true;
+        overlayInitialized = true;
         
         // Salvar flag no localStorage
         localStorage.setItem('rpg_has_scene_' + SESSION_ID, 'true');
         
         // Remover overlay se estiver aberto
         if (sceneCreationOverlay) {
-            sceneCreationOverlay.remove();
-            sceneCreationOverlay = null;
+            sceneCreationOverlay.style.animation = 'fadeOut 0.3s ease';
+            setTimeout(() => {
+                if (sceneCreationOverlay) {
+                    sceneCreationOverlay.remove();
+                    sceneCreationOverlay = null;
+                }
+            }, 300);
         }
     }
 });
