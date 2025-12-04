@@ -2612,6 +2612,208 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// ==========================================
+// MONITOR DE CONVERSAS - SOMENTE LEITURA
+// ==========================================
+
+let monitorData = {};
+let currentMonitorConv = null;
+
+function openConversationsMonitor() {
+    console.log('👁️ Abrindo monitor de conversas');
+    
+    const modal = document.getElementById('conversationsMonitor');
+    modal.classList.add('show');
+    
+    loadMonitorData();
+}
+
+function closeConversationsMonitor() {
+    const modal = document.getElementById('conversationsMonitor');
+    modal.classList.remove('show');
+    currentMonitorConv = null;
+}
+
+function refreshMonitor() {
+    console.log('🔄 Atualizando monitor');
+    showToast('Atualizando...');
+    loadMonitorData();
+}
+
+function loadMonitorData() {
+    console.log('📡 Solicitando dados de conversas');
+    
+    socket.emit('get_all_player_conversations', {
+        session_id: SESSION_ID
+    });
+}
+
+socket.on('player_conversations_data', (data) => {
+    console.log('📦 Dados recebidos:', data);
+    
+    monitorData = data.conversations || {};
+    
+    renderMonitorConversationsList();
+    
+    const count = Object.keys(monitorData).length;
+    showToast(`${count} conversa(s) encontrada(s)`);
+});
+
+function renderMonitorConversationsList() {
+    const listEl = document.getElementById('monitorConvList');
+    listEl.innerHTML = '';
+    
+    const conversations = [];
+    
+    for (let convId in monitorData) {
+        const conv = monitorData[convId];
+        
+        if (conv.messages && conv.messages.length > 0) {
+            const lastMsg = conv.messages[conv.messages.length - 1];
+            
+            conversations.push({
+                id: convId,
+                name: conv.name,
+                messageCount: conv.messages.length,
+                lastMessageTime: lastMsg.timestamp
+            });
+        }
+    }
+    
+    if (conversations.length === 0) {
+        listEl.innerHTML = `
+            <div class="monitor-empty" style="padding: 2rem;">
+                <div class="monitor-empty-icon">💬</div>
+                <p>Nenhuma conversa entre jogadores ainda</p>
+                <p style="font-size: 0.75rem; margin-top: 0.5rem; opacity: 0.7;">
+                    Os jogadores precisam conversar entre si primeiro
+                </p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Ordenar por última mensagem
+    conversations.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+    
+    conversations.forEach(conv => {
+        const item = document.createElement('div');
+        item.className = 'monitor-conv-item';
+        
+        if (currentMonitorConv === conv.id) {
+            item.classList.add('active');
+        }
+        
+        item.onclick = () => selectMonitorConversation(conv.id);
+        
+        const lastTime = new Date(conv.lastMessageTime);
+        const timeStr = lastTime.toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        item.innerHTML = `
+            <div class="monitor-conv-title">${conv.name}</div>
+            <div class="monitor-conv-meta">
+                <span class="monitor-conv-count">${conv.messageCount} msgs</span>
+                <span class="monitor-conv-time">${timeStr}</span>
+            </div>
+        `;
+        
+        listEl.appendChild(item);
+    });
+}
+
+function selectMonitorConversation(convId) {
+    console.log('📖 Abrindo conversa:', convId);
+    
+    currentMonitorConv = convId;
+    
+    // Atualizar visual da lista
+    document.querySelectorAll('.monitor-conv-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    event.currentTarget?.classList.add('active');
+    
+    // Mostrar painel de mensagens
+    document.getElementById('monitorEmptyState').style.display = 'none';
+    document.getElementById('monitorMessagesPanel').style.display = 'flex';
+    
+    const conv = monitorData[convId];
+    document.getElementById('monitorCurrentConvTitle').textContent = conv.name;
+    
+    renderMonitorMessages(conv.messages, conv.player1_id, conv.player2_id);
+}
+
+function renderMonitorMessages(messages, player1Id, player2Id) {
+    const container = document.getElementById('monitorMessagesContainer');
+    container.innerHTML = '';
+    
+    if (!messages || messages.length === 0) {
+        container.innerHTML = `
+            <div class="monitor-empty">
+                <p>Nenhuma mensagem nesta conversa</p>
+            </div>
+        `;
+        return;
+    }
+    
+    messages.forEach(msg => {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'monitor-message-group';
+        
+        const isPlayer1 = msg.sender_id === player1Id;
+        const playerClass = isPlayer1 ? 'player-1' : 'player-2';
+        
+        const time = new Date(msg.timestamp).toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        msgDiv.innerHTML = `
+            <div class="monitor-msg ${playerClass}">
+                <div class="monitor-msg-header">
+                    <span class="monitor-msg-sender">${msg.sender_name}</span>
+                    <span class="monitor-msg-time">${time}</span>
+                </div>
+                <div class="monitor-msg-text">${msg.message}</div>
+            </div>
+        `;
+        
+        container.appendChild(msgDiv);
+    });
+    
+    // Scroll para o final
+    container.scrollTop = container.scrollHeight;
+}
+
+// ✅ Atualizar automaticamente quando nova mensagem chega
+socket.on('new_private_message', (data) => {
+    // Se o monitor está aberto E a mensagem não é do mestre
+    const modal = document.getElementById('conversationsMonitor');
+    
+    if (modal && modal.classList.contains('show')) {
+        if (data.sender_id !== 'master' && data.recipient_id !== 'master') {
+            console.log('🔄 Nova mensagem detectada - atualizando monitor');
+            
+            // Aguardar um pouco para o servidor processar
+            setTimeout(() => {
+                loadMonitorData();
+            }, 500);
+        }
+    }
+});
+
+// Fechar com ESC
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('conversationsMonitor');
+        if (modal && modal.classList.contains('show')) {
+            closeConversationsMonitor();
+        }
+    }
+});
+
 // ==================
 // PERMISSÕES E JOGADORES
 // ==================

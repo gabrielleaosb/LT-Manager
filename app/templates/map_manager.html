@@ -44,6 +44,9 @@
             <button class="btn btn-icon" onclick="openSceneManager()" data-tooltip="Gerenciar Cenas">
                 <span>🎬</span>
             </button>
+            <button class="btn btn-icon" onclick="openConversationsMonitor()" data-tooltip="Monitor de Conversas">
+                <span>👁️</span>
+            </button>
             <button class="btn btn-icon" onclick="copyShareLink()" data-tooltip="Copiar Link para Jogadores">
                 <span>🔗</span>
             </button>
@@ -463,6 +466,48 @@
         
         <div class="modal-actions">
             <button class="action-btn" onclick="closeSceneVisibilityModal()">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Conversations Monitor Modal -->
+<div class="conversations-monitor-modal" id="conversationsMonitor">
+    <div class="monitor-container">
+        <div class="monitor-header">
+            <h2>
+                <span>👁️</span>
+                <span>Monitor de Conversas</span>
+            </h2>
+            <button class="monitor-refresh-btn" onclick="refreshMonitor()">
+                <span>🔄</span>
+                <span>Atualizar</span>
+            </button>
+            <button class="monitor-close-btn" onclick="closeConversationsMonitor()">×</button>
+        </div>
+        
+        <div class="monitor-body">
+            <div class="monitor-conversations-list" id="monitorConvList">
+                <div class="monitor-empty">
+                    <div class="monitor-empty-icon">💬</div>
+                    <p>Carregando conversas...</p>
+                </div>
+            </div>
+            
+            <div class="monitor-messages-panel">
+                <div class="monitor-empty" id="monitorEmptyState">
+                    <div class="monitor-empty-icon">💬</div>
+                    <p>Selecione uma conversa para visualizar</p>
+                </div>
+                
+                <div id="monitorMessagesPanel" style="display: none; flex-direction: column; height: 100%;">
+                    <div class="monitor-messages-header">
+                        <h3 id="monitorCurrentConvTitle">Conversa</h3>
+                    </div>
+                    <div class="monitor-messages-container" id="monitorMessagesContainer">
+                        <!-- Mensagens aparecem aqui -->
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

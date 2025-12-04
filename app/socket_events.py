@@ -415,6 +415,7 @@ def handle_get_contacts(data):
     unread_data = active_sessions[session_id]['unread_messages']
     
     if user_id == 'master':
+        # ✅ MESTRE: Mostrar APENAS jogadores individuais (sem conversas entre eles)
         for player_id, player_data in active_sessions[session_id]['players'].items():
             unread_count = unread_data.get(f"{user_id}_{player_id}", 0)
             contacts.append({
@@ -424,31 +425,11 @@ def handle_get_contacts(data):
                 'type': 'player'
             })
         
-        seen_pairs = set()
-        for sender_id, conversations in active_sessions[session_id]['chat_conversations'].items():
-            if sender_id == 'master':
-                continue
-            for recipient_id in conversations.keys():
-                if recipient_id == 'master':
-                    continue
-                
-                pair = tuple(sorted([sender_id, recipient_id]))
-                if pair not in seen_pairs:
-                    seen_pairs.add(pair)
-                    
-                    player1 = active_sessions[session_id]['players'].get(pair[0], {})
-                    player2 = active_sessions[session_id]['players'].get(pair[1], {})
-                    
-                    if player1 and player2:
-                        conversation_id = f"{pair[0]}_{pair[1]}"
-                        unread_count = unread_data.get(f"{user_id}_{conversation_id}", 0)
-                        contacts.append({
-                            'id': conversation_id,
-                            'name': f"{player1['name']} ↔ {player2['name']}",
-                            'unread': unread_count,
-                            'type': 'conversation'
-                        })
+        # ✅ REMOVIDO: Não mostrar conversas entre jogadores no chat do mestre
+        # O mestre agora usa o Monitor dedicado para ver essas conversas
+        
     else:
+        # ✅ JOGADOR: Mostrar mestre + outros jogadores
         unread_count = unread_data.get(f"{user_id}_master", 0)
         contacts.append({
             'id': 'master',
@@ -525,16 +506,6 @@ def handle_send_message(data):
         if recipient_socket:
             emit('new_private_message', message_data, room=recipient_socket)
     
-    if sender_id != 'master' and recipient_id != 'master':
-        master_socket = active_sessions[session_id].get('master_socket')
-        if master_socket:
-            conversation_id = '_'.join(sorted([sender_id, recipient_id]))
-            mestre_unread_key = f"master_{conversation_id}"
-            if mestre_unread_key not in active_sessions[session_id]['unread_messages']:
-                active_sessions[session_id]['unread_messages'][mestre_unread_key] = 0
-            active_sessions[session_id]['unread_messages'][mestre_unread_key] += 1
-            
-            emit('new_private_message', message_data, room=master_socket)
 
 @socketio.on('get_conversation')
 def handle_get_conversation(data):
@@ -809,9 +780,9 @@ def handle_shared_dice_roll(data):
     is_critical = data.get('is_critical', False)
     is_failure = data.get('is_failure', False)
     
-    print(f'🎲 {roller_name} rolou {formula}: {result}')
+    print(f'🎲 [BROADCAST] {roller_name} rolou {formula}: {result}')
     
-    # Broadcast para TODA a sala
+    # ✅ BROADCAST para TODA A SALA (incluindo o próprio remetente)
     emit('dice_rolled_shared', {
         'roller_name': roller_name,
         'dice_type': dice_type,
@@ -821,3 +792,58 @@ def handle_shared_dice_roll(data):
         'is_failure': is_failure,
         'timestamp': time.time()
     }, room=session_id, include_self=True)
+
+# ==================
+# MONITOR DE CHAT - MESTRE
+# ==================
+@socketio.on('get_all_player_conversations')
+def handle_get_all_player_conversations(data):
+    """Enviar todas as conversas entre jogadores para o mestre"""
+    session_id = data.get('session_id')
+    
+    init_session(session_id)
+    
+    conversations = {}
+    session_data = active_sessions[session_id]
+    
+    # Processar todas as conversas
+    for sender_id in session_data.get('chat_conversations', {}):
+        if sender_id == 'master':
+            continue
+        
+        for recipient_id in session_data['chat_conversations'][sender_id]:
+            if recipient_id == 'master':
+                continue
+            
+            # Criar ID único para o par (ordenado)
+            conv_id = '_'.join(sorted([sender_id, recipient_id]))
+            
+            # Evitar duplicatas
+            if conv_id in conversations:
+                continue
+            
+            # Buscar nomes dos jogadores
+            player1 = session_data['players'].get(sender_id, {})
+            player2 = session_data['players'].get(recipient_id, {})
+            
+            if not player1 or not player2:
+                continue
+            
+            player1_name = player1.get('name', 'Jogador')
+            player2_name = player2.get('name', 'Jogador')
+            
+            # Buscar mensagens
+            messages = session_data['chat_conversations'][sender_id].get(recipient_id, [])
+            
+            conversations[conv_id] = {
+                'name': f"{player1_name} ↔ {player2_name}",
+                'messages': messages,
+                'player1_id': sender_id,
+                'player2_id': recipient_id
+            }
+    
+    print(f'📊 Enviando {len(conversations)} conversas para monitor')
+    
+    emit('player_conversations_data', {
+        'conversations': conversations
+    })
