@@ -1,521 +1,212 @@
 /* ==========================================
-   SISTEMA DE DADOS - VERSÃO PREMIUM
+   SISTEMA DE DADOS - VERSÃO DISCRETA
    ========================================== */
 
-.dice-roll-overlay {
+.dice-notification {
     position: fixed;
-    inset: 0;
-    background: radial-gradient(
-        ellipse at center,
-        rgba(15, 23, 42, 0.97) 0%,
-        rgba(0, 0, 0, 0.98) 100%
-    );
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 99999;
-    backdrop-filter: blur(20px) saturate(180%);
-    animation: overlayFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.dice-roll-overlay.show {
-    display: flex;
-}
-
-@keyframes overlayFadeIn {
-    from {
-        opacity: 0;
-        backdrop-filter: blur(0px) saturate(100%);
-    }
-    to {
-        opacity: 1;
-        backdrop-filter: blur(20px) saturate(180%);
-    }
-}
-
-/* Container Principal */
-.dice-roll-container {
-    text-align: center;
-    position: relative;
-    animation: containerSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes containerSlideUp {
-    from {
-        opacity: 0;
-        transform: translateY(40px) scale(0.96);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-/* Nome do Jogador */
-.dice-roller-name {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #e2e8f0;
-    margin-bottom: 3rem;
-    letter-spacing: 0.05em;
+    bottom: 120px;
+    right: 20px;
+    width: 320px;
+    background: linear-gradient(135deg, 
+        rgba(15, 23, 42, 0.98) 0%, 
+        rgba(30, 41, 59, 0.98) 100%);
+    border: 2px solid rgba(99, 102, 241, 0.5);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(20px);
+    z-index: 10000;
+    transform: translateX(400px);
     opacity: 0;
-    animation: nameAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
 }
 
-@keyframes nameAppear {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+.dice-notification.show {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
 }
 
-/* ==========================================
-   DADO 3D - VERSÃO PREMIUM
-   ========================================== */
-
-.dice-3d-wrapper {
-    perspective: 1200px;
-    margin: 0 auto;
-    width: 160px;
-    height: 160px;
+.dice-notification.hiding {
+    transform: translateX(400px);
+    opacity: 0;
 }
 
-.dice-3d {
-    width: 160px;
-    height: 160px;
-    position: relative;
-    transform-style: preserve-3d;
-    animation: smoothDiceRoll 2.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    filter: drop-shadow(0 20px 60px rgba(99, 102, 241, 0.4));
-}
-
-@keyframes smoothDiceRoll {
-    0% {
-        transform: 
-            rotateX(0deg) 
-            rotateY(0deg) 
-            rotateZ(0deg) 
-            scale(0.4);
-        opacity: 0;
-    }
-    15% {
-        opacity: 1;
-    }
-    40% {
-        transform: 
-            rotateX(360deg) 
-            rotateY(360deg) 
-            rotateZ(180deg) 
-            scale(1.15);
-    }
-    70% {
-        transform: 
-            rotateX(720deg) 
-            rotateY(720deg) 
-            rotateZ(360deg) 
-            scale(1.08);
-    }
-    85% {
-        transform: 
-            rotateX(1080deg) 
-            rotateY(1080deg) 
-            rotateZ(540deg) 
-            scale(0.98);
-    }
-    100% {
-        transform: 
-            rotateX(1080deg) 
-            rotateY(1080deg) 
-            rotateZ(540deg) 
-            scale(1);
-    }
-}
-
-/* Face do Dado */
-.dice-face {
-    position: absolute;
-    width: 160px;
-    height: 160px;
-    background: linear-gradient(
-        135deg,
-        rgba(99, 102, 241, 0.95) 0%,
-        rgba(79, 70, 229, 0.98) 100%
-    );
-    border: 2px solid rgba(165, 180, 252, 0.3);
-    border-radius: 24px;
+/* Header da Notificação */
+.dice-notif-header {
     display: flex;
     align-items: center;
-    justify-content: center;
-    font-size: 4.5rem;
-    font-weight: 800;
-    color: white;
-    text-shadow: 
-        0 2px 10px rgba(0, 0, 0, 0.3),
-        0 0 40px rgba(255, 255, 255, 0.1);
-    box-shadow: 
-        inset 0 2px 20px rgba(255, 255, 255, 0.1),
-        inset 0 -2px 20px rgba(0, 0, 0, 0.2),
-        0 10px 40px rgba(99, 102, 241, 0.3);
-    backdrop-filter: blur(10px);
+    justify-content: space-between;
+    margin-bottom: 15px;
 }
 
-/* Pontos do Dado (para d6) */
-.dice-dot {
-    width: 20px;
-    height: 20px;
-    background: white;
+.dice-notif-roller {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dice-notif-avatar {
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    border: 2px solid rgba(99, 102, 241, 0.3);
 }
 
-/* ==========================================
-   RESULTADO - ANIMAÇÃO SUAVE
-   ========================================== */
-
-.dice-result-display {
-    margin-top: 4rem;
-    opacity: 0;
-    animation: resultFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 2.2s forwards;
+.dice-notif-name {
+    color: #f1f5f9;
+    font-weight: 600;
+    font-size: 0.95rem;
 }
 
-@keyframes resultFadeIn {
-    0% {
-        opacity: 0;
-        transform: translateY(20px) scale(0.9);
-    }
-    60% {
-        transform: translateY(-5px) scale(1.02);
-    }
-    100% {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-.dice-result-label {
-    font-size: 0.75rem;
+.dice-notif-close {
+    background: transparent;
+    border: none;
     color: #64748b;
-    margin-bottom: 0.75rem;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.dice-notif-close:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+/* Resultado */
+.dice-notif-result {
+    text-align: center;
+    padding: 20px 0;
+}
+
+.dice-notif-label {
+    color: #94a3b8;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.1em;
+    margin-bottom: 10px;
     font-weight: 600;
 }
 
-.dice-result-value {
-    font-size: 5rem;
+.dice-notif-value {
+    font-size: 3.5rem;
     font-weight: 900;
     background: linear-gradient(135deg, #10b981, #059669);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     line-height: 1;
-    margin-bottom: 1rem;
-    filter: drop-shadow(0 0 30px rgba(16, 185, 129, 0.3));
-    font-family: 'Inter', sans-serif;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 0 20px rgba(16, 185, 129, 0.3));
+    animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.dice-result-formula {
-    font-size: 1rem;
+@keyframes popIn {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.dice-notif-formula {
     color: #94a3b8;
+    font-size: 0.9rem;
     font-weight: 500;
-    letter-spacing: 0.05em;
 }
 
-/* ==========================================
-   CRÍTICO SUCESSO - DOURADO ELEGANTE
-   ========================================== */
-
-.dice-roll-overlay.critical-success .dice-face {
-    background: linear-gradient(
-        135deg,
-        rgba(251, 191, 36, 0.95) 0%,
-        rgba(245, 158, 11, 0.98) 100%
-    );
-    border-color: rgba(253, 224, 71, 0.4);
-    animation: 
-        smoothDiceRoll 2.4s cubic-bezier(0.34, 1.56, 0.64, 1),
-        criticalGlowPulse 2s ease-in-out 2.4s infinite;
+/* Ícone do Dado Animado */
+.dice-notif-icon {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    font-size: 2rem;
+    animation: diceRoll 0.6s ease-in-out;
 }
 
-.dice-roll-overlay.critical-success .dice-result-value {
+@keyframes diceRoll {
+    0%, 100% {
+        transform: rotate(0deg);
+    }
+    25% {
+        transform: rotate(90deg) scale(1.1);
+    }
+    50% {
+        transform: rotate(180deg) scale(1.2);
+    }
+    75% {
+        transform: rotate(270deg) scale(1.1);
+    }
+}
+
+/* Crítico Sucesso */
+.dice-notification.critical-success {
+    border-color: rgba(251, 191, 36, 0.8);
+    background: linear-gradient(135deg, 
+        rgba(15, 23, 42, 0.98) 0%, 
+        rgba(251, 191, 36, 0.15) 100%);
+}
+
+.dice-notification.critical-success .dice-notif-value {
     background: linear-gradient(135deg, #fbbf24, #f59e0b);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    filter: drop-shadow(0 0 40px rgba(251, 191, 36, 0.6));
-    animation: 
-        resultFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 2.2s forwards,
-        criticalNumberPulse 1.5s ease-in-out 3s infinite;
+    animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), glowPulse 1.5s ease-in-out infinite;
 }
 
-@keyframes criticalGlowPulse {
+@keyframes glowPulse {
     0%, 100% {
-        box-shadow: 
-            inset 0 2px 20px rgba(255, 255, 255, 0.2),
-            inset 0 -2px 20px rgba(0, 0, 0, 0.2),
-            0 10px 40px rgba(251, 191, 36, 0.4),
-            0 0 80px rgba(251, 191, 36, 0.3);
+        filter: drop-shadow(0 0 20px rgba(251, 191, 36, 0.5));
     }
     50% {
-        box-shadow: 
-            inset 0 2px 20px rgba(255, 255, 255, 0.3),
-            inset 0 -2px 20px rgba(0, 0, 0, 0.1),
-            0 10px 60px rgba(251, 191, 36, 0.6),
-            0 0 120px rgba(251, 191, 36, 0.5);
+        filter: drop-shadow(0 0 30px rgba(251, 191, 36, 0.8));
     }
 }
 
-@keyframes criticalNumberPulse {
-    0%, 100% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.05);
-    }
+/* Crítico Falha */
+.dice-notification.critical-failure {
+    border-color: rgba(239, 68, 68, 0.8);
+    background: linear-gradient(135deg, 
+        rgba(15, 23, 42, 0.98) 0%, 
+        rgba(239, 68, 68, 0.15) 100%);
 }
 
-/* ==========================================
-   CRÍTICO FALHA - VERMELHO ELEGANTE
-   ========================================== */
-
-.dice-roll-overlay.critical-failure .dice-face {
-    background: linear-gradient(
-        135deg,
-        rgba(239, 68, 68, 0.95) 0%,
-        rgba(220, 38, 38, 0.98) 100%
-    );
-    border-color: rgba(248, 113, 113, 0.4);
-    animation: 
-        smoothDiceRoll 2.4s cubic-bezier(0.34, 1.56, 0.64, 1),
-        failureShake 0.6s ease-in-out 2.4s;
-}
-
-.dice-roll-overlay.critical-failure .dice-result-value {
+.dice-notification.critical-failure .dice-notif-value {
     background: linear-gradient(135deg, #ef4444, #dc2626);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    filter: drop-shadow(0 0 40px rgba(239, 68, 68, 0.6));
+    animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), shake 0.5s ease-in-out;
 }
 
-@keyframes failureShake {
-    0%, 100% { 
-        transform: translateX(0) rotate(0deg); 
-    }
-    20% { 
-        transform: translateX(-8px) rotate(-2deg); 
-    }
-    40% { 
-        transform: translateX(8px) rotate(2deg); 
-    }
-    60% { 
-        transform: translateX(-6px) rotate(-1deg); 
-    }
-    80% { 
-        transform: translateX(6px) rotate(1deg); 
-    }
+@keyframes shake {
+    0%, 100% { transform: translateX(0) scale(1); }
+    25% { transform: translateX(-5px) scale(1.05); }
+    75% { transform: translateX(5px) scale(1.05); }
 }
 
-/* ==========================================
-   PARTÍCULAS PREMIUM
-   ========================================== */
-
-.dice-particles {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    overflow: hidden;
-    opacity: 0.6;
-}
-
-.particle {
-    position: absolute;
-    background: radial-gradient(
-        circle,
-        rgba(129, 140, 248, 0.8) 0%,
-        rgba(99, 102, 241, 0) 70%
-    );
-    border-radius: 50%;
-    animation: particleFloat 4s ease-in-out infinite;
-}
-
-.particle:nth-child(odd) {
-    width: 3px;
-    height: 3px;
-}
-
-.particle:nth-child(even) {
-    width: 5px;
-    height: 5px;
-    animation-duration: 5s;
-}
-
-@keyframes particleFloat {
-    0% {
-        transform: translateY(100vh) translateX(0) scale(0);
-        opacity: 0;
-    }
-    10% {
-        opacity: 1;
-        transform: translateY(90vh) translateX(var(--drift-start)) scale(1);
-    }
-    90% {
-        opacity: 1;
-        transform: translateY(10vh) translateX(var(--drift-end)) scale(1);
-    }
-    100% {
-        transform: translateY(-10vh) translateX(var(--drift-end)) scale(0);
-        opacity: 0;
-    }
-}
-
-/* Partículas para crítico */
-.dice-roll-overlay.critical-success .particle {
-    background: radial-gradient(
-        circle,
-        rgba(251, 191, 36, 0.9) 0%,
-        rgba(245, 158, 11, 0) 70%
-    );
-}
-
-.dice-roll-overlay.critical-failure .particle {
-    background: radial-gradient(
-        circle,
-        rgba(239, 68, 68, 0.9) 0%,
-        rgba(220, 38, 38, 0) 70%
-    );
-}
-
-/* ==========================================
-   HINT DE FECHAMENTO
-   ========================================== */
-
-.dice-close-hint {
-    position: absolute;
-    bottom: 3rem;
-    left: 50%;
-    transform: translateX(-50%);
-    color: #475569;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-    opacity: 0;
-    animation: hintFadeIn 1s ease-in-out 3s forwards;
-    cursor: pointer;
-    padding: 0.625rem 1.25rem;
-    background: rgba(51, 65, 85, 0.3);
-    border-radius: 2rem;
-    border: 1px solid rgba(100, 116, 139, 0.3);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.dice-close-hint:hover {
-    background: rgba(51, 65, 85, 0.5);
-    border-color: rgba(100, 116, 139, 0.5);
-    color: #94a3b8;
-    transform: translateX(-50%) translateY(-2px);
-}
-
-@keyframes hintFadeIn {
-    from {
-        opacity: 0;
-        transform: translateX(-50%) translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
-    }
-}
-
-/* ==========================================
-   ANIMAÇÃO DE SAÍDA SUAVE
-   ========================================== */
-
-@keyframes overlayFadeOut {
-    from {
-        opacity: 1;
-        backdrop-filter: blur(20px) saturate(180%);
-    }
-    to {
-        opacity: 0;
-        backdrop-filter: blur(0px) saturate(100%);
-    }
-}
-
-.dice-roll-overlay.hiding {
-    animation: overlayFadeOut 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.dice-roll-overlay.hiding .dice-roll-container {
-    animation: containerSlideDown 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes containerSlideDown {
-    from {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-    to {
-        opacity: 0;
-        transform: translateY(30px) scale(0.96);
-    }
-}
-
-/* ==========================================
-   RESPONSIVO
-   ========================================== */
-
-@media (max-height: 700px) {
-    .dice-3d-wrapper,
-    .dice-3d,
-    .dice-face {
-        width: 120px;
-        height: 120px;
-    }
-    
-    .dice-face {
-        font-size: 3.5rem;
-        border-radius: 18px;
-    }
-    
-    .dice-result-value {
-        font-size: 3.5rem;
-    }
-    
-    .dice-result-display {
-        margin-top: 2rem;
-    }
-    
-    .dice-roller-name {
-        margin-bottom: 2rem;
-    }
-}
-
-@media (max-width: 480px) {
-    .dice-3d-wrapper,
-    .dice-3d,
-    .dice-face {
-        width: 140px;
-        height: 140px;
-    }
-    
-    .dice-face {
-        font-size: 4rem;
-    }
-    
-    .dice-result-value {
-        font-size: 4rem;
-    }
-    
-    .dice-roller-name {
-        font-size: 1rem;
-    }
-    
-    .dice-result-formula {
-        font-size: 0.875rem;
+/* Responsivo */
+@media (max-width: 768px) {
+    .dice-notification {
+        width: calc(100% - 40px);
+        right: 20px;
+        bottom: 80px;
     }
 }

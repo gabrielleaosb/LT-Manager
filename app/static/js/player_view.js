@@ -126,58 +126,85 @@ function loadPlayerSession() {
 }
 
 // ==========================================
-// SISTEMA DE DADOS COMPARTILHADO
+// SISTEMA DE DADOS COMPARTILHADO - VERSÃO DISCRETA
 // ==========================================
 const SharedDiceSystem = {
-    overlay: null,
+    container: null,
     isShowing: false,
+    hideTimeout: null,
     
     init() {
-        this.overlay = document.getElementById('sharedDiceOverlay');
-        
-        if (this.overlay) {
-            this.overlay.addEventListener('click', () => {
-                this.hide();
-            });
+        // Criar container se não existir
+        if (!this.container) {
+            this.container = document.createElement('div');
+            this.container.className = 'dice-notification';
+            this.container.id = 'diceNotification';
+            this.container.innerHTML = `
+                <div class="dice-notif-icon">🎲</div>
+                <div class="dice-notif-header">
+                    <div class="dice-notif-roller">
+                        <div class="dice-notif-avatar" id="diceNotifAvatar"></div>
+                        <div class="dice-notif-name" id="diceNotifName"></div>
+                    </div>
+                    <button class="dice-notif-close" onclick="SharedDiceSystem.hide()">×</button>
+                </div>
+                <div class="dice-notif-result">
+                    <div class="dice-notif-label">RESULTADO</div>
+                    <div class="dice-notif-value" id="diceNotifValue">0</div>
+                    <div class="dice-notif-formula" id="diceNotifFormula"></div>
+                </div>
+            `;
+            document.body.appendChild(this.container);
         }
     },
     
     show(data) {
-        if (this.isShowing) return;
+        this.init();
         
-        console.log('🎲 Mostrando rolagem:', data);
+        // Se já está mostrando, esconder primeiro
+        if (this.isShowing) {
+            this.hide();
+            setTimeout(() => this.show(data), 400);
+            return;
+        }
+        
+        console.log('🎲 Exibindo rolagem:', data);
         
         this.isShowing = true;
-        const overlay = this.overlay;
         
-        // Definir nome
-        document.getElementById('diceRollerName').textContent = 
-            `🎲 ${data.roller_name} rolou os dados`;
-        
-        // Definir valor do dado (para animação)
-        document.getElementById('diceFaceValue').textContent = data.result;
+        // Limpar timeout anterior
+        if (this.hideTimeout) {
+            clearTimeout(this.hideTimeout);
+        }
         
         // Resetar classes
-        overlay.className = 'dice-roll-overlay show';
+        this.container.className = 'dice-notification';
         
         // Adicionar classe especial
         if (data.is_critical) {
-            overlay.classList.add('critical-success');
+            this.container.classList.add('critical-success');
         } else if (data.is_failure) {
-            overlay.classList.add('critical-failure');
+            this.container.classList.add('critical-failure');
         }
         
-        // Criar partículas
-        this.createParticles();
+        // Preencher dados
+        const avatar = document.getElementById('diceNotifAvatar');
+        const name = document.getElementById('diceNotifName');
+        const value = document.getElementById('diceNotifValue');
+        const formula = document.getElementById('diceNotifFormula');
         
-        // Mostrar resultado após animação
-        setTimeout(() => {
-            document.getElementById('sharedDiceResult').textContent = data.result;
-            document.getElementById('sharedDiceFormula').textContent = data.formula;
-        }, 2000);
+        avatar.textContent = data.roller_name.charAt(0).toUpperCase();
+        name.textContent = data.roller_name;
+        value.textContent = data.result;
+        formula.textContent = data.formula;
         
-        // Fechar automaticamente após 5 segundos
+        // Mostrar
         setTimeout(() => {
+            this.container.classList.add('show');
+        }, 10);
+        
+        // Auto-hide após 5 segundos
+        this.hideTimeout = setTimeout(() => {
             this.hide();
         }, 5000);
     },
@@ -185,30 +212,13 @@ const SharedDiceSystem = {
     hide() {
         if (!this.isShowing) return;
         
-        this.overlay.style.animation = 'fadeOut 0.3s ease';
+        this.container.classList.add('hiding');
+        this.container.classList.remove('show');
         
         setTimeout(() => {
-            this.overlay.classList.remove('show');
-            this.overlay.style.animation = '';
+            this.container.classList.remove('hiding');
             this.isShowing = false;
-            
-            // Limpar partículas
-            document.getElementById('diceParticles').innerHTML = '';
-        }, 300);
-    },
-    
-    createParticles() {
-        const container = document.getElementById('diceParticles');
-        container.innerHTML = '';
-        
-        for (let i = 0; i < 30; i++) {
-            const particle = document.createElement('div');
-            particle.className = 'particle';
-            particle.style.left = Math.random() * 100 + '%';
-            particle.style.setProperty('--drift', (Math.random() - 0.5) * 200 + 'px');
-            particle.style.animationDelay = Math.random() * 2 + 's';
-            container.appendChild(particle);
-        }
+        }, 400);
     }
 };
 
@@ -298,6 +308,203 @@ canvasWrapper.addEventListener('wheel', (e) => {
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
     zoom(delta);
 });
+
+// ==========================================
+// SISTEMA DE DADOS DO JOGADOR
+// ==========================================
+
+let playerDiceHistory = [];
+
+function togglePlayerDicePanel() {
+    const panel = document.getElementById('playerDicePanel');
+    if (panel.style.display === 'none' || !panel.style.display) {
+        panel.style.display = 'flex';
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+function rollPlayerDice(sides) {
+    const result = Math.floor(Math.random() * sides) + 1;
+    const isCritical = sides === 20 && result === 20;
+    const isFail = sides === 20 && result === 1;
+    
+    // Mostrar resultado local
+    const resultDiv = document.getElementById('playerDiceResult');
+    resultDiv.textContent = result;
+    resultDiv.style.opacity = '0';
+    resultDiv.style.transform = 'scale(0.8)';
+    
+    setTimeout(() => {
+        resultDiv.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        resultDiv.style.opacity = '1';
+        resultDiv.style.transform = 'scale(1)';
+        
+        if (isCritical) {
+            resultDiv.style.borderColor = '#fbbf24';
+            resultDiv.style.color = '#fbbf24';
+            resultDiv.style.background = 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))';
+            showToast('🎉 CRÍTICO!');
+        } else if (isFail) {
+            resultDiv.style.borderColor = '#ef4444';
+            resultDiv.style.color = '#ef4444';
+            resultDiv.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1))';
+            showToast('💀 FALHA CRÍTICA!');
+        } else {
+            resultDiv.style.borderColor = '#10b981';
+            resultDiv.style.color = '#10b981';
+            resultDiv.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.05))';
+        }
+    }, 10);
+    
+    // Adicionar ao histórico
+    addPlayerDiceToHistory(`1d${sides}`, result, isCritical, isFail);
+    
+    // Broadcast para todos
+    socket.emit('roll_shared_dice', {
+        session_id: SESSION_ID,
+        roller_name: playerName,
+        dice_type: `d${sides}`,
+        result: result,
+        formula: `1d${sides}`,
+        is_critical: isCritical,
+        is_failure: isFail
+    });
+    
+    console.log('🎲 [PLAYER] Dado rolado:', { sides, result, playerName });
+}
+
+function rollPlayerCustomDice() {
+    const count = parseInt(document.getElementById('playerCustomDiceCount')?.value) || 1;
+    const sides = parseInt(document.getElementById('playerCustomDiceSides')?.value) || 20;
+    const modifier = parseInt(document.getElementById('playerCustomDiceModifier')?.value) || 0;
+    
+    let rolls = [];
+    let sum = 0;
+    
+    for (let i = 0; i < count; i++) {
+        const roll = Math.floor(Math.random() * sides) + 1;
+        rolls.push(roll);
+        sum += roll;
+    }
+    
+    const total = sum + modifier;
+    const formula = `${count}d${sides}${modifier !== 0 ? (modifier > 0 ? '+' : '') + modifier : ''}`;
+    const breakdown = rolls.join(' + ') + (modifier !== 0 ? ` ${modifier > 0 ? '+' : ''}${modifier}` : '');
+    
+    const isCrit = sides === 20 && count === 1 && rolls[0] === 20;
+    const isFail = sides === 20 && count === 1 && rolls[0] === 1;
+    
+    // Mostrar resultado local
+    const resultDiv = document.getElementById('playerDiceResult');
+    resultDiv.textContent = total;
+    resultDiv.style.opacity = '0';
+    resultDiv.style.transform = 'scale(0.8)';
+    
+    setTimeout(() => {
+        resultDiv.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        resultDiv.style.opacity = '1';
+        resultDiv.style.transform = 'scale(1)';
+        
+        if (isCrit) {
+            resultDiv.style.borderColor = '#fbbf24';
+            resultDiv.style.color = '#fbbf24';
+            resultDiv.style.background = 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))';
+            showToast('🎉 CRÍTICO!');
+        } else if (isFail) {
+            resultDiv.style.borderColor = '#ef4444';
+            resultDiv.style.color = '#ef4444';
+            resultDiv.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1))';
+            showToast('💀 FALHA CRÍTICA!');
+        } else {
+            resultDiv.style.borderColor = '#10b981';
+            resultDiv.style.color = '#10b981';
+            resultDiv.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.05))';
+        }
+    }, 10);
+    
+    // Adicionar ao histórico
+    addPlayerDiceToHistory(formula, total, isCrit, isFail, breakdown);
+    
+    // Broadcast para todos
+    socket.emit('roll_shared_dice', {
+        session_id: SESSION_ID,
+        roller_name: playerName,
+        dice_type: `d${sides}`,
+        result: total,
+        formula: formula,
+        is_critical: isCrit,
+        is_failure: isFail
+    });
+    
+    console.log('🎲 [PLAYER] Dado customizado rolado:', { formula, total, playerName });
+}
+
+function addPlayerDiceToHistory(formula, result, isCrit, isFail, breakdown = '') {
+    const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    
+    playerDiceHistory.unshift({
+        formula,
+        result,
+        isCrit,
+        isFail,
+        breakdown,
+        timestamp
+    });
+    
+    if (playerDiceHistory.length > 30) {
+        playerDiceHistory = playerDiceHistory.slice(0, 30);
+    }
+    
+    renderPlayerDiceHistory();
+}
+
+function renderPlayerDiceHistory() {
+    const historyList = document.getElementById('playerDiceHistoryList');
+    if (!historyList) return;
+    
+    if (playerDiceHistory.length === 0) {
+        historyList.innerHTML = '<div class="empty-state" style="text-align: center; padding: 20px; color: #666; font-size: 0.8125rem;">Nenhuma rolagem ainda</div>';
+        return;
+    }
+    
+    historyList.innerHTML = playerDiceHistory.map(item => {
+        let resultClass = '';
+        let icon = '🎲';
+        
+        if (item.isCrit) {
+            resultClass = 'style="color: #fbbf24; font-weight: bold;"';
+            icon = '⭐';
+        } else if (item.isFail) {
+            resultClass = 'style="color: #e74c3c; font-weight: bold;"';
+            icon = '💀';
+        }
+        
+        return `
+            <div style="padding: 10px; background: rgba(16,16,30,0.6); border-radius: 6px; border: 1px solid rgba(155,89,182,0.2); margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <strong style="color: #c49bdb; font-size: 0.875rem;">${icon} ${item.formula}</strong>
+                    <span ${resultClass} style="font-size: 0.875rem;">${item.result}</span>
+                </div>
+                ${item.breakdown ? `<div style="font-size: 0.75rem; color: #888;">${item.breakdown}</div>` : ''}
+                <div style="font-size: 0.7rem; color: #666; margin-top: 4px;">${item.timestamp}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearPlayerDiceHistory() {
+    if (confirm('Limpar histórico de dados?')) {
+        playerDiceHistory = [];
+        renderPlayerDiceHistory();
+        showToast('Histórico limpo');
+    }
+}
+
+// ==========================================
+// REMOVER FUNÇÃO ANTIGA
+// ==========================================
+// Remover a função openPlayerDiceRoller() antiga se existir
 
 // ========== GRID ==========
 function drawGrid() {

@@ -196,38 +196,51 @@ const ToolManager = {
 };
 
 // ==========================================
-// SISTEMA DE DADOS COMPARTILHADO - PREMIUM
+// SISTEMA DE DADOS COMPARTILHADO - VERSÃO DISCRETA
 // ==========================================
 const SharedDiceSystem = {
-    overlay: null,
+    container: null,
     isShowing: false,
     hideTimeout: null,
     
     init() {
-        this.overlay = document.getElementById('sharedDiceOverlay');
-        
-        if (this.overlay) {
-            // Remover listener antigo se existir
-            this.overlay.replaceWith(this.overlay.cloneNode(true));
-            this.overlay = document.getElementById('sharedDiceOverlay');
-            
-            this.overlay.addEventListener('click', () => {
-                this.hide();
-            });
+        // Criar container se não existir
+        if (!this.container) {
+            this.container = document.createElement('div');
+            this.container.className = 'dice-notification';
+            this.container.id = 'diceNotification';
+            this.container.innerHTML = `
+                <div class="dice-notif-icon">🎲</div>
+                <div class="dice-notif-header">
+                    <div class="dice-notif-roller">
+                        <div class="dice-notif-avatar" id="diceNotifAvatar"></div>
+                        <div class="dice-notif-name" id="diceNotifName"></div>
+                    </div>
+                    <button class="dice-notif-close" onclick="SharedDiceSystem.hide()">×</button>
+                </div>
+                <div class="dice-notif-result">
+                    <div class="dice-notif-label">RESULTADO</div>
+                    <div class="dice-notif-value" id="diceNotifValue">0</div>
+                    <div class="dice-notif-formula" id="diceNotifFormula"></div>
+                </div>
+            `;
+            document.body.appendChild(this.container);
         }
     },
     
     show(data) {
+        this.init();
+        
+        // Se já está mostrando, esconder primeiro
         if (this.isShowing) {
             this.hide();
-            setTimeout(() => this.show(data), 600);
+            setTimeout(() => this.show(data), 400);
             return;
         }
         
-        console.log('🎲 Exibindo rolagem premium:', data);
+        console.log('🎲 Exibindo rolagem:', data);
         
         this.isShowing = true;
-        const overlay = this.overlay;
         
         // Limpar timeout anterior
         if (this.hideTimeout) {
@@ -235,141 +248,66 @@ const SharedDiceSystem = {
         }
         
         // Resetar classes
-        overlay.className = 'dice-roll-overlay show';
-        
-        // Nome do jogador
-        const rollerNameEl = document.getElementById('diceRollerName');
-        rollerNameEl.textContent = `${data.roller_name} rolou os dados`;
-        
-        // Valor do dado
-        const diceFaceValue = document.getElementById('diceFaceValue');
-        diceFaceValue.textContent = data.result;
+        this.container.className = 'dice-notification';
         
         // Adicionar classe especial
         if (data.is_critical) {
-            overlay.classList.add('critical-success');
+            this.container.classList.add('critical-success');
         } else if (data.is_failure) {
-            overlay.classList.add('critical-failure');
+            this.container.classList.add('critical-failure');
         }
         
-        // Criar partículas suaves
-        this.createSmoothParticles();
+        // Preencher dados
+        const avatar = document.getElementById('diceNotifAvatar');
+        const name = document.getElementById('diceNotifName');
+        const value = document.getElementById('diceNotifValue');
+        const formula = document.getElementById('diceNotifFormula');
         
-        // Resultado (aparece depois da animação)
+        avatar.textContent = data.roller_name.charAt(0).toUpperCase();
+        name.textContent = data.roller_name;
+        value.textContent = data.result;
+        formula.textContent = data.formula;
+        
+        // Mostrar
         setTimeout(() => {
-            const resultEl = document.getElementById('sharedDiceResult');
-            const formulaEl = document.getElementById('sharedDiceFormula');
-            
-            resultEl.textContent = data.result;
-            formulaEl.textContent = data.formula;
-            
-            // Efeito sonoro visual (opcional)
-            if (data.is_critical || data.is_failure) {
-                this.createBurst();
-            }
-        }, 2200);
+            this.container.classList.add('show');
+        }, 10);
         
-        // Auto-hide após 6 segundos
+        // Auto-hide após 5 segundos
         this.hideTimeout = setTimeout(() => {
             this.hide();
-        }, 6000);
+        }, 5000);
     },
     
     hide() {
         if (!this.isShowing) return;
         
-        const overlay = this.overlay;
-        
-        // Adicionar classe de saída
-        overlay.classList.add('hiding');
+        this.container.classList.add('hiding');
+        this.container.classList.remove('show');
         
         setTimeout(() => {
-            overlay.classList.remove('show', 'hiding', 'critical-success', 'critical-failure');
+            this.container.classList.remove('hiding');
             this.isShowing = false;
-            
-            // Limpar partículas
-            const particlesContainer = document.getElementById('diceParticles');
-            if (particlesContainer) {
-                particlesContainer.innerHTML = '';
-            }
-        }, 500);
-    },
-    
-    createSmoothParticles() {
-        const container = document.getElementById('diceParticles');
-        if (!container) return;
-        
-        container.innerHTML = '';
-        
-        // Criar 40 partículas com movimento suave
-        for (let i = 0; i < 40; i++) {
-            const particle = document.createElement('div');
-            particle.className = 'particle';
-            
-            // Posição inicial aleatória
-            particle.style.left = Math.random() * 100 + '%';
-            particle.style.bottom = '0';
-            
-            // Drift aleatório (movimento horizontal)
-            const driftStart = (Math.random() - 0.5) * 100;
-            const driftEnd = driftStart + (Math.random() - 0.5) * 200;
-            
-            particle.style.setProperty('--drift-start', driftStart + 'px');
-            particle.style.setProperty('--drift-end', driftEnd + 'px');
-            
-            // Delay aleatório
-            particle.style.animationDelay = Math.random() * 3 + 's';
-            
-            container.appendChild(particle);
-        }
-    },
-    
-    createBurst() {
-        const container = document.getElementById('diceParticles');
-        if (!container) return;
-        
-        // Criar burst de partículas no centro
-        for (let i = 0; i < 20; i++) {
-            const burst = document.createElement('div');
-            burst.className = 'particle';
-            burst.style.left = '50%';
-            burst.style.top = '50%';
-            burst.style.width = '8px';
-            burst.style.height = '8px';
-            
-            const angle = (Math.PI * 2 * i) / 20;
-            const distance = 100 + Math.random() * 100;
-            const endX = Math.cos(angle) * distance;
-            const endY = Math.sin(angle) * distance;
-            
-            burst.style.setProperty('--drift-start', '0px');
-            burst.style.setProperty('--drift-end', endX + 'px');
-            burst.style.animation = `burstParticle 1s ease-out forwards`;
-            burst.style.transform = `translate(-50%, -50%)`;
-            
-            container.appendChild(burst);
-            
-            // Remover após animação
-            setTimeout(() => burst.remove(), 1000);
-        }
+        }, 400);
     }
 };
 
-// Adicionar animação de burst
-const burstStyle = document.createElement('style');
-burstStyle.textContent = `
-    @keyframes burstParticle {
-        0% {
-            opacity: 1;
-            transform: translate(-50%, -50%) translate(0, 0) scale(1);
-        }
-        100% {
-            opacity: 0;
-            transform: translate(-50%, -50%) translate(var(--drift-end), var(--drift-end)) scale(0);
-        }
+// ==========================================
+// FUNÇÕES DE PRIVACIDADE DE DADOS
+// ==========================================
+function updateDiceVisibilityLabel() {
+    const toggle = document.getElementById('dicePrivacyToggle');
+    const label = document.getElementById('diceVisibilityLabel');
+    const desc = document.getElementById('diceVisibilityDesc');
+    
+    if (toggle.checked) {
+        label.textContent = '🔒 Privado';
+        desc.textContent = 'Apenas você vê o resultado';
+    } else {
+        label.textContent = '🌐 Público';
+        desc.textContent = 'Todos veem o resultado';
     }
-`;
-document.head.appendChild(burstStyle);
+}
 
 // ==========================================
 // DEBUG: MOSTRAR INFO DA SESSÃO
@@ -2839,6 +2777,7 @@ function toggleDiceRoller() {
 
 function rollDice(sides) {
     const result = Math.floor(Math.random() * sides) + 1;
+    const isPrivate = document.getElementById('dicePrivacyToggle')?.checked || false;
     const resultDiv = document.getElementById('diceResult');
     
     // Resultado local
@@ -2862,6 +2801,23 @@ function rollDice(sides) {
         }
     }, 10);
     
+    // Se for privado, apenas mostrar localmente
+    if (isPrivate) {
+        showToast('🔒 Rolagem privada (apenas você vê)');
+        
+        // Exibir na notificação discreta local
+        SharedDiceSystem.show({
+            roller_name: 'Mestre (Privado)',
+            dice_type: `d${sides}`,
+            result: result,
+            formula: `1d${sides}`,
+            is_critical: isCritical,
+            is_failure: isFail
+        });
+        
+        return;
+    }
+    
     // ✅ BROADCAST para todos
     socket.emit('roll_shared_dice', {
         session_id: SESSION_ID,
@@ -2878,6 +2834,7 @@ function rollCustomDice() {
     const count = parseInt(document.getElementById('customDiceCount')?.value) || 1;
     const sides = parseInt(document.getElementById('customDiceSides')?.value) || 20;
     const modifier = parseInt(document.getElementById('customDiceModifier')?.value) || 0;
+    const isPrivate = document.getElementById('dicePrivacyToggle')?.checked || false;
     
     let rolls = [];
     let sum = 0;
@@ -2908,6 +2865,22 @@ function rollCustomDice() {
     }
     
     addDiceToHistory(formula, total, isCrit, isFail, breakdown);
+    
+    // Se for privado, apenas mostrar localmente
+    if (isPrivate) {
+        showToast('🔒 Rolagem privada (apenas você vê)');
+        
+        SharedDiceSystem.show({
+            roller_name: 'Mestre (Privado)',
+            dice_type: `d${sides}`,
+            result: total,
+            formula: formula,
+            is_critical: isCrit,
+            is_failure: isFail
+        });
+        
+        return;
+    }
     
     // ✅ BROADCAST para todos
     socket.emit('roll_shared_dice', {

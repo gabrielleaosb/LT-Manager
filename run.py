@@ -1,27 +1,36 @@
 from app import app, socketio
-from pyngrok import ngrok # type: ignore
+from pyngrok import ngrok
 import os
+import sys
 
 def start_ngrok():
-    """Inicia o túnel ngrok e retorna a URL pública"""
-    # Token de autenticação (opcional, mas recomendado)
+    """Inicia o túnel ngrok otimizado"""
     ngrok_auth_token = '2w5ggh7AVEPuw4UCR4g8rBK8VLK_fWadm6LreTzgcm9d1DgC'
     
     if ngrok_auth_token:
         ngrok.set_auth_token(ngrok_auth_token)
     
-    # IMPORTANTE: Mata todas as sessões ngrok antigas primeiro
+    # Matar sessões antigas
     print("🔄 Encerrando sessões ngrok antigas...")
     ngrok.kill()
     
-    # Cria o túnel HTTP na porta 5000
-    public_url = ngrok.connect(5000, bind_tls=True)
-    print("\n" + "="*60)
+    # ✅ Configurar ngrok com opções otimizadas
+    options = {
+        "bind_tls": True,
+        "inspect": False  # Desabilita interface de inspeção
+    }
+    
+    # Criar túnel
+    public_url = ngrok.connect(5000, **options)
+    
+    print("\n" + "="*70)
     print("🌐 NGROK ATIVO!")
-    print("="*60)
+    print("="*70)
     print(f"📡 URL Pública: {public_url}")
-    print(f"🔗 Compartilhe com jogadores: {public_url}")
-    print("="*60 + "\n")
+    print(f"🔗 Link Direto: {public_url}/dashboard")
+    print("="*70)
+    print("\n💡 DICA: Compartilhe o 'Link Direto' com seus jogadores")
+    print("   (Eles verão um aviso de segurança apenas na PRIMEIRA vez)\n")
     
     return public_url
 
@@ -32,7 +41,7 @@ if __name__ == "__main__":
         # Inicia o ngrok
         ngrok_url = start_ngrok()
         
-        # Salva a URL em uma variável de ambiente
+        # Salva a URL
         os.environ['NGROK_URL'] = str(ngrok_url)
         
         # Inicia o servidor Flask
@@ -61,7 +70,6 @@ if __name__ == "__main__":
         print("4. Execute novamente este programa\n")
         
     finally:
-        # Limpa as sessões ngrok ao encerrar
         print("🧹 Limpando sessões ngrok...")
         try:
             ngrok.kill()
