@@ -23,6 +23,15 @@ const fogCtx = fogCanvas.getContext('2d');
 fogCanvas.width = CANVAS_WIDTH;
 fogCanvas.height = CANVAS_HEIGHT;
 
+// Configurar contextos para performance
+mapCtx.imageSmoothingEnabled = false;
+drawCtx.imageSmoothingEnabled = true;
+drawCtx.imageSmoothingQuality = 'high';
+
+// Otimizações de rendering
+drawingCanvas.style.willChange = 'contents';
+mapCanvas.style.willChange = 'transform';
+
 mapCanvas.width = gridCanvas.width = drawingCanvas.width = CANVAS_WIDTH;
 mapCanvas.height = gridCanvas.height = drawingCanvas.height = CANVAS_HEIGHT;
 
@@ -103,12 +112,18 @@ let tempPanning = false;
 let spacePressed = false;  // ✅ ADICIONADO
 
 // Undo/Redo
-let history = [];
-let historyIndex = -1;
+let sceneHistories = {}; 
+let currentSceneHistory = { history: [], index: -1 };
 const MAX_HISTORY = 50;
 
 // Scene Manager
 let currentSceneId = null;  // ✅ ADICIONADO
+
+// Sistema de buffer para desenho suave
+let drawingBuffer = null;
+let drawingBufferCtx = null;
+let isCurrentlyDrawingPath = false;
+let drawingFrameRequest = null;
 
 // ==========================================
 // OTIMIZAÇÕES DE PERFORMANCE
@@ -484,6 +499,10 @@ socket.on('connect', () => {
         
         socket.emit('join_session', { session_id: SESSION_ID });
         startAutoSave();
+
+        setTimeout(() => {
+            initializeSceneSystem();
+        }, 1500);
     });
 });
 
@@ -632,12 +651,23 @@ socket.on('scene_switched', (data) => {
     console.log('🎬 Cena trocada:', data);
     currentSceneId = data.scene_id;
     currentScene = data.scene;
-    // Aqui você pode adicionar lógica para carregar o conteúdo da cena
 });
 
-// ==================
-// FOG (NÉVOA)
-// ==================
+// Inicializar buffer
+function initDrawingBuffer() {
+    if (!drawingBuffer) {
+        drawingBuffer = document.createElement('canvas');
+        drawingBuffer.width = CANVAS_WIDTH;
+        drawingBuffer.height = CANVAS_HEIGHT;
+        drawingBufferCtx = drawingBuffer.getContext('2d', {
+            alpha: true,
+            desynchronized: true  // Performance hint
+        });
+        console.log('✅ Buffer de desenho criado');
+    }
+}
+
+initDrawingBuffer();
 
 // CHAT - Socket Handlers CORRIGIDOS (substitua no início do arquivo, parte 1)
 
@@ -785,10 +815,11 @@ function setBrushSize(size) {
 // ==================
 
 function redrawAll() {
-    // Usar RequestAnimationFrame para sincronizar com o navegador
+    if (isCurrentlyDrawingPath) {
+        return;
+    }
     CanvasOptimizer.scheduleRedraw(() => {
         isCurrentlyDrawing = true;
-        
         mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
         // Desenhar imagens com otimização
@@ -915,24 +946,26 @@ function redrawAll() {
 }
 
 function redrawDrawings() {
-    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    drawings.forEach(drawing => {
-        drawCtx.strokeStyle = drawing.color;
-        drawCtx.lineWidth = drawing.size;
-        drawCtx.lineCap = 'round';
-        drawCtx.lineJoin = 'round';
+    // ✅ Usar requestAnimationFrame
+    requestAnimationFrame(() => {
+        drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        if (drawing.path.length > 1) {
-            drawCtx.beginPath();
-            drawCtx.moveTo(drawing.path[0].x, drawing.path[0].y);
+        drawings.forEach(drawing => {
+            drawCtx.strokeStyle = drawing.color;
+            drawCtx.lineWidth = drawing.size;
+            drawCtx.lineCap = 'round';
+            drawCtx.lineJoin = 'round';
             
-            for (let i = 1; i < drawing.path.length; i++) {
-                drawCtx.lineTo(drawing.path[i].x, drawing.path[i].y);
+            if (drawing.path.length > 1) {
+                drawCtx.beginPath();
+                drawCtx.moveTo(drawing.path[0].x, drawing.path[0].y);
+                
+                for (let i = 1; i < drawing.path.length; i++) {
+                    drawCtx.lineTo(drawing.path[i].x, drawing.path[i].y);
+                }          
+                drawCtx.stroke();
             }
-            
-            drawCtx.stroke();
-        }
+        });
     });
 }
 
@@ -1224,7 +1257,7 @@ canvasWrapper.addEventListener('mouseleave', () => {
 // MAP MANAGER - PARTE 3 - DESENHO, ADICIONAR ITENS E CHAT
 
 // ==================
-// DESENHO LIVRE - CORRIGIDO
+// DESENHO LIVRE - TOTALMENTE REESCRITO
 // ==================
 
 function getDrawingPos(e) {
@@ -1238,23 +1271,129 @@ function getDrawingPos(e) {
     return { x, y };
 }
 
+// ✅ NOVO: Renderizar preview em tempo real
+function renderDrawingPreview() {
+    if (!isCurrentlyDrawingPath || currentPath.length < 2) return;
+    
+    // Limpar buffer
+    drawingBufferCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Configurar estilo
+    drawingBufferCtx.strokeStyle = drawingColor;
+    drawingBufferCtx.lineWidth = brushSize;
+    drawingBufferCtx.lineCap = 'round';
+    drawingBufferCtx.lineJoin = 'round';
+    
+    // Desenhar path suavizado
+    drawingBufferCtx.beginPath();
+    drawingBufferCtx.moveTo(currentPath[0].x, currentPath[0].y);
+    
+    // Usar curvas quadráticas para suavização
+    for (let i = 1; i < currentPath.length - 1; i++) {
+        const xc = (currentPath[i].x + currentPath[i + 1].x) / 2;
+        const yc = (currentPath[i].y + currentPath[i + 1].y) / 2;
+        drawingBufferCtx.quadraticCurveTo(currentPath[i].x, currentPath[i].y, xc, yc);
+    }
+    
+    // Último ponto
+    if (currentPath.length > 1) {
+        const last = currentPath[currentPath.length - 1];
+        drawingBufferCtx.lineTo(last.x, last.y);
+    }
+    
+    drawingBufferCtx.stroke();
+    
+    // Copiar buffer para canvas principal
+    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Redesenhar desenhos existentes
+    drawings.forEach(drawing => {
+        drawCtx.strokeStyle = drawing.color;
+        drawCtx.lineWidth = drawing.size;
+        drawCtx.lineCap = 'round';
+        drawCtx.lineJoin = 'round';
+        
+        if (drawing.path.length > 1) {
+            drawCtx.beginPath();
+            drawCtx.moveTo(drawing.path[0].x, drawing.path[0].y);
+            
+            for (let i = 1; i < drawing.path.length; i++) {
+                drawCtx.lineTo(drawing.path[i].x, drawing.path[i].y);
+            }
+            
+            drawCtx.stroke();
+        }
+    });
+    
+    // Sobrepor preview
+    drawCtx.drawImage(drawingBuffer, 0, 0);
+}
+
+// ✅ NOVO: Throttle para adicionar pontos
+let lastPointTime = 0;
+const POINT_INTERVAL = 8; // ms entre pontos (125 FPS max)
+
+function addDrawingPoint(x, y) {
+    const now = performance.now();
+    
+    if (now - lastPointTime < POINT_INTERVAL) {
+        return false;
+    }
+    
+    // Calcular distância do último ponto
+    if (currentPath.length > 0) {
+        const lastPoint = currentPath[currentPath.length - 1];
+        const dist = Math.hypot(x - lastPoint.x, y - lastPoint.y);
+        
+        // Ignorar pontos muito próximos
+        if (dist < 2) {
+            return false;
+        }
+    }
+    
+    currentPath.push({ x, y });
+    lastPointTime = now;
+    return true;
+}
+
+// ✅ NOVO: Loop de animação dedicado para desenho
+function scheduleDrawingRender() {
+    if (drawingFrameRequest) {
+        cancelAnimationFrame(drawingFrameRequest);
+    }
+    
+    drawingFrameRequest = requestAnimationFrame(() => {
+        renderDrawingPreview();
+        drawingFrameRequest = null;
+    });
+}
+
 drawingCanvas.addEventListener('mousedown', (e) => {
     if (e.button === 1) {
         return;
     }
     
     if (currentTool === 'draw') {
-        isDrawing = true;
-        const pos = getDrawingPos(e);
-        currentPath = [pos];
         e.preventDefault();
         e.stopPropagation();
+        
+        isDrawing = true;
+        isCurrentlyDrawingPath = true;
+        
+        const pos = getDrawingPos(e);
+        currentPath = [pos];
+        lastPointTime = performance.now();
+        
+        // Primeira renderização
+        scheduleDrawingRender();
+        
     } else if (currentTool === 'erase') {
+        e.preventDefault();
+        e.stopPropagation();
+        
         isDrawing = true;
         const pos = getDrawingPos(e);
         eraseDrawingsAt(pos.x, pos.y);
-        e.preventDefault();
-        e.stopPropagation();
     }
 });
 
@@ -1262,67 +1401,88 @@ drawingCanvas.addEventListener('mousemove', (e) => {
     if (!isDrawing) return;
     
     if (currentTool === 'draw') {
-        const pos = getDrawingPos(e);
-        currentPath.push(pos);
-        
-        drawCtx.strokeStyle = drawingColor;
-        drawCtx.lineWidth = brushSize;
-        drawCtx.lineCap = 'round';
-        drawCtx.lineJoin = 'round';
-        
-        if (currentPath.length > 1) {
-            const prev = currentPath[currentPath.length - 2];
-            const curr = currentPath[currentPath.length - 1];
-            
-            drawCtx.beginPath();
-            drawCtx.moveTo(prev.x, prev.y);
-            drawCtx.lineTo(curr.x, curr.y);
-            drawCtx.stroke();
-        }
         e.preventDefault();
         e.stopPropagation();
+        
+        const pos = getDrawingPos(e);
+        
+        // Adicionar ponto com throttle
+        if (addDrawingPoint(pos.x, pos.y)) {
+            // Agendar renderização
+            scheduleDrawingRender();
+        }
+        
     } else if (currentTool === 'erase') {
+        e.preventDefault();
+        e.stopPropagation();
+        
         const pos = getDrawingPos(e);
         eraseDrawingsAt(pos.x, pos.y);
-        e.preventDefault();
-        e.stopPropagation();
     }
 });
 
 drawingCanvas.addEventListener('mouseup', () => {
     if (isDrawing && currentPath.length > 0 && currentTool === 'draw') {
+        // Cancelar animação pendente
+        if (drawingFrameRequest) {
+            cancelAnimationFrame(drawingFrameRequest);
+            drawingFrameRequest = null;
+        }
+        
+        isCurrentlyDrawingPath = false;
+        
+        // Simplificar path (remover pontos redundantes)
+        const simplifiedPath = simplifyPath(currentPath, 2);
+        
         const drawing = {
             id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-            path: currentPath,
+            path: simplifiedPath,
             color: drawingColor,
             size: brushSize
         };
+        
         drawings.push(drawing);
         
-        // ✅ ENVIAR PARA O SERVIDOR
+        // ✅ Renderizar final
+        redrawDrawings();
+        
+        // ✅ ENVIAR PARA O SERVIDOR (apenas no final)
         socket.emit('drawing_update', {
             session_id: SESSION_ID,
             drawing: drawing
         });
         
         currentPath = [];
-        
         saveState('Desenhar');
         
-        console.log('✏️ Desenho salvo no histórico');
+        console.log('✏️ Desenho finalizado:', simplifiedPath.length, 'pontos');
     }
+    
     isDrawing = false;
+    isCurrentlyDrawingPath = false;
 });
 
 drawingCanvas.addEventListener('mouseleave', () => {
     if (isDrawing && currentPath.length > 0 && currentTool === 'draw') {
+        // Cancelar animação
+        if (drawingFrameRequest) {
+            cancelAnimationFrame(drawingFrameRequest);
+            drawingFrameRequest = null;
+        }
+        
+        isCurrentlyDrawingPath = false;
+        
+        const simplifiedPath = simplifyPath(currentPath, 2);
+        
         const drawing = {
             id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-            path: currentPath,
+            path: simplifiedPath,
             color: drawingColor,
             size: brushSize
         };
+        
         drawings.push(drawing);
+        redrawDrawings();
         
         socket.emit('drawing_update', {
             session_id: SESSION_ID,
@@ -1330,12 +1490,63 @@ drawingCanvas.addEventListener('mouseleave', () => {
         });
         
         currentPath = [];
-        
-        // ✅ ADICIONAR: Salvar no histórico
         saveState('Desenhar');
     }
+    
     isDrawing = false;
+    isCurrentlyDrawingPath = false;
 });
+
+// ✅ NOVO: Simplificar path (algoritmo Ramer-Douglas-Peucker simplificado)
+function simplifyPath(points, tolerance = 2) {
+    if (points.length <= 2) return points;
+    
+    const simplified = [points[0]];
+    
+    for (let i = 1; i < points.length - 1; i++) {
+        const prev = simplified[simplified.length - 1];
+        const curr = points[i];
+        const next = points[i + 1];
+        
+        // Calcular distância perpendicular
+        const dist = perpendicularDistance(curr, prev, next);
+        
+        if (dist > tolerance) {
+            simplified.push(curr);
+        }
+    }
+    
+    simplified.push(points[points.length - 1]);
+    
+    console.log(`📉 Path simplificado: ${points.length} → ${simplified.length} pontos`);
+    return simplified;
+}
+
+function perpendicularDistance(point, lineStart, lineEnd) {
+    const dx = lineEnd.x - lineStart.x;
+    const dy = lineEnd.y - lineStart.y;
+    
+    if (dx === 0 && dy === 0) {
+        return Math.hypot(point.x - lineStart.x, point.y - lineStart.y);
+    }
+    
+    const t = ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / (dx * dx + dy * dy);
+    
+    let closestX, closestY;
+    
+    if (t < 0) {
+        closestX = lineStart.x;
+        closestY = lineStart.y;
+    } else if (t > 1) {
+        closestX = lineEnd.x;
+        closestY = lineEnd.y;
+    } else {
+        closestX = lineStart.x + t * dx;
+        closestY = lineStart.y + t * dy;
+    }
+    
+    return Math.hypot(point.x - closestX, point.y - closestY);
+}
 
 function eraseDrawingsAt(x, y) {
     const eraseRadius = brushSize * 5;
@@ -1359,6 +1570,16 @@ function eraseDrawingsAt(x, y) {
     if (changed) {
         drawings = newDrawings;
         redrawDrawings();
+    }
+}
+
+function clearDrawings() {
+    if (confirm('Limpar todos os desenhos?')) {
+        drawings = [];
+        redrawDrawings();
+        socket.emit('clear_drawings', { session_id: SESSION_ID });
+        showToast('Desenhos limpos!');
+        saveState('Limpar Desenhos');
     }
 }
 
@@ -2690,31 +2911,47 @@ function switchToScene(sceneId) {
     
     console.log('🎬 Trocando para cena:', scene.name);
     
+    // ✅ SALVAR cena atual ANTES de trocar
     if (currentSceneId) {
         saveCurrentScene();
+        
+        // ✅ NOVO: Salvar histórico da cena atual
+        if (sceneHistories[currentSceneId]) {
+            console.log(`📚 Histórico da cena ${currentSceneId.slice(0,8)}: ${sceneHistories[currentSceneId].history.length} estados`);
+        }
     }
     
-    // Limpar arrays
+    // ✅ LIMPAR TUDO
     images = [];
     tokens = [];
     drawings = [];
     
-    // Limpar canvases
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     currentSceneId = sceneId;
     
-    // Carregar dados da cena
-    images = [
-        ...JSON.parse(JSON.stringify(scene.maps || [])),
-        ...JSON.parse(JSON.stringify(scene.entities || []))
-    ];
+    // ✅ NOVO: Inicializar histórico da nova cena se não existir
+    if (!sceneHistories[sceneId]) {
+        sceneHistories[sceneId] = {
+            history: [],
+            index: -1
+        };
+        console.log(`📚 Novo histórico criado para cena ${sceneId.slice(0,8)}`);
+    } else {
+        console.log(`📚 Histórico carregado: ${sceneHistories[sceneId].history.length} estados`);
+    }
+    
+    // ✅ CARREGAR dados da cena (DEEP COPY)
+    images = JSON.parse(JSON.stringify([
+        ...(scene.maps || []),
+        ...(scene.entities || [])
+    ]));
     tokens = JSON.parse(JSON.stringify(scene.tokens || []));
     drawings = JSON.parse(JSON.stringify(scene.drawings || []));
     
-    // ✅ CARREGAR FOG DA CENA
+    // ✅ CARREGAR FOG da cena
     if (scene.fog_image) {
         console.log('🌫️ Carregando fog da cena');
         loadFogState(scene.fog_image);
@@ -2727,11 +2964,15 @@ function switchToScene(sceneId) {
     renderImageList();
     renderTokenList();
     
+    // ✅ ATUALIZAR botões undo/redo
+    updateUndoRedoButtons();
+    
     setTimeout(() => {
         redrawAll();
         redrawDrawings();
     }, 150);
     
+    // ✅ SINCRONIZAR com servidor
     socket.emit('scene_switch', {
         session_id: SESSION_ID,
         scene_id: sceneId,
@@ -2758,6 +2999,12 @@ function deleteScene(sceneId) {
     }
     
     scenes = scenes.filter(s => s.id !== sceneId);
+    
+    // ✅ NOVO: Limpar histórico da cena deletada
+    if (sceneHistories[sceneId]) {
+        delete sceneHistories[sceneId];
+        console.log(`🗑️ Histórico da cena ${sceneId.slice(0,8)} removido`);
+    }
     
     socket.emit('scene_delete', {
         session_id: SESSION_ID,
@@ -2937,42 +3184,74 @@ if (scene && data.scene) {
 // ==================
 
 function saveState(action) {
+    // ✅ CORRIGIDO: Salvar no histórico da cena atual
+    if (!currentSceneId) {
+        console.warn('⚠️ Nenhuma cena ativa - histórico não salvo');
+        return;
+    }
+    
+    // Garantir que a cena tem histórico
+    if (!sceneHistories[currentSceneId]) {
+        sceneHistories[currentSceneId] = {
+            history: [],
+            index: -1
+        };
+    }
+    
+    const sceneHist = sceneHistories[currentSceneId];
+    
     // Remover estados futuros se estivermos no meio da história
-    if (historyIndex < history.length - 1) {
-        history = history.slice(0, historyIndex + 1);
+    if (sceneHist.index < sceneHist.history.length - 1) {
+        sceneHist.history = sceneHist.history.slice(0, sceneHist.index + 1);
     }
     
     // Salvar estado atual
     const state = {
         action: action,
         timestamp: Date.now(),
+        scene_id: currentSceneId,  // ✅ NOVO: Vincular ao ID da cena
         images: JSON.parse(JSON.stringify(images)),
         tokens: JSON.parse(JSON.stringify(tokens)),
         drawings: JSON.parse(JSON.stringify(drawings)),
         fogImage: fogCanvas.toDataURL()
     };
     
-    history.push(state);
-    historyIndex++;
+    sceneHist.history.push(state);
+    sceneHist.index++;
     
     // Limitar histórico
-    if (history.length > MAX_HISTORY) {
-        history.shift();
-        historyIndex--;
+    if (sceneHist.history.length > MAX_HISTORY) {
+        sceneHist.history.shift();
+        sceneHist.index--;
     }
     
-    console.log(`💾 Estado salvo: ${action} (${historyIndex + 1}/${history.length})`);
+    console.log(`💾 [${currentSceneId.slice(0,8)}] Estado salvo: ${action} (${sceneHist.index + 1}/${sceneHist.history.length})`);
     updateUndoRedoButtons();
 }
 
 function undo() {
-    if (historyIndex <= 0) {
+    if (!currentSceneId) {
+        showToast('⚠️ Nenhuma cena ativa');
+        return;
+    }
+    
+    const sceneHist = sceneHistories[currentSceneId];
+    
+    if (!sceneHist || sceneHist.index <= 0) {
         showToast('⚠️ Nada para desfazer');
         return;
     }
     
-    historyIndex--;
-    const state = history[historyIndex];
+    sceneHist.index--;
+    const state = sceneHist.history[sceneHist.index];
+    
+    // ✅ VERIFICAR se o estado pertence à cena atual
+    if (state.scene_id !== currentSceneId) {
+        console.error('❌ Estado pertence a outra cena!');
+        sceneHist.index++; // Reverter
+        showToast('❌ Erro: histórico corrompido');
+        return;
+    }
     
     // Restaurar estado
     images = JSON.parse(JSON.stringify(state.images));
@@ -2998,17 +3277,32 @@ function undo() {
     
     showToast(`↩️ Desfeito: ${state.action}`);
     updateUndoRedoButtons();
-    console.log(`↩️ Undo: ${historyIndex + 1}/${history.length}`);
+    console.log(`↩️ Undo: ${sceneHist.index + 1}/${sceneHist.history.length}`);
 }
 
 function redo() {
-    if (historyIndex >= history.length - 1) {
+    if (!currentSceneId) {
+        showToast('⚠️ Nenhuma cena ativa');
+        return;
+    }
+    
+    const sceneHist = sceneHistories[currentSceneId];
+    
+    if (!sceneHist || sceneHist.index >= sceneHist.history.length - 1) {
         showToast('⚠️ Nada para refazer');
         return;
     }
     
-    historyIndex++;
-    const state = history[historyIndex];
+    sceneHist.index++;
+    const state = sceneHist.history[sceneHist.index];
+    
+    // ✅ VERIFICAR se o estado pertence à cena atual
+    if (state.scene_id !== currentSceneId) {
+        console.error('❌ Estado pertence a outra cena!');
+        sceneHist.index--; // Reverter
+        showToast('❌ Erro: histórico corrompido');
+        return;
+    }
     
     // Restaurar estado
     images = JSON.parse(JSON.stringify(state.images));
@@ -3034,7 +3328,7 @@ function redo() {
     
     showToast(`↪️ Refeito: ${state.action}`);
     updateUndoRedoButtons();
-    console.log(`↪️ Redo: ${historyIndex + 1}/${history.length}`);
+    console.log(`↪️ Redo: ${sceneHist.index + 1}/${sceneHist.history.length}`);
 }
 
 function syncStateToServer() {
@@ -3081,14 +3375,43 @@ function updateUndoRedoButtons() {
     const undoBtn = document.getElementById('undoBtn');
     const redoBtn = document.getElementById('redoBtn');
     
+    if (!currentSceneId) {
+        // Sem cena ativa - desabilitar tudo
+        if (undoBtn) {
+            undoBtn.disabled = true;
+            undoBtn.style.opacity = '0.5';
+        }
+        if (redoBtn) {
+            redoBtn.disabled = true;
+            redoBtn.style.opacity = '0.5';
+        }
+        return;
+    }
+    
+    const sceneHist = sceneHistories[currentSceneId];
+    
+    if (!sceneHist) {
+        // Cena sem histórico ainda
+        if (undoBtn) {
+            undoBtn.disabled = true;
+            undoBtn.style.opacity = '0.5';
+        }
+        if (redoBtn) {
+            redoBtn.disabled = true;
+            redoBtn.style.opacity = '0.5';
+        }
+        return;
+    }
+    
+    // Atualizar botões baseado no histórico da cena atual
     if (undoBtn) {
-        undoBtn.disabled = historyIndex <= 0;
-        undoBtn.style.opacity = historyIndex <= 0 ? '0.5' : '1';
+        undoBtn.disabled = sceneHist.index <= 0;
+        undoBtn.style.opacity = sceneHist.index <= 0 ? '0.5' : '1';
     }
     
     if (redoBtn) {
-        redoBtn.disabled = historyIndex >= history.length - 1;
-        redoBtn.style.opacity = historyIndex >= history.length - 1 ? '0.5' : '1';
+        redoBtn.disabled = sceneHist.index >= sceneHist.history.length - 1;
+        redoBtn.style.opacity = sceneHist.index >= sceneHist.history.length - 1 ? '0.5' : '1';
     }
 }
 
@@ -3345,6 +3668,13 @@ function promptCreateFirstScene() {
     // Ativar cena
     currentSceneId = newScene.id;
     
+    // ✅ NOVO: Inicializar histórico da primeira cena
+    sceneHistories[newScene.id] = {
+        history: [],
+        index: -1
+    };
+    updateUndoRedoButtons();
+    
     // Sincronizar com servidor
     socket.emit('scene_create', {
         session_id: SESSION_ID,
@@ -3356,11 +3686,9 @@ function promptCreateFirstScene() {
     
     // Marcar como criado
     hasCreatedScene = true;
-    
-    // Salvar preferência no localStorage
     localStorage.setItem('rpg_has_scene_' + SESSION_ID, 'true');
     
-    // Remover overlay com animação
+    // Remover overlay
     if (sceneCreationOverlay) {
         sceneCreationOverlay.style.animation = 'fadeOut 0.3s ease';
         setTimeout(() => {
@@ -3372,7 +3700,6 @@ function promptCreateFirstScene() {
         }, 300);
     }
     
-    // Mostrar mensagem de sucesso
     showToast(`✅ Cena "${sceneName.trim()}" criada com sucesso!`);
     
     setTimeout(() => {
@@ -3405,34 +3732,43 @@ document.head.appendChild(style);
 function checkIfSceneExists() {
     console.log('🔍 Verificando se já existe cena criada...');
     
-    // Verificar no localStorage
-    const hasSceneFlag = localStorage.getItem('rpg_has_scene_' + SESSION_ID);
-    
-    // Verificar se há cenas no array
-    const hasScenesInMemory = scenes && scenes.length > 0;
-    
-    if (hasSceneFlag === 'true' || hasScenesInMemory) {
-        console.log('✅ Cena já existe - permitindo acesso');
-        hasCreatedScene = true;
-        overlayInitialized = true; // ✅ Marcar como inicializado para não abrir
-        return true;
-    }
-    
-    console.log('❌ Nenhuma cena encontrada - bloqueando acesso');
-    hasCreatedScene = false;
-    return false;
+    // ✅ CORRIGIDO: Aguardar scenes carregar
+    return new Promise((resolve) => {
+        const checkScenes = () => {
+            const hasSceneFlag = localStorage.getItem('rpg_has_scene_' + SESSION_ID);
+            const hasScenesInMemory = scenes && scenes.length > 0;
+            
+            if (hasSceneFlag === 'true' || hasScenesInMemory) {
+                console.log('✅ Cena já existe - permitindo acesso');
+                hasCreatedScene = true;
+                overlayInitialized = true;
+                resolve(true);
+            } else {
+                console.log('❌ Nenhuma cena encontrada - bloqueando acesso');
+                hasCreatedScene = false;
+                resolve(false);
+            }
+        };
+        
+        // Se scenes já está populado, verificar imediatamente
+        if (scenes && scenes.length > 0) {
+            checkScenes();
+        } else {
+            // Aguardar um pouco para scenes carregar
+            setTimeout(checkScenes, 800);
+        }
+    });
 }
 
-function initializeSceneSystem() {
+async function initializeSceneSystem() {
     console.log('🎬 Inicializando sistema de cenas...');
     
-    // ✅ Verificar se já foi inicializado
     if (overlayInitialized) {
         console.log('⚠️ Sistema já inicializado - ignorando');
         return;
     }
     
-    const exists = checkIfSceneExists();
+    const exists = await checkIfSceneExists();
     
     if (!exists) {
         console.log('🚨 Mostrando overlay obrigatório');

@@ -1787,3 +1787,25 @@ html, body {
     background: rgba(239, 68, 68, 0.2);
     border-color: var(--danger);
 }
+
+/* ==========================================
+   OTIMIZAÇÕES DE DESENHO
+   ========================================== */
+
+#drawingCanvas.drawing-mode {
+    pointer-events: auto;
+    cursor: crosshair !important;
+    touch-action: none;
+    will-change: contents;
+}
+
+#drawingCanvas {
+    /* GPU acceleration */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.canvas-wrapper.drawing-mode #drawingCanvas {
+    z-index: 10 !important;
+}

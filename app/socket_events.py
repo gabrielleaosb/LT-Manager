@@ -1,4 +1,4 @@
-from flask_socketio import emit, join_room, leave_room # type: ignore
+from flask_socketio import emit, join_room, leave_room # type: ignore  # noqa: F401
 from flask import request # type: ignore
 from app import socketio
 import time
@@ -63,18 +63,17 @@ def handle_join_session(data):
     
     session_state = active_sessions[session_id]
     
-    # Enviar estado completo
+    # ✅ CORRIGIDO: Não enviar dados globais, apenas cenas
     emit('session_state', {
-        'maps': session_state.get('maps', []),
-        'entities': session_state.get('entities', []),
-        'tokens': session_state.get('tokens', []),
-        'drawings': session_state.get('drawings', []),
-        'scenes': session_state.get('scenes', [])
+        'maps': [],  # Vazio - apenas cenas importam
+        'entities': [],
+        'tokens': [],
+        'drawings': []
     })
 
-    # ✅ CORRIGIDO: Enviar fog_image
+    # Fog vazio (será carregado pela cena)
     emit('fog_state_sync', {
-        'fog_image': session_state.get('fog_image')
+        'fog_image': None
     })
 
     # Enviar grid
@@ -88,6 +87,10 @@ def handle_join_session(data):
     })
     
     emit('players_list', {'players': list(session_state.get('players', {}).values())})
+    
+    # ✅ ENVIAR CENAS
+    emit('scenes_sync', {'scenes': session_state.get('scenes', [])})
+    
     print(f'✅ Mestre entrou na sessão: {session_id}')
 
 @socketio.on('player_join')
@@ -113,6 +116,8 @@ def handle_player_join(data):
     }
     
     session_state = active_sessions[session_id]
+    
+    # ✅ CORRIGIDO: Verificar se há cena ativa
     active_scene_id = session_state.get('active_scene_id')
     
     if active_scene_id:
@@ -123,38 +128,29 @@ def handle_player_join(data):
             visible_players = active_scene.get('visible_to_players', [])
             is_visible = player_id in visible_players
             
+            print(f'🎬 Jogador {player_name} - Cena ativa: {active_scene.get("name")} - Visível: {is_visible}')
+            
             if is_visible:
+                # ✅ TEM PERMISSÃO - Enviar cena
                 emit('scene_activated', {
                     'scene_id': active_scene_id,
                     'scene': active_scene
                 })
             else:
-                emit('session_state', {
-                    'maps': [],
-                    'entities': [],
-                    'tokens': [],
-                    'drawings': []
+                # ❌ SEM PERMISSÃO - Bloquear
+                emit('scene_blocked', {
+                    'scene_id': active_scene_id,
+                    'scene_name': active_scene.get('name')
                 })
         else:
-            emit('session_state', {
-                'maps': session_state.get('maps', []),
-                'entities': session_state.get('entities', []),
-                'tokens': session_state.get('tokens', []),
-                'drawings': session_state.get('drawings', [])
-            })
+            # Cena ativa não existe mais
+            emit('no_active_scene', {})
     else:
-        emit('session_state', {
-            'maps': session_state.get('maps', []),
-            'entities': session_state.get('entities', []),
-            'tokens': session_state.get('tokens', []),
-            'drawings': session_state.get('drawings', [])
-        })
+        # ✅ SEM CENA ATIVA - Enviar estado vazio
+        print(f'ℹ️ Nenhuma cena ativa - jogador {player_name} aguardando')
+        emit('no_active_scene', {})
     
-    # ✅ CORRIGIDO: Sempre enviar fog_image atual
-    emit('fog_state_sync', {
-        'fog_image': session_state.get('fog_image')
-    })
-    
+    # Grid settings
     emit('grid_settings_sync', {
         'grid_settings': session_state.get('grid_settings', {
             'enabled': True,
@@ -639,22 +635,16 @@ def handle_scene_update(data):
     if active_sessions[session_id].get('active_scene_id') == scene_id:
         print('🎬 Cena ativa modificada - atualizando jogadores')
         
-        # Pegar lista de jogadores
         session_data = active_sessions[session_id]
         
-        # ✅ NOVA LÓGICA: Verificar mudanças de visibilidade
+        # ✅ Verificar mudanças de visibilidade
         old_visible = set(old_scene.get('visible_to_players', [])) if old_scene else set()
         new_visible = set(scene.get('visible_to_players', []))
         
-        # Jogadores que PERDERAM acesso
+        gained_access = new_visible - old_visible
         lost_access = old_visible - new_visible
         
-        # Jogadores que GANHARAM acesso
-        gained_access = new_visible - old_visible
-        
-        print(f'📊 Mudanças de acesso:')
-        print(f'   ✅ Ganharam: {gained_access}')
-        print(f'   ❌ Perderam: {lost_access}')
+        print(f'📊 Mudanças de acesso: Ganharam: {gained_access}, Perderam: {lost_access}')
         
         # ✅ Para cada jogador conectado
         for player_id, player_data in session_data.get('players', {}).items():
@@ -666,14 +656,14 @@ def handle_scene_update(data):
             is_visible = player_id in new_visible
             
             if is_visible:
-                # ✅ JOGADOR TEM PERMISSÃO - Enviar cena completa
+                # ✅ JOGADOR TEM PERMISSÃO
                 print(f'  👁️ {player_id} - Enviando cena completa')
                 emit('scene_activated', {
                     'scene_id': scene_id,
                     'scene': scene
                 }, room=player_socket)
             else:
-                # ❌ JOGADOR NÃO TEM PERMISSÃO - Bloquear
+                # ❌ JOGADOR NÃO TEM PERMISSÃO
                 print(f'  🚫 {player_id} - Bloqueando acesso')
                 emit('scene_blocked', {
                     'scene_id': scene_id,
