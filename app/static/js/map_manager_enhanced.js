@@ -1914,8 +1914,7 @@ function paintFog(x, y, erase = false) {
             fogBrushSize,
             fogBrushSize
         );
-    }
-    
+    }  
     fogCtx.globalCompositeOperation = 'source-over';
 }
 
@@ -2011,17 +2010,22 @@ function coverAllWithFog() {
     }
 }
 
-// Eventos do fog canvas - CORRIGIDO
+// Eventos do fog canvas
+
+let fogMouseDown = false;
+
 fogCanvas.addEventListener('mousedown', (e) => {
-    // Verificar se está em modo fog
+    // ✅ VERIFICAR se está em modo fog
     if (!fogPaintMode && !fogEraseMode) {
+        console.log('❌ Não está em modo fog');
         return;
     }
     
-    if (spacePressed) return;
-    
+    // ✅ PREVENIR outros eventos
     e.preventDefault();
     e.stopPropagation();
+    
+    console.log('🖱️ Fog mousedown:', { fogPaintMode, fogEraseMode });
     
     const rect = fogCanvas.getBoundingClientRect();
     const scaleX = CANVAS_WIDTH / rect.width;
@@ -2030,15 +2034,18 @@ fogCanvas.addEventListener('mousedown', (e) => {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
     
-    fogDrawingActive = true;
+    fogMouseDown = true;
     lastFogPoint = { x, y };
     
+    // ✅ Pintar/apagar imediatamente
     paintFog(x, y, fogEraseMode);
+    
+    console.log('✅ Fog iniciado em:', x, y);
 });
 
 fogCanvas.addEventListener('mousemove', (e) => {
-    if (!fogDrawingActive) return;
-    if (spacePressed) return;
+    if (!fogMouseDown) return;
+    if (!fogPaintMode && !fogEraseMode) return;
     
     e.preventDefault();
     e.stopPropagation();
@@ -2050,6 +2057,7 @@ fogCanvas.addEventListener('mousemove', (e) => {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
     
+    // ✅ Interpolar entre último ponto e atual
     if (lastFogPoint) {
         interpolateFogPaint(lastFogPoint.x, lastFogPoint.y, x, y, fogEraseMode);
     }
@@ -2057,36 +2065,42 @@ fogCanvas.addEventListener('mousemove', (e) => {
     lastFogPoint = { x, y };
 });
 
-let fogSyncTimeout = null;
-
 fogCanvas.addEventListener('mouseup', () => {
-    if (fogDrawingActive) {
-        fogDrawingActive = false;
+    if (fogMouseDown) {
+        console.log('✅ Fog mouseup - sincronizando');
+        fogMouseDown = false;
         lastFogPoint = null;
         
-        // ✅ Esperar 500ms antes de enviar
+        // ✅ Sincronizar com delay
         clearTimeout(fogSyncTimeout);
         fogSyncTimeout = setTimeout(() => {
             PerformanceFix.syncFogThrottled(
                 SESSION_ID, 
-                fogCanvas.toDataURL('image/jpeg', 0.7) // ← Comprimir
+                fogCanvas.toDataURL('image/jpeg', 0.7)
             );
         }, 500);
     }
 });
 
 fogCanvas.addEventListener('mouseleave', () => {
-    fogDrawingActive = false;
-    lastFogPoint = null;
-    
-    // ✅ Sincronizar ao sair
-    if (fogSyncTimeout) {
-        clearTimeout(fogSyncTimeout);
-        PerformanceFix.syncFogThrottled(
-            SESSION_ID, 
-            fogCanvas.toDataURL('image/jpeg', 0.7)
-        );
+    if (fogMouseDown) {
+        console.log('✅ Fog mouseleave - finalizando');
+        fogMouseDown = false;
+        lastFogPoint = null;
+        
+        // ✅ Sincronizar ao sair
+        if (fogSyncTimeout) {
+            clearTimeout(fogSyncTimeout);
+            PerformanceFix.syncFogThrottled(
+                SESSION_ID, 
+                fogCanvas.toDataURL('image/jpeg', 0.7)
+            );
+        }
     }
+});
+
+fogCanvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
 });
 
 function clearDrawings() {

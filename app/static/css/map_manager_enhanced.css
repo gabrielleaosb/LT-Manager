@@ -837,10 +837,19 @@ html, body {
 #mapCanvas { z-index: 1; }
 #drawingCanvas { z-index: 2; pointer-events: none; }
 #gridCanvas { z-index: 3; pointer-events: none; }
-#fogCanvas { z-index: 4; pointer-events: none; }
+#fogCanvas { 
+    z-index: 4; 
+    pointer-events: none;  /* ✅ Desabilitado por padrão */
+}
 
-#drawingCanvas.drawing-mode,
+/* ✅ ATIVAR pointer-events quando em modo fog */
 #fogCanvas.fog-drawing-mode {
+    pointer-events: auto !important;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+#drawingCanvas.drawing-mode {
     pointer-events: auto;
 }
 
