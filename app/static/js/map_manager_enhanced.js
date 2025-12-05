@@ -330,24 +330,57 @@ if (savedState) {
     console.log('❌ NENHUM DADO no localStorage para esta sessão');
 }
 
-// Função de auto-save (executa a cada 10 segundos)]
+// ==========================================
+// AUTO-SAVE INTELIGENTE - OTIMIZADO
+// ==========================================
 
 let autoSaveInterval = null;
 let isSaving = false;
+let changesMade = false;
+let lastChangeTime = 0;
 
+/**
+ * Marcar que houve mudanças e agendar auto-save
+ */
+function markChanges() {
+    changesMade = true;
+    lastChangeTime = Date.now();
+    
+    // Agendar auto-save para 5 segundos após última mudança
+    PerformanceFix.scheduleAutoSave(() => {
+        if (changesMade) {
+            saveCurrentState();
+            changesMade = false;
+        }
+    }, 5000);
+}
+
+/**
+ * Iniciar sistema de auto-save
+ */
 function startAutoSave() {
     if (autoSaveInterval) {
         clearInterval(autoSaveInterval);
     }
     
-    // Auto-save a cada 30 segundos
+    // Verificar a cada 30 segundos se há mudanças não salvas
     autoSaveInterval = setInterval(() => {
-        saveCurrentState();
+        const timeSinceLastChange = Date.now() - lastChangeTime;
+        
+        // Se houve mudanças e já passou mais de 30s
+        if (changesMade && timeSinceLastChange > 30000) {
+            console.log('💾 Auto-save periódico (30s sem mudanças)');
+            saveCurrentState();
+            changesMade = false;
+        }
     }, 30000);
     
-    console.log('✅ Auto-save ativado (30s)');
+    console.log('✅ Auto-save ativado (salva 5s após última mudança)');
 }
 
+/**
+ * Salvar estado atual no banco
+ */
 async function saveCurrentState() {
     if (!SESSION_ID || isSaving) {
         return;
@@ -357,12 +390,15 @@ async function saveCurrentState() {
     console.log('💾 Salvando estado atual...');
     
     try {
+        // ✅ Comprimir fog antes de salvar (reduz de 5MB para ~500KB)
+        const compressedFog = PerformanceFix.compressFog(fogCanvas);
+        
         // Montar estado COMPLETO
         const state = {
             images: images,
             tokens: tokens,
             drawings: drawings,
-            fogImage: fogCanvas.toDataURL('image/jpeg', 0.7),
+            fogImage: compressedFog, // ← Usar fog comprimida
             scenes: scenes,
             grid_settings: {
                 enabled: gridEnabled,
@@ -377,25 +413,29 @@ async function saveCurrentState() {
         const success = await PersistenceManager.saveSession(SESSION_ID, state);
         
         if (success) {
-            updateStorageIndicator();
+            console.log('✅ Estado salvo com sucesso');
         } else {
+            console.error('❌ Erro ao salvar no banco');
             showToast('⚠️ Erro ao salvar');
         }
         
     } catch (error) {
         console.error('❌ Erro ao salvar:', error);
+        showToast('❌ Erro ao salvar estado');
     } finally {
         isSaving = false;
     }
 }
 
+/**
+ * Carregar estado salvo
+ */
 async function loadSavedState() {
     if (!SESSION_ID) return false;
     
     console.log('📂 Carregando estado salvo...');
     
     try {
-        // ✅ CORRIGIDO: Usar loadSession ao invés de loadSessionState
         const savedData = await PersistenceManager.loadSession(SESSION_ID);
         
         if (!savedData) {
@@ -434,7 +474,7 @@ async function loadSavedState() {
         
         showToast('✅ Sessão restaurada!');
         
-        // ✅ Verificar se tem cenas
+        // Verificar se tem cenas
         if (scenes && scenes.length > 0) {
             hasCreatedScene = true;
             localStorage.setItem('rpg_has_scene_' + SESSION_ID, 'true');
@@ -645,7 +685,7 @@ function preloadAllImages() {
 socket.on('connect', () => {
     console.log('✅ Conectado ao servidor');
    
-     SharedDiceSystem.init();
+    SharedDiceSystem.init();
     loadSavedState().then(wasRestored => {
         if (wasRestored) {
             console.log('♻️ Estado restaurado');
@@ -735,7 +775,7 @@ socket.on('maps_sync', (data) => {
     preloadAllImages();
     renderImageList();
     redrawAll();
-    // ✅ NÃO limpar fog aqui
+    markChanges();
     console.log('✅ Maps sync completo - fog preservado');
 });
 
@@ -747,7 +787,7 @@ socket.on('entities_sync', (data) => {
     preloadAllImages();
     renderImageList();
     redrawAll();
-    // ✅ NÃO limpar fog aqui
+    markChanges();
     console.log('✅ Entities sync completo - fog preservado');
 });
 
@@ -768,7 +808,7 @@ socket.on('token_sync', (data) => {
         preloadAllImages();
         renderTokenList();
         redrawAll();
-        // ✅ NÃO limpar fog aqui
+        markChanges();
         console.log('✅ [MESTRE] Canvas redesenhado após token_sync - fog preservado');
     });
 });
@@ -777,20 +817,24 @@ socket.on('drawing_sync', (data) => {
     drawings.push(data.drawing);
     redrawDrawings();
     redrawAll();
+    markChanges();
 });
 
 socket.on('drawings_cleared', () => {
     drawings = [];
     redrawDrawings();
     redrawAll();
+    markChanges();
 });
 
 socket.on('fog_state_sync', (data) => {
     console.log('🌫️ Fog state recebido');
     if (data.fog_image) {
         loadFogState(data.fog_image);
+        markChanges();
     } else {
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        markChanges();
     }
 });
 
@@ -798,6 +842,7 @@ socket.on('scenes_sync', (data) => {
     console.log('🎬 Sincronização de cenas recebida:', data);
     scenes = data.scenes || [];
     renderScenesList();
+    markChanges();
     console.log('🎬 Total de cenas após sync:', scenes.length);
 });
 
@@ -1739,6 +1784,7 @@ function clearDrawings() {
         socket.emit('clear_drawings', { session_id: SESSION_ID });
         showToast('Desenhos limpos!');
         saveState('Limpar Desenhos');
+        markChanges();
     }
 }
 
@@ -1896,6 +1942,7 @@ function clearAllFog() {
         });
         
         showToast('Névoa removida!');
+        markChanges();
     }
 }
 
@@ -1907,6 +1954,7 @@ function coverAllWithFog() {
         
         saveFogState();
         showToast('Mapa coberto com névoa!');
+        markChanges();
     }
 }
 
@@ -1956,17 +2004,36 @@ fogCanvas.addEventListener('mousemove', (e) => {
     lastFogPoint = { x, y };
 });
 
+let fogSyncTimeout = null;
+
 fogCanvas.addEventListener('mouseup', () => {
     if (fogDrawingActive) {
         fogDrawingActive = false;
         lastFogPoint = null;
-        saveFogState();
+        
+        // ✅ Esperar 500ms antes de enviar
+        clearTimeout(fogSyncTimeout);
+        fogSyncTimeout = setTimeout(() => {
+            PerformanceFix.syncFogThrottled(
+                SESSION_ID, 
+                fogCanvas.toDataURL('image/jpeg', 0.7) // ← Comprimir
+            );
+        }, 500);
     }
 });
 
 fogCanvas.addEventListener('mouseleave', () => {
     fogDrawingActive = false;
     lastFogPoint = null;
+    
+    // ✅ Sincronizar ao sair
+    if (fogSyncTimeout) {
+        clearTimeout(fogSyncTimeout);
+        PerformanceFix.syncFogThrottled(
+            SESSION_ID, 
+            fogCanvas.toDataURL('image/jpeg', 0.7)
+        );
+    }
 });
 
 function clearDrawings() {
@@ -2047,6 +2114,7 @@ function addImage() {
                         renderImageList();
                         showToast(`✅ Imagem "${name}" adicionada e comprimida!`);
                         saveState('Adicionar Imagem');
+                        markChanges();
                         
                         // ✅ SALVAR AUTOMATICAMENTE
                         saveToDatabaseAsync();
@@ -2137,6 +2205,7 @@ function createToken() {
                         closeTokenModal();
                         showToast(`✅ Token "${name}" adicionado e comprimido!`);
                         saveState('Adicionar Token');
+                        markChanges();
                         
                         // ✅ SALVAR AUTOMATICAMENTE
                        saveToDatabaseAsync();
@@ -2405,6 +2474,7 @@ function deleteItemById(itemId, type) {
         redrawAll();
         showToast('Item removido!');
         saveState(type === 'image' ? 'Remover Imagem' : 'Remover Token');
+        markChanges();
     }
 }
 
@@ -3340,6 +3410,7 @@ function saveCurrentScene() {
     });
     
     showToast(`💾 Cena "${scene.name}" salva`);
+    markChanges();
 }
 
 function switchToScene(sceneId) {
@@ -3422,6 +3493,7 @@ function switchToScene(sceneId) {
     renderScenesList();
     showToast(`Cena ativada: ${scene.name}`);
     closeSceneManager();
+    markChanges();
 }
 
 function deleteScene(sceneId) {
@@ -3921,7 +3993,7 @@ window.addEventListener('beforeunload', (e) => {
 
 let hasCreatedScene = false;
 let sceneCreationOverlay = null;
-let overlayInitialized = false; // ✅ NOVO - Prevenir múltiplas inicializações
+let overlayInitialized = false;
 
 function showSceneCreationOverlay() {
     // ✅ Verificar se já foi inicializado
