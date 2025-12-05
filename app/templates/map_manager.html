@@ -191,9 +191,16 @@
                 <div style="margin-bottom: 0.75rem;">
                     <label style="color: var(--text-secondary); font-size: 0.75rem; display: block; margin-bottom: 0.5rem;">Forma</label>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                        <button class="tool-btn fog-shape-btn active" onclick="setFogBrushShape('circle')">Círculo</button>
+                        <button class="tool-btn fog-shape-btn" onclick="setFogBrushShape('circle')">Círculo</button>
                         <button class="tool-btn fog-shape-btn" onclick="setFogBrushShape('square')">Quadrado</button>
                     </div>
+                </div>
+                
+                <!-- ✅ NOVO: Controle de Opacidade -->
+                <div class="control-row" style="margin-bottom: 0.75rem;">
+                    <label>Opacidade</label>
+                    <input type="range" min="0" max="1" value="0.9" step="0.05" onchange="updateFogOpacity(this.value)">
+                    <span class="grid-size-value" id="fogOpacityValue">90%</span>
                 </div>
                 
                 <div class="control-row" style="margin-bottom: 0.75rem;">

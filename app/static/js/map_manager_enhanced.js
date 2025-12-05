@@ -45,9 +45,9 @@ let scenes = [];
 
 // FOG OF WAR - 
 let fogAreas = [];       
-let fogOpacity = 1.0;    
 let fogBrushSize = 100;
 let fogBrushShape = 'circle';
+let fogOpacity = 0.9;    
 let fogDrawingActive = false;
 let fogPaintMode = false;
 let fogEraseMode = false;
@@ -1792,42 +1792,48 @@ function clearDrawings() {
 // FOG CANVAS EVENTS
 // ==================
 
-// Inicializar fog canvas vazio
 function toggleFogPaintMode() {
-    console.log('🌫️ Toggle Fog Paint');
+    console.log('🌫️ Toggle Fog Paint - Estado atual:', { fogPaintMode, fogEraseMode });
     
+    // Se já está ativo, desativar
     if (fogPaintMode) {
-        // Desativar
         ToolManager.deactivateAll();
         showToast('🌫️ Modo névoa desativado');
         return;
     }
     
-    // ✅ DESATIVAR TUDO PRIMEIRO
     ToolManager.deactivateAll();
     
     // Ativar fog paint
-    fogPaintMode = true;
-    fogEraseMode = false;
+    window.fogPaintMode = true;
+    window.fogEraseMode = false;
     
-    document.getElementById('fogPaintBtn')?.classList.add('active');
+    const paintBtn = document.getElementById('fogPaintBtn');
+    const eraseBtn = document.getElementById('fogEraseBtn');
+    
+    if (paintBtn) paintBtn.classList.add('active');
+    if (eraseBtn) eraseBtn.classList.remove('active');
     
     const fogCanvas = document.getElementById('fogCanvas');
     const canvasWrapper = document.querySelector('.canvas-wrapper');
     
-    fogCanvas.classList.add('fog-drawing-mode');
-    fogCanvas.style.cursor = 'crosshair';
-    canvasWrapper.style.cursor = 'crosshair';
+    if (fogCanvas) {
+        fogCanvas.classList.add('fog-drawing-mode');
+        fogCanvas.style.cursor = 'crosshair';
+    }
+    if (canvasWrapper) {
+        canvasWrapper.style.cursor = 'crosshair';
+    }
     
     showToast('🌫️ Modo: Pintar Névoa');
+    console.log('✅ Fog Paint ativado');
 }
 
-// Ativar modo de apagar névoa
 function toggleFogEraseMode() {
-    console.log('✨ Toggle Fog Erase');
+    console.log('✨ Toggle Fog Erase - Estado atual:', { fogPaintMode, fogEraseMode });
     
+    // Se já está ativo, desativar
     if (fogEraseMode) {
-        // Desativar
         ToolManager.deactivateAll();
         showToast('✨ Modo névoa desativado');
         return;
@@ -1837,28 +1843,50 @@ function toggleFogEraseMode() {
     ToolManager.deactivateAll();
     
     // Ativar fog erase
-    fogEraseMode = true;
-    fogPaintMode = false;
+    window.fogEraseMode = true;
+    window.fogPaintMode = false;
     
-    document.getElementById('fogEraseBtn')?.classList.add('active');
+    const paintBtn = document.getElementById('fogPaintBtn');
+    const eraseBtn = document.getElementById('fogEraseBtn');
+    
+    if (paintBtn) paintBtn.classList.remove('active');
+    if (eraseBtn) eraseBtn.classList.add('active');
     
     const fogCanvas = document.getElementById('fogCanvas');
     const canvasWrapper = document.querySelector('.canvas-wrapper');
     
-    fogCanvas.classList.add('fog-drawing-mode');
-    fogCanvas.style.cursor = 'not-allowed';
-    canvasWrapper.style.cursor = 'not-allowed';
+    if (fogCanvas) {
+        fogCanvas.classList.add('fog-drawing-mode');
+        fogCanvas.style.cursor = 'not-allowed';
+    }
+    if (canvasWrapper) {
+        canvasWrapper.style.cursor = 'not-allowed';
+    }
     
     showToast('✨ Modo: Apagar Névoa');
+    console.log('✅ Fog Erase ativado');
 }
 
 // Definir forma do pincel
 function setFogBrushShape(shape) {
     fogBrushShape = shape;
+    
+    // Remover active de todos
     document.querySelectorAll('.fog-shape-btn').forEach(btn => {
         btn.classList.remove('active');
     });
-    event.target.classList.add('active');
+    
+    // Adicionar active no clicado
+    if (typeof event !== 'undefined' && event.target) {
+        event.target.classList.add('active');
+    } else {
+        // Se chamado programaticamente, ativar o botão correto
+        const shapeBtn = Array.from(document.querySelectorAll('.fog-shape-btn'))
+            .find(btn => btn.textContent.toLowerCase().includes(shape));
+        if (shapeBtn) shapeBtn.classList.add('active');
+    }
+    
+    console.log('🔷 Forma do pincel:', shape);
 }
 
 // Atualizar tamanho do pincel
@@ -1872,12 +1900,14 @@ function paintFog(x, y, erase = false) {
     fogCtx.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
     
     if (fogBrushShape === 'circle') {
-        fogCtx.fillStyle = erase ? 'rgba(255, 255, 255, 1)' : 'rgba(0, 0, 0, 0.9)';
+        // ✅ USAR opacidade customizável
+        fogCtx.fillStyle = erase ? 'rgba(255, 255, 255, 1)' : `rgba(0, 0, 0, ${fogOpacity})`;
         fogCtx.beginPath();
         fogCtx.arc(x, y, fogBrushSize / 2, 0, Math.PI * 2);
         fogCtx.fill();
     } else if (fogBrushShape === 'square') {
-        fogCtx.fillStyle = erase ? 'rgba(255, 255, 255, 1)' : 'rgba(0, 0, 0, 0.9)';
+        // ✅ USAR opacidade customizável
+        fogCtx.fillStyle = erase ? 'rgba(255, 255, 255, 1)' : `rgba(0, 0, 0, ${fogOpacity})`;
         fogCtx.fillRect(
             x - fogBrushSize / 2,
             y - fogBrushSize / 2,
@@ -1887,6 +1917,28 @@ function paintFog(x, y, erase = false) {
     }
     
     fogCtx.globalCompositeOperation = 'source-over';
+}
+
+function updateFogOpacity(value) {
+    fogOpacity = parseFloat(value);
+    document.getElementById('fogOpacityValue').textContent = Math.round(fogOpacity * 100) + '%';
+    
+    // ✅ Redesenhar névoa existente com nova opacidade
+    if (fogCanvas.width > 0) {
+        const imageData = fogCtx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        const data = imageData.data;
+        
+        // Atualizar alpha de todos os pixels da névoa
+        for (let i = 0; i < data.length; i += 4) {
+            // Se é um pixel de névoa (preto ou escuro)
+            if (data[i] < 50 && data[i+1] < 50 && data[i+2] < 50 && data[i+3] > 0) {
+                data[i+3] = Math.round(255 * fogOpacity);  // Atualizar alpha
+            }
+        }
+        
+        fogCtx.putImageData(imageData, 0, 0);
+        console.log('🌫️ Opacidade atualizada:', Math.round(fogOpacity * 100) + '%');
+    }
 }
 
 // Interpolar entre dois pontos para pincel suave
@@ -1949,7 +2001,8 @@ function clearAllFog() {
 // Cobrir todo o mapa com névoa
 function coverAllWithFog() {
     if (confirm('Cobrir todo o mapa com névoa?')) {
-        fogCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        // ✅ USAR opacidade customizável
+        fogCtx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
         fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
         saveFogState();
@@ -2116,8 +2169,6 @@ function addImage() {
                         saveState('Adicionar Imagem');
                         markChanges();
                         
-                        // ✅ SALVAR AUTOMATICAMENTE
-                        saveToDatabaseAsync();
                     };
                     compressedImg.onerror = () => {
                         showToast('❌ Erro ao carregar imagem comprimida');
@@ -2207,8 +2258,6 @@ function createToken() {
                         saveState('Adicionar Token');
                         markChanges();
                         
-                        // ✅ SALVAR AUTOMATICAMENTE
-                       saveToDatabaseAsync();
                     };
                     compressedImg.onerror = () => {
                         showToast('❌ Erro ao carregar token comprimido');
@@ -4354,6 +4403,22 @@ socket.on('connect', () => {
         setTimeout(() => {
             initializeOnce();
         }, 1200);
+    }
+});
+
+// ==========================================
+// INICIALIZAÇÃO DO SISTEMA DE NÉVOA
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Definir forma padrão como círculo e marcar como ativo
+    fogBrushShape = 'circle';
+    
+    const circleBtn = Array.from(document.querySelectorAll('.fog-shape-btn'))
+        .find(btn => btn.textContent.toLowerCase().includes('círculo'));
+    
+    if (circleBtn) {
+        circleBtn.classList.add('active');
+        console.log('✅ Forma padrão (Círculo) ativada');
     }
 });
 
