@@ -825,7 +825,7 @@ html, body {
     cursor: crosshair !important;
 }
 
-#mapCanvas, #gridCanvas, #drawingCanvas, #fogCanvas {
+#mapCanvas, #gridCanvas, #drawingCanvas {
     position: absolute;
     top: 0;
     left: 0;
@@ -839,7 +839,7 @@ html, body {
 #gridCanvas { z-index: 3; pointer-events: none; }
 
 /* ==========================================
-   FOG OF WAR - NÉVOA PROFISSIONAL
+   FOG OF WAR - REESCRITO
    ========================================== */
 
 #fogCanvas {
@@ -849,24 +849,34 @@ html, body {
     width: 2000px;
     height: 2000px;
     z-index: 4;
-    pointer-events: none; /* ✅ Desabilitado por padrão */
+    pointer-events: none;
     image-rendering: crisp-edges;
-    touch-action: none; /* ✅ Evitar scroll em mobile */
+    touch-action: none;
+    opacity: 0.5; /* Opacidade padrão do mestre */
+    transition: opacity 0.2s ease;
 }
 
-/* ✅ Modo ativo de desenho - MÁXIMA PRIORIDADE */
-#fogCanvas.fog-drawing-mode {
-    pointer-events: auto !important; /* ✅ FORÇAR */
+/* Quando fog está ativo para desenho */
+#fogCanvas.fog-active {
+    pointer-events: auto !important;
+    z-index: 999 !important;
+}
+
+/* Cursor quando está desenhando */
+#fogCanvas.fog-paint {
     cursor: crosshair !important;
-    z-index: 9999 !important; /* ✅ Acima de TUDO */
 }
 
-/* ✅ Névoa do mestre (opacidade configurável) */
+#fogCanvas.fog-erase {
+    cursor: not-allowed !important;
+}
+
+/* Mestre sempre vê com opacidade ajustável */
 .canvas-wrapper.master-view #fogCanvas {
-    opacity: 0.5; /* Padrão - pode ser ajustado */
+    opacity: var(--fog-master-opacity, 0.5);
 }
 
-/* ✅ Névoa dos jogadores (sempre 100% opaca) */
+/* Jogadores sempre veem 100% opaco */
 .canvas-wrapper.player-view #fogCanvas {
     opacity: 1 !important;
 }
