@@ -837,21 +837,35 @@ html, body {
 #mapCanvas { z-index: 1; }
 #drawingCanvas { z-index: 2; pointer-events: none; }
 #gridCanvas { z-index: 3; pointer-events: none; }
-#fogCanvas { 
-    z-index: 4; 
-    pointer-events: none;  /* ✅ Desabilitado por padrão */
+/* ==========================================
+   FOG OF WAR - NÉVOA PROFISSIONAL
+   ========================================== */
+
+#fogCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 2000px;
+    height: 2000px;
+    z-index: 4;
+    pointer-events: none; /* Desabilitado por padrão */
+    image-rendering: crisp-edges;
 }
 
-/* ✅ ATIVAR pointer-events quando em modo fog */
-#fogCanvas.fog-drawing-mode,
-#fogCanvas[style*="pointer-events: auto"] {
+/* ✅ Modo ativo de desenho */
+#fogCanvas.fog-drawing-mode {
     pointer-events: auto !important;
     cursor: crosshair;
-    z-index: 100 !important; /* ✅ Forçar no topo */
+    z-index: 100 !important;
 }
 
-#drawingCanvas.drawing-mode {
-    pointer-events: auto;
+.canvas-wrapper.master-view #fogCanvas {
+    /* O mestre vê com a opacidade configurada */
+}
+
+/* ✅ Névoa dos jogadores (sempre 100% opaca) */
+.canvas-wrapper.player-view #fogCanvas {
+    opacity: 1 !important;
 }
 
 /* ==========================================

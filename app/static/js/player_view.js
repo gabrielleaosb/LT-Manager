@@ -696,26 +696,30 @@ socket.on('drawings_cleared', () => {
 });
 
 function loadFogStatePlayer(imageData) {
-    console.log('🌫️ [PLAYER] loadFogStatePlayer chamado', imageData ? 'COM dados' : 'SEM dados');
+    console.log('🌫️ [PLAYER] Carregando névoa');
+    
+    const fogCanvas = document.getElementById('fogCanvas');
+    const fogCtx = fogCanvas.getContext('2d');
     
     if (!imageData) {
-        console.log('🌫️ [PLAYER] Sem dados - limpando fog');
+        console.log('✨ [PLAYER] Sem névoa - limpando');
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         return;
     }
     
     const img = new Image();
     img.onload = () => {
-        console.log('✅ [PLAYER] Fog image carregado - desenhando no canvas');
+        console.log('✅ [PLAYER] Névoa carregada - aplicando');
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         fogCtx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        // ✅ FORÇAR redesenho após fog carregar
-        redrawAll();
-        console.log('✅ [PLAYER] Fog aplicado e canvas redesenhado');
+        // ✅ Forçar opacidade total no canvas
+        fogCanvas.style.opacity = '1';
+        
+        console.log('✅ [PLAYER] Névoa aplicada (100% opaca)');
     };
     img.onerror = () => {
-        console.error('❌ [PLAYER] Erro ao carregar fog image');
+        console.error('❌ [PLAYER] Erro ao carregar névoa');
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     };
     img.src = imageData;

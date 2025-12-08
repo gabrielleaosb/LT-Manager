@@ -46,10 +46,14 @@ let scenes = [];
 // FOG OF WAR 
 window.fogBrushSize = 100;
 window.fogBrushShape = 'circle';
-window.fogOpacity = 0.9;
+window.fogMasterOpacity = 0.5; 
 window.fogPaintMode = false;
 window.fogEraseMode = false;
-let lastFogPoint = null;
+
+let isFogDrawing = false;
+let lastFogX = null;
+let lastFogY = null;
+let fogSyncTimeout = null;
 
 // CHAT
 let chatContacts = [];
@@ -1814,38 +1818,24 @@ function clearDrawings() {
 // FOG CANVAS EVENTS 
 // ====================
 
-let fogSyncTimeout = null;
-let isFogDrawing = false;
-let lastFogX = null;
-let lastFogY = null;
-
-// ✅ Garantir que fogCanvas existe e está configurado
-document.addEventListener('DOMContentLoaded', () => {
-    const fogCanvas = document.getElementById('fogCanvas');
-    
-    if (fogCanvas) {
-        fogCanvas.style.pointerEvents = 'none';
-        fogCanvas.style.cursor = 'default';
-        fogCanvas.style.zIndex = '4';
-        console.log('✅ FogCanvas inicializado corretamente');
-    }
-});
-
 function toggleFogPaintMode() {
     console.log('🌫️ Toggle Fog Paint');
     
     if (window.fogPaintMode) {
-        ToolManager.deactivateFog();
+        deactivateFogModes();
         showToast('🌫️ Modo névoa desativado');
         return;
     }
     
+    // Desativar outras ferramentas
     ToolManager.deactivateAll();
-    ToolManager.deactivateFog();
+    deactivateFogModes();
     
+    // Ativar pintura
     window.fogPaintMode = true;
     window.fogEraseMode = false;
     
+    // Atualizar UI
     const paintBtn = document.getElementById('fogPaintBtn');
     const eraseBtn = document.getElementById('fogEraseBtn');
     const fogCanvas = document.getElementById('fogCanvas');
@@ -1854,31 +1844,37 @@ function toggleFogPaintMode() {
     if (eraseBtn) eraseBtn.classList.remove('active');
     
     if (fogCanvas) {
+        fogCanvas.classList.add('fog-drawing-mode');
         fogCanvas.style.pointerEvents = 'auto';
         fogCanvas.style.cursor = 'crosshair';
         fogCanvas.style.zIndex = '100';
-        fogCanvas.style.touchAction = 'none';
     }
     
-    showToast('🌫️ Modo: Pintar Névoa');
-    console.log('✅ Fog Paint ativado - pointerEvents:', fogCanvas?.style.pointerEvents);
+    showToast('🌫️ Modo: Cobrir com Névoa');
+    console.log('✅ Fog Paint ativado');
 }
 
+/**
+ * Ativar modo de revelação (apagar névoa)
+ */
 function toggleFogEraseMode() {
     console.log('✨ Toggle Fog Erase');
     
     if (window.fogEraseMode) {
-        ToolManager.deactivateFog();
+        deactivateFogModes();
         showToast('✨ Modo névoa desativado');
         return;
     }
     
+    // Desativar outras ferramentas
     ToolManager.deactivateAll();
-    ToolManager.deactivateFog();
+    deactivateFogModes();
     
+    // Ativar revelação
     window.fogEraseMode = true;
     window.fogPaintMode = false;
     
+    // Atualizar UI
     const paintBtn = document.getElementById('fogPaintBtn');
     const eraseBtn = document.getElementById('fogEraseBtn');
     const fogCanvas = document.getElementById('fogCanvas');
@@ -1887,111 +1883,61 @@ function toggleFogEraseMode() {
     if (eraseBtn) eraseBtn.classList.add('active');
     
     if (fogCanvas) {
+        fogCanvas.classList.add('fog-drawing-mode');
         fogCanvas.style.pointerEvents = 'auto';
         fogCanvas.style.cursor = 'not-allowed';
         fogCanvas.style.zIndex = '100';
-        fogCanvas.style.touchAction = 'none';
     }
     
-    showToast('✨ Modo: Apagar Névoa');
-    console.log('✅ Fog Erase ativado - pointerEvents:', fogCanvas?.style.pointerEvents);
+    showToast('✨ Modo: Revelar Áreas');
+    console.log('✅ Fog Erase ativado');
 }
 
-if (fogCanvas) {
-    // MouseDown
-    fogCanvas.addEventListener('mousedown', (e) => {
-        if (!window.fogPaintMode && !window.fogEraseMode) {
-            console.log('❌ Modo fog não ativo');
-            return;
-        }
-        
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const rect = fogCanvas.getBoundingClientRect();
-        const scaleX = CANVAS_WIDTH / rect.width;
-        const scaleY = CANVAS_HEIGHT / rect.height;
-        
-        const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;
-        
-        isFogDrawing = true;
-        lastFogX = x;
-        lastFogY = y;
-        
-        paintFog(x, y, window.fogEraseMode);
-        
-        console.log('🖱️ Fog iniciado:', { x, y, mode: window.fogEraseMode ? 'erase' : 'paint' });
-    });
-
-    // MouseMove
-    fogCanvas.addEventListener('mousemove', (e) => {
-        if (!isFogDrawing) return;
-        if (!window.fogPaintMode && !window.fogEraseMode) return;
-        
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const rect = fogCanvas.getBoundingClientRect();
-        const scaleX = CANVAS_WIDTH / rect.width;
-        const scaleY = CANVAS_HEIGHT / rect.height;
-        
-        const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;
-        
-        if (lastFogX !== null && lastFogY !== null) {
-            interpolateFogPaint(lastFogX, lastFogY, x, y, window.fogEraseMode);
-        }
-        
-        lastFogX = x;
-        lastFogY = y;
-    });
-
-    // MouseUp
-    fogCanvas.addEventListener('mouseup', () => {
-        if (isFogDrawing) {
-            console.log('✅ Fog finalizado - sincronizando');
-            isFogDrawing = false;
-            lastFogX = null;
-            lastFogY = null;
-            
-            clearTimeout(fogSyncTimeout);
-            fogSyncTimeout = setTimeout(() => {
-                PerformanceFix.syncFogThrottled(
-                    SESSION_ID, 
-                    fogCanvas.toDataURL('image/jpeg', 0.7)
-                );
-            }, 500);
-        }
-    });
-
-    // MouseLeave
-    fogCanvas.addEventListener('mouseleave', () => {
-        if (isFogDrawing) {
-            console.log('✅ Fog mouseleave - finalizando');
-            isFogDrawing = false;
-            lastFogX = null;
-            lastFogY = null;
-            
-            if (fogSyncTimeout) {
-                clearTimeout(fogSyncTimeout);
-                PerformanceFix.syncFogThrottled(
-                    SESSION_ID, 
-                    fogCanvas.toDataURL('image/jpeg', 0.7)
-                );
-            }
-        }
-    });
-
-    // Context Menu
-    fogCanvas.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-    });
-
-    console.log('✅ Eventos do fogCanvas registrados');
+/**
+ * Desativar todos os modos de fog
+ */
+function deactivateFogModes() {
+    window.fogPaintMode = false;
+    window.fogEraseMode = false;
+    
+    const fogCanvas = document.getElementById('fogCanvas');
+    const paintBtn = document.getElementById('fogPaintBtn');
+    const eraseBtn = document.getElementById('fogEraseBtn');
+    
+    if (fogCanvas) {
+        fogCanvas.classList.remove('fog-drawing-mode');
+        fogCanvas.style.pointerEvents = 'none';
+        fogCanvas.style.cursor = 'default';
+        fogCanvas.style.zIndex = '4';
+    }
+    
+    if (paintBtn) paintBtn.classList.remove('active');
+    if (eraseBtn) eraseBtn.classList.remove('active');
 }
 
-// ✅ Funções auxiliares
+/**
+ * Atualizar opacidade da névoa para o mestre
+ */
+function updateMasterFogOpacity(value) {
+    window.fogMasterOpacity = parseFloat(value);
+    
+    const opacityValue = document.getElementById('masterFogOpacityValue');
+    if (opacityValue) {
+        opacityValue.textContent = Math.round(window.fogMasterOpacity * 100) + '%';
+    }
+    
+    // ✅ Aplicar opacidade ao canvas do mestre
+    const fogCanvas = document.getElementById('fogCanvas');
+    if (fogCanvas) {
+        fogCanvas.style.opacity = window.fogMasterOpacity;
+    }
+    
+    console.log('🌫️ Opacidade do mestre:', window.fogMasterOpacity);
+}
+
+/**
+ * Configurar forma do pincel
+ */
 function setFogBrushShape(shape) {
     window.fogBrushShape = shape;
     
@@ -2006,32 +1952,36 @@ function setFogBrushShape(shape) {
     console.log('🔷 Forma do pincel:', shape);
 }
 
+/**
+ * Configurar tamanho do pincel
+ */
 function setFogBrushSize(size) {
     window.fogBrushSize = parseInt(size);
+    
     const sizeValue = document.getElementById('fogBrushSizeValue');
     if (sizeValue) {
         sizeValue.textContent = window.fogBrushSize + 'px';
     }
 }
 
-function updateFogOpacity(value) {
-    window.fogOpacity = parseFloat(value);
-    const opacityValue = document.getElementById('fogOpacityValue');
-    if (opacityValue) {
-        opacityValue.textContent = Math.round(window.fogOpacity * 100) + '%';
-    }
-}
-
+/**
+ * Pintar névoa em uma posição
+ */
 function paintFog(x, y, erase = false) {
+    const fogCanvas = document.getElementById('fogCanvas');
+    const fogCtx = fogCanvas.getContext('2d');
+    
+    // ✅ Configurar modo de composição
     fogCtx.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
     
     if (window.fogBrushShape === 'circle') {
-        fogCtx.fillStyle = erase ? 'rgba(255, 255, 255, 1)' : `rgba(0, 0, 0, ${window.fogOpacity})`;
+        // ✅ Pintar com OPACIDADE TOTAL (jogadores verão 100%)
+        fogCtx.fillStyle = erase ? 'rgba(255, 255, 255, 1)' : 'rgba(0, 0, 0, 1)';
         fogCtx.beginPath();
         fogCtx.arc(x, y, window.fogBrushSize / 2, 0, Math.PI * 2);
         fogCtx.fill();
     } else if (window.fogBrushShape === 'square') {
-        fogCtx.fillStyle = erase ? 'rgba(255, 255, 255, 1)' : `rgba(0, 0, 0, ${window.fogOpacity})`;
+        fogCtx.fillStyle = erase ? 'rgba(255, 255, 255, 1)' : 'rgba(0, 0, 0, 1)';
         fogCtx.fillRect(
             x - window.fogBrushSize / 2,
             y - window.fogBrushSize / 2,
@@ -2040,9 +1990,13 @@ function paintFog(x, y, erase = false) {
         );
     }
     
+    // Resetar composição
     fogCtx.globalCompositeOperation = 'source-over';
 }
 
+/**
+ * Interpolar pontos para desenho suave
+ */
 function interpolateFogPaint(x1, y1, x2, y2, erase) {
     const dist = Math.hypot(x2 - x1, y2 - y1);
     const steps = Math.max(1, Math.floor(dist / 5));
@@ -2055,32 +2009,73 @@ function interpolateFogPaint(x1, y1, x2, y2, erase) {
     }
 }
 
+/**
+ * Cobrir todo o mapa com névoa
+ */
 function coverAllWithFog() {
-    if (confirm('Cobrir todo o mapa com névoa?')) {
-        fogCtx.fillStyle = `rgba(0, 0, 0, ${window.fogOpacity})`;
+    if (confirm('🌫️ Cobrir todo o mapa com névoa?')) {
+        const fogCanvas = document.getElementById('fogCanvas');
+        const fogCtx = fogCanvas.getContext('2d');
+        
+        // ✅ Preencher com preto sólido
+        fogCtx.fillStyle = 'rgba(0, 0, 0, 1)';
         fogCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
+        // Sincronizar
         socket.emit('update_fog_state', {
             session_id: SESSION_ID,
-            fog_image: fogCanvas.toDataURL('image/jpeg', 0.7)
+            fog_image: fogCanvas.toDataURL('image/png')
         });
         
-        showToast('Mapa coberto com névoa!');
+        showToast('🌫️ Mapa coberto com névoa');
         markChanges();
     }
 }
 
+/**
+ * Remover toda a névoa
+ */
 function clearAllFog() {
-    if (confirm('Remover toda a névoa do mapa?')) {
+    if (confirm('✨ Revelar todo o mapa (remover névoa)?')) {
+        const fogCanvas = document.getElementById('fogCanvas');
+        const fogCtx = fogCanvas.getContext('2d');
+        
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
         socket.emit('clear_fog_state', {
             session_id: SESSION_ID
         });
         
-        showToast('Névoa removida!');
+        showToast('✨ Névoa removida');
         markChanges();
     }
+}
+
+/**
+ * Carregar estado da névoa (para sincronização)
+ */
+function loadFogState(imageData) {
+    if (!imageData) {
+        const fogCanvas = document.getElementById('fogCanvas');
+        const fogCtx = fogCanvas.getContext('2d');
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        return;
+    }
+    
+    const img = new Image();
+    img.onload = () => {
+        const fogCanvas = document.getElementById('fogCanvas');
+        const fogCtx = fogCanvas.getContext('2d');
+        
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        fogCtx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        console.log('✅ Névoa carregada');
+    };
+    img.onerror = () => {
+        console.error('❌ Erro ao carregar névoa');
+    };
+    img.src = imageData;
 }
 
 // ==================
@@ -4391,29 +4386,118 @@ socket.on('connect', () => {
 });
 
 // ==========================================
-// INICIALIZAÇÃO DO SISTEMA DE NÉVOA
+// EVENTOS DO FOG CANVAS
 // ==========================================
+
 document.addEventListener('DOMContentLoaded', () => {
-    // ✅ Garantir que fogCanvas existe
     const fogCanvas = document.getElementById('fogCanvas');
     
-    if (fogCanvas) {
-        // Estado inicial: desabilitado
-        fogCanvas.style.pointerEvents = 'none';
-        fogCanvas.style.cursor = 'default';
-        console.log('✅ FogCanvas inicializado');
+    if (!fogCanvas) {
+        console.error('❌ FogCanvas não encontrado');
+        return;
     }
     
-    // Definir forma padrão como círculo
-    fogBrushShape = 'circle';
+    // Estado inicial
+    fogCanvas.style.pointerEvents = 'none';
+    fogCanvas.style.cursor = 'default';
+    fogCanvas.style.zIndex = '4';
+    fogCanvas.style.opacity = window.fogMasterOpacity; // ✅ Opacidade inicial do mestre
     
-    const circleBtn = Array.from(document.querySelectorAll('.fog-shape-btn'))
-        .find(btn => btn.textContent.toLowerCase().includes('círculo'));
-    
-    if (circleBtn) {
-        circleBtn.classList.add('active');
-        console.log('✅ Forma padrão (Círculo) ativada');
+    // ✅ Adicionar classe para identificar como mestre
+    const canvasWrapper = document.querySelector('.canvas-wrapper');
+    if (canvasWrapper) {
+        canvasWrapper.classList.add('master-view');
     }
+    
+    console.log('✅ FogCanvas inicializado');
+    
+    // MouseDown
+    fogCanvas.addEventListener('mousedown', (e) => {
+        if (!window.fogPaintMode && !window.fogEraseMode) {
+            return;
+        }
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const rect = fogCanvas.getBoundingClientRect();
+        const scaleX = CANVAS_WIDTH / rect.width;
+        const scaleY = CANVAS_HEIGHT / rect.height;
+        
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        
+        isFogDrawing = true;
+        lastFogX = x;
+        lastFogY = y;
+        
+        paintFog(x, y, window.fogEraseMode);
+    });
+    
+    // MouseMove
+    fogCanvas.addEventListener('mousemove', (e) => {
+        if (!isFogDrawing) return;
+        if (!window.fogPaintMode && !window.fogEraseMode) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const rect = fogCanvas.getBoundingClientRect();
+        const scaleX = CANVAS_WIDTH / rect.width;
+        const scaleY = CANVAS_HEIGHT / rect.height;
+        
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        
+        if (lastFogX !== null && lastFogY !== null) {
+            interpolateFogPaint(lastFogX, lastFogY, x, y, window.fogEraseMode);
+        }
+        
+        lastFogX = x;
+        lastFogY = y;
+    });
+    
+    // MouseUp
+    fogCanvas.addEventListener('mouseup', () => {
+        if (isFogDrawing) {
+            console.log('✅ Fog finalizado - sincronizando');
+            isFogDrawing = false;
+            lastFogX = null;
+            lastFogY = null;
+            
+            // ✅ Sincronizar com delay
+            clearTimeout(fogSyncTimeout);
+            fogSyncTimeout = setTimeout(() => {
+                PerformanceFix.syncFogThrottled(
+                    SESSION_ID,
+                    fogCanvas.toDataURL('image/png')
+                );
+            }, 500);
+        }
+    });
+    
+    // MouseLeave
+    fogCanvas.addEventListener('mouseleave', () => {
+        if (isFogDrawing) {
+            console.log('✅ Fog mouseleave - finalizando');
+            isFogDrawing = false;
+            lastFogX = null;
+            lastFogY = null;
+            
+            if (fogSyncTimeout) {
+                clearTimeout(fogSyncTimeout);
+                PerformanceFix.syncFogThrottled(
+                    SESSION_ID,
+                    fogCanvas.toDataURL('image/png')
+                );
+            }
+        }
+    });
+    
+    // Prevenir menu de contexto
+    fogCanvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
 });
 
 // ==========================================
