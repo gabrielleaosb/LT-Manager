@@ -843,10 +843,11 @@ html, body {
 }
 
 /* ✅ ATIVAR pointer-events quando em modo fog */
-#fogCanvas.fog-drawing-mode {
+#fogCanvas.fog-drawing-mode,
+#fogCanvas[style*="pointer-events: auto"] {
     pointer-events: auto !important;
     cursor: crosshair;
-    touch-action: none;
+    z-index: 100 !important; /* ✅ Forçar no topo */
 }
 
 #drawingCanvas.drawing-mode {

@@ -159,39 +159,62 @@ let isCurrentlyDrawing = false;
 // ==========================================
 // GERENCIADOR DE FERRAMENTAS
 // ==========================================
+
 const ToolManager = {
     deactivateAll() {
         console.log('🔄 Desativando todas as ferramentas');
         
-        // Fog
-        window.fogPaintMode = false;
-        window.fogEraseMode = false;
-        
-        // Drawing
+        // ✅ NÃO resetar fog modes aqui
+        // Apenas limpar ferramentas de desenho normais
         window.currentTool = 'select';
         
-        // Remover classes ativas
-        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+        // Remover classes ativas dos botões (exceto fog)
+        document.querySelectorAll('.tool-btn:not(#fogPaintBtn):not(#fogEraseBtn)').forEach(btn => {
+            btn.classList.remove('active');
+        });
         
-        // Limpar cursores e classes
+        // Limpar cursores de desenho normal
         const drawingCanvas = document.getElementById('drawingCanvas');
         const canvasWrapper = document.getElementById('canvasWrapper');
-        const fogCanvas = document.getElementById('fogCanvas');
         
         if (drawingCanvas) {
             drawingCanvas.classList.remove('drawing-mode');
             drawingCanvas.style.cursor = 'default';
         }
         
-        if (canvasWrapper) {
+        if (canvasWrapper && !window.fogPaintMode && !window.fogEraseMode) {
             canvasWrapper.classList.remove('drawing-mode');
             canvasWrapper.style.cursor = 'default';
         }
         
+        console.log('✅ Ferramentas normais desativadas (fog preservado)');
+    },
+    
+    deactivateFog() {
+        console.log('🌫️ Desativando modos fog');
+        
+        window.fogPaintMode = false;
+        window.fogEraseMode = false;
+        
+        const fogCanvas = document.getElementById('fogCanvas');
+        const canvasWrapper = document.getElementById('canvasWrapper');
+        const paintBtn = document.getElementById('fogPaintBtn');
+        const eraseBtn = document.getElementById('fogEraseBtn');
+        
         if (fogCanvas) {
             fogCanvas.classList.remove('fog-drawing-mode');
+            fogCanvas.style.pointerEvents = 'none';
             fogCanvas.style.cursor = 'default';
         }
+        
+        if (canvasWrapper) {
+            canvasWrapper.style.cursor = 'default';
+        }
+        
+        if (paintBtn) paintBtn.classList.remove('active');
+        if (eraseBtn) eraseBtn.classList.remove('active');
+        
+        console.log('✅ Fog desativado');
     }
 };
 
@@ -1788,84 +1811,247 @@ function clearDrawings() {
     }
 }
 
-// ==================
-// FOG CANVAS EVENTS
-// ==================
+// ==========================================
+// FOG CANVAS EVENTS - TOTALMENTE REESCRITO
+// ==========================================
+
+let fogSyncTimeout = null;
+
+fogCanvas.style.pointerEvents = 'none'; // Desabilitado por padrão
 
 function toggleFogPaintMode() {
-    console.log('🌫️ Toggle Fog Paint - Estado atual:', { fogPaintMode, fogEraseMode });
+    console.log('🌫️ Toggle Fog Paint - Estado atual:', { fogPaintMode: window.fogPaintMode, fogEraseMode: window.fogEraseMode });
     
     // Se já está ativo, desativar
-    if (fogPaintMode) {
-        ToolManager.deactivateAll();
+    if (window.fogPaintMode) {
+        ToolManager.deactivateFog();
         showToast('🌫️ Modo névoa desativado');
         return;
     }
     
-    ToolManager.deactivateAll();
+    // ✅ Desativar apenas fog, não outras ferramentas
+    ToolManager.deactivateFog();
     
-    // Ativar fog paint
+    // ✅ Ativar fog paint
     window.fogPaintMode = true;
     window.fogEraseMode = false;
     
     const paintBtn = document.getElementById('fogPaintBtn');
     const eraseBtn = document.getElementById('fogEraseBtn');
+    const fogCanvas = document.getElementById('fogCanvas');
+    const canvasWrapper = document.getElementById('canvasWrapper');
     
     if (paintBtn) paintBtn.classList.add('active');
     if (eraseBtn) eraseBtn.classList.remove('active');
     
-    const fogCanvas = document.getElementById('fogCanvas');
-    const canvasWrapper = document.querySelector('.canvas-wrapper');
-    
     if (fogCanvas) {
         fogCanvas.classList.add('fog-drawing-mode');
+        fogCanvas.style.pointerEvents = 'auto';  // ✅ CRÍTICO
         fogCanvas.style.cursor = 'crosshair';
+        fogCanvas.style.touchAction = 'none';
     }
+    
     if (canvasWrapper) {
         canvasWrapper.style.cursor = 'crosshair';
     }
     
     showToast('🌫️ Modo: Pintar Névoa');
-    console.log('✅ Fog Paint ativado');
+    console.log('✅ Fog Paint ativado - pointer-events:', fogCanvas?.style.pointerEvents);
 }
 
 function toggleFogEraseMode() {
-    console.log('✨ Toggle Fog Erase - Estado atual:', { fogPaintMode, fogEraseMode });
+    console.log('✨ Toggle Fog Erase - Estado atual:', { fogPaintMode: window.fogPaintMode, fogEraseMode: window.fogEraseMode });
     
     // Se já está ativo, desativar
-    if (fogEraseMode) {
-        ToolManager.deactivateAll();
+    if (window.fogEraseMode) {
+        ToolManager.deactivateFog();
         showToast('✨ Modo névoa desativado');
         return;
     }
     
-    // ✅ DESATIVAR TUDO PRIMEIRO
-    ToolManager.deactivateAll();
+    // ✅ Desativar apenas fog
+    ToolManager.deactivateFog();
     
-    // Ativar fog erase
+    // ✅ Ativar fog erase
     window.fogEraseMode = true;
     window.fogPaintMode = false;
     
     const paintBtn = document.getElementById('fogPaintBtn');
     const eraseBtn = document.getElementById('fogEraseBtn');
+    const fogCanvas = document.getElementById('fogCanvas');
+    const canvasWrapper = document.getElementById('canvasWrapper');
     
     if (paintBtn) paintBtn.classList.remove('active');
     if (eraseBtn) eraseBtn.classList.add('active');
     
-    const fogCanvas = document.getElementById('fogCanvas');
-    const canvasWrapper = document.querySelector('.canvas-wrapper');
-    
     if (fogCanvas) {
         fogCanvas.classList.add('fog-drawing-mode');
+        fogCanvas.style.pointerEvents = 'auto';  // ✅ CRÍTICO
         fogCanvas.style.cursor = 'not-allowed';
+        fogCanvas.style.touchAction = 'none';
     }
+    
     if (canvasWrapper) {
         canvasWrapper.style.cursor = 'not-allowed';
     }
     
     showToast('✨ Modo: Apagar Névoa');
-    console.log('✅ Fog Erase ativado');
+    console.log('✅ Fog Erase ativado - pointer-events:', fogCanvas?.style.pointerEvents);
 }
+
+// ✅ NOVO: Sistema de eventos simplificado
+let isFogDrawing = false;
+let lastFogX = null;
+let lastFogY = null;
+
+fogCanvas.addEventListener('pointerdown', (e) => {
+    if (!fogPaintMode && !fogEraseMode) {
+        console.log('❌ Modo fog não ativo');
+        return;
+    }
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const rect = fogCanvas.getBoundingClientRect();
+    const scaleX = CANVAS_WIDTH / rect.width;
+    const scaleY = CANVAS_HEIGHT / rect.height;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    isFogDrawing = true;
+    lastFogX = x;
+    lastFogY = y;
+    
+    // Pintar/apagar imediatamente
+    paintFog(x, y, fogEraseMode);
+    
+    console.log('🖱️ Fog iniciado:', { x, y, mode: fogEraseMode ? 'erase' : 'paint' });
+});
+
+fogCanvas.addEventListener('pointermove', (e) => {
+    if (!isFogDrawing) return;
+    if (!fogPaintMode && !fogEraseMode) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const rect = fogCanvas.getBoundingClientRect();
+    const scaleX = CANVAS_WIDTH / rect.width;
+    const scaleY = CANVAS_HEIGHT / rect.height;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    // Interpolar entre último ponto e atual
+    if (lastFogX !== null && lastFogY !== null) {
+        interpolateFogPaint(lastFogX, lastFogY, x, y, fogEraseMode);
+    }
+    
+    lastFogX = x;
+    lastFogY = y;
+});
+
+fogCanvas.addEventListener('pointerup', () => {
+    if (isFogDrawing) {
+        console.log('✅ Fog finalizado - sincronizando');
+        isFogDrawing = false;
+        lastFogX = null;
+        lastFogY = null;
+        
+        // Sincronizar com delay
+        clearTimeout(fogSyncTimeout);
+        fogSyncTimeout = setTimeout(() => {
+            PerformanceFix.syncFogThrottled(
+                SESSION_ID, 
+                fogCanvas.toDataURL('image/jpeg', 0.7)
+            );
+        }, 500);
+    }
+});
+
+fogCanvas.addEventListener('pointerleave', () => {
+    if (isFogDrawing) {
+        console.log('✅ Fog mouseleave - finalizando');
+        isFogDrawing = false;
+        lastFogX = null;
+        lastFogY = null;
+        
+        // Sincronizar ao sair
+        if (fogSyncTimeout) {
+            clearTimeout(fogSyncTimeout);
+            PerformanceFix.syncFogThrottled(
+                SESSION_ID, 
+                fogCanvas.toDataURL('image/jpeg', 0.7)
+            );
+        }
+    }
+});
+
+// Prevenir menu de contexto
+fogCanvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+});
+
+// ✅ SUPORTE A TOUCH (Mobile/Tablet)
+fogCanvas.addEventListener('touchstart', (e) => {
+    if (!fogPaintMode && !fogEraseMode) return;
+    
+    e.preventDefault();
+    const touch = e.touches[0];
+    
+    const rect = fogCanvas.getBoundingClientRect();
+    const scaleX = CANVAS_WIDTH / rect.width;
+    const scaleY = CANVAS_HEIGHT / rect.height;
+    
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    
+    isFogDrawing = true;
+    lastFogX = x;
+    lastFogY = y;
+    
+    paintFog(x, y, fogEraseMode);
+    console.log('📱 Touch fog iniciado');
+});
+
+fogCanvas.addEventListener('touchmove', (e) => {
+    if (!isFogDrawing) return;
+    
+    e.preventDefault();
+    const touch = e.touches[0];
+    
+    const rect = fogCanvas.getBoundingClientRect();
+    const scaleX = CANVAS_WIDTH / rect.width;
+    const scaleY = CANVAS_HEIGHT / rect.height;
+    
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    
+    if (lastFogX !== null && lastFogY !== null) {
+        interpolateFogPaint(lastFogX, lastFogY, x, y, fogEraseMode);
+    }
+    
+    lastFogX = x;
+    lastFogY = y;
+});
+
+fogCanvas.addEventListener('touchend', () => {
+    if (isFogDrawing) {
+        isFogDrawing = false;
+        lastFogX = null;
+        lastFogY = null;
+        
+        clearTimeout(fogSyncTimeout);
+        fogSyncTimeout = setTimeout(() => {
+            PerformanceFix.syncFogThrottled(
+                SESSION_ID, 
+                fogCanvas.toDataURL('image/jpeg', 0.7)
+            );
+        }, 500);
+    }
+});
 
 // Definir forma do pincel
 function setFogBrushShape(shape) {
@@ -4424,7 +4610,17 @@ socket.on('connect', () => {
 // INICIALIZAÇÃO DO SISTEMA DE NÉVOA
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    // Definir forma padrão como círculo e marcar como ativo
+    // ✅ Garantir que fogCanvas existe
+    const fogCanvas = document.getElementById('fogCanvas');
+    
+    if (fogCanvas) {
+        // Estado inicial: desabilitado
+        fogCanvas.style.pointerEvents = 'none';
+        fogCanvas.style.cursor = 'default';
+        console.log('✅ FogCanvas inicializado');
+    }
+    
+    // Definir forma padrão como círculo
     fogBrushShape = 'circle';
     
     const circleBtn = Array.from(document.querySelectorAll('.fog-shape-btn'))
