@@ -858,7 +858,7 @@ html, body {
 #fogCanvas.fog-drawing-mode {
     pointer-events: auto !important; /* ✅ FORÇAR */
     cursor: crosshair !important;
-    z-index: 100 !important; /* ✅ Acima de TUDO */
+    z-index: 9999 !important; /* ✅ Acima de TUDO */
 }
 
 /* ✅ Névoa do mestre (opacidade configurável) */

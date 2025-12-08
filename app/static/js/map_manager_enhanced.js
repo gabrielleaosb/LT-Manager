@@ -1263,8 +1263,8 @@ canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
 
     if (window.fogPaintMode || window.fogEraseMode) {
-        console.log('🚫 Modo fog ativo - bloqueando outros eventos');
-        return;
+        console.log('🌫️ Modo fog ativo - ignorando evento do wrapper');
+        return; // Apenas retorna, não previne
     }
     
     if (e.button === 1) {
@@ -4408,7 +4408,7 @@ function initializeFogCanvas() {
     // ✅ ADICIONAR event listeners no canvas NOVO
     const freshFogCanvas = document.getElementById('fogCanvas');
     
-    // MouseDown
+    // ✅ PREVENIR propagação para camadas inferiores
     freshFogCanvas.addEventListener('mousedown', (e) => {
         if (!window.fogPaintMode && !window.fogEraseMode) {
             return;
@@ -4416,6 +4416,7 @@ function initializeFogCanvas() {
         
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation(); // ✅ CRÍTICO
         
         const rect = freshFogCanvas.getBoundingClientRect();
         const scaleX = CANVAS_WIDTH / rect.width;
@@ -4431,7 +4432,7 @@ function initializeFogCanvas() {
         paintFog(x, y, window.fogEraseMode);
         
         console.log('🖌️ Fog drawing iniciado:', { x, y, erase: window.fogEraseMode });
-    });
+    }, true); // ✅ USE CAPTURE PHASE
     
     // MouseMove
     freshFogCanvas.addEventListener('mousemove', (e) => {
@@ -4440,6 +4441,7 @@ function initializeFogCanvas() {
         
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         
         const rect = freshFogCanvas.getBoundingClientRect();
         const scaleX = CANVAS_WIDTH / rect.width;
@@ -4454,7 +4456,7 @@ function initializeFogCanvas() {
         
         lastFogX = x;
         lastFogY = y;
-    });
+    }, true);
     
     // MouseUp
     freshFogCanvas.addEventListener('mouseup', () => {
@@ -4472,7 +4474,7 @@ function initializeFogCanvas() {
                 );
             }, 500);
         }
-    });
+    }, true);
     
     // MouseLeave
     freshFogCanvas.addEventListener('mouseleave', () => {
@@ -4490,12 +4492,12 @@ function initializeFogCanvas() {
                 );
             }
         }
-    });
+    }, true);
     
     // Prevenir menu de contexto
     freshFogCanvas.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-    });
+    }, true);
     
     console.log('✅ FogCanvas configurado com sucesso');
 }
