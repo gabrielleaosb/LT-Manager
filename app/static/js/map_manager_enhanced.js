@@ -163,10 +163,11 @@ let isCurrentlyDrawing = false;
 
 const ToolManager = {
     deactivateAll() {
-        console.log('🔄 Desativando todas as ferramentas');
+        console.log('🔄 Desativando todas as ferramentas normais');
         
         window.currentTool = 'select';
         
+        // ✅ NÃO remover active dos botões fog aqui
         document.querySelectorAll('.tool-btn:not(#fogPaintBtn):not(#fogEraseBtn)').forEach(btn => {
             btn.classList.remove('active');
         });
@@ -184,7 +185,7 @@ const ToolManager = {
             canvasWrapper.style.cursor = 'default';
         }
         
-        console.log('✅ Ferramentas normais desativadas');
+        console.log('✅ Ferramentas normais desativadas (fog preservado se ativo)');
     },
     
     deactivateFog() {
@@ -522,6 +523,16 @@ function zoom(delta) {
 
 canvasWrapper.addEventListener('wheel', (e) => {
     e.preventDefault();
+    
+    if (window.fogState && (window.fogState.paintMode || window.fogState.eraseMode)) {
+        // Pan vertical com scroll
+        const panSpeed = 2;
+        panY -= e.deltaY * panSpeed;
+        panX -= e.deltaX * panSpeed;
+        applyTransform();
+        return;
+    }
+    
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
     zoom(delta);
 });
@@ -964,21 +975,62 @@ socket.on('grid_settings_sync', (data) => {
 // FERRAMENTAS
 // ==================
 
+function deselectAllTools() {
+    console.log('🔄 Desselecionando todas as ferramentas');
+    
+    // ✅ Desselecionar ferramentas normais
+    document.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // ✅ Desselecionar ferramentas de fog
+    const fogPaintBtn = document.getElementById('fogPaintBtn');
+    const fogEraseBtn = document.getElementById('fogEraseBtn');
+    
+    if (fogPaintBtn) fogPaintBtn.classList.remove('active');
+    if (fogEraseBtn) fogEraseBtn.classList.remove('active');
+    
+    // ✅ Desselecionar ferramentas de desenho (color palette)
+    document.querySelectorAll('.color-option').forEach(opt => {
+        // Manter apenas a primeira cor ativa (padrão)
+        if (opt.style.background !== 'rgb(155, 89, 182)') {
+            opt.classList.remove('active');
+        }
+    });
+    
+    console.log('✅ Todas as ferramentas desselecionadas');
+}
+
 function setTool(tool) {
     console.log('🔧 Ativando ferramenta:', tool);
     
-    // ✅ DESATIVAR TUDO PRIMEIRO
-    ToolManager.deactivateAll();
+    // ✅ Desselecionar tudo primeiro
+    deselectAllTools();
+    
+    // ✅ Desativar fog se estiver ativo
+    if (window.fogState && (window.fogState.paintMode || window.fogState.eraseMode)) {
+        deactivateFogModes();
+    }
     
     // Ativar ferramenta selecionada
     currentTool = tool;
     
-    // Remover active de todos
-    document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-    
-    // Ativar botão clicado
+    // ✅ Ativar botão clicado
     if (typeof event !== 'undefined' && event.target) {
         event.target.classList.add('active');
+    } else {
+        // Fallback: ativar por nome de tool
+        const toolButtons = {
+            'select': '.tool-btn:nth-child(1)',
+            'draw': '.tool-btn:nth-child(2)',
+            'erase': '.tool-btn:nth-child(3)'
+        };
+        
+        const selector = toolButtons[tool];
+        if (selector) {
+            const btn = document.querySelector(selector);
+            if (btn) btn.classList.add('active');
+        }
     }
     
     const canvasWrapper = document.querySelector('.canvas-wrapper');
@@ -994,6 +1046,8 @@ function setTool(tool) {
         canvasWrapper.classList.add('drawing-mode');
         canvasWrapper.style.cursor = 'not-allowed';
     } else {
+        drawingCanvas.classList.remove('drawing-mode');
+        canvasWrapper.classList.remove('drawing-mode');
         canvasWrapper.style.cursor = 'default';
     }
     
@@ -1002,8 +1056,12 @@ function setTool(tool) {
 
 function setDrawingColor(color) {
     drawingColor = color;
+    
     document.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('active'));
-    event.target.classList.add('active');
+    
+    if (typeof event !== 'undefined' && event.target) {
+        event.target.classList.add('active');
+    }
 }
 
 function setBrushSize(size) {
@@ -1807,6 +1865,9 @@ window.fogState = {
 /**
  * Ativar modo de pintura (cobrir com névoa)
  */
+/**
+ * Ativar modo de pintura (cobrir com névoa)
+ */
 function toggleFogPaintMode() {
     console.log('🌫️ Toggle Fog Paint');
     
@@ -1816,7 +1877,10 @@ function toggleFogPaintMode() {
         return;
     }
     
-    // Desativar outras ferramentas
+    // ✅ Desselecionar TODAS as ferramentas primeiro
+    deselectAllTools();
+    
+    // ✅ Desativar ferramentas normais
     ToolManager.deactivateAll();
     deactivateFogModes();
     
@@ -1824,17 +1888,14 @@ function toggleFogPaintMode() {
     window.fogState.paintMode = true;
     window.fogState.eraseMode = false;
     
-    // Atualizar UI
+    // ✅ Ativar APENAS este botão
     const paintBtn = document.getElementById('fogPaintBtn');
-    const eraseBtn = document.getElementById('fogEraseBtn');
-    
     if (paintBtn) paintBtn.classList.add('active');
-    if (eraseBtn) eraseBtn.classList.remove('active');
     
     // Ativar fog canvas
     activateFogCanvas();
     
-    showToast('🌫️ Modo: Cobrir com Névoa');
+    showToast('🌫️ Modo: Cobrir com Névoa (Use scroll para mover)');
     console.log('✅ Fog Paint ativado');
 }
 
@@ -1850,7 +1911,10 @@ function toggleFogEraseMode() {
         return;
     }
     
-    // Desativar outras ferramentas
+    // ✅ Desselecionar TODAS as ferramentas primeiro
+    deselectAllTools();
+    
+    // ✅ Desativar ferramentas normais
     ToolManager.deactivateAll();
     deactivateFogModes();
     
@@ -1858,17 +1922,14 @@ function toggleFogEraseMode() {
     window.fogState.eraseMode = true;
     window.fogState.paintMode = false;
     
-    // Atualizar UI
-    const paintBtn = document.getElementById('fogPaintBtn');
+    // ✅ Ativar APENAS este botão
     const eraseBtn = document.getElementById('fogEraseBtn');
-    
-    if (paintBtn) paintBtn.classList.remove('active');
     if (eraseBtn) eraseBtn.classList.add('active');
     
     // Ativar fog canvas
     activateFogCanvas();
     
-    showToast('✨ Modo: Revelar Áreas');
+    showToast('✨ Modo: Revelar Áreas (Use scroll para mover)');
     console.log('✅ Fog Erase ativado');
 }
 
@@ -1898,6 +1959,9 @@ function deactivateFogModes() {
 /**
  * Ativar fog canvas para interação
  */
+/**
+ * Ativar fog canvas para interação
+ */
 function activateFogCanvas() {
     const fogCanvas = document.getElementById('fogCanvas');
     const wrapper = document.querySelector('.canvas-wrapper');
@@ -1905,11 +1969,21 @@ function activateFogCanvas() {
     if (fogCanvas) {
         fogCanvas.style.pointerEvents = 'auto';
         fogCanvas.style.cursor = window.fogState.eraseMode ? 'not-allowed' : 'crosshair';
-        fogCanvas.style.zIndex = '999'; // Acima de tudo
+        fogCanvas.style.zIndex = '999';
+        
+        // ✅ Adicionar classe para indicador visual
+        fogCanvas.classList.add('fog-active');
+        if (window.fogState.paintMode) {
+            fogCanvas.classList.add('fog-paint');
+            fogCanvas.classList.remove('fog-erase');
+        } else if (window.fogState.eraseMode) {
+            fogCanvas.classList.add('fog-erase');
+            fogCanvas.classList.remove('fog-paint');
+        }
     }
     
     if (wrapper) {
-        wrapper.style.pointerEvents = 'none'; // Desabilitar outros canvas
+        wrapper.style.pointerEvents = 'none';
     }
 }
 
@@ -1923,11 +1997,14 @@ function deactivateFogCanvas() {
     if (fogCanvas) {
         fogCanvas.style.pointerEvents = 'none';
         fogCanvas.style.cursor = 'default';
-        fogCanvas.style.zIndex = '4'; // Voltar ao normal
+        fogCanvas.style.zIndex = '4';
+        
+        // ✅ Remover classes de indicador
+        fogCanvas.classList.remove('fog-active', 'fog-paint', 'fog-erase');
     }
     
     if (wrapper) {
-        wrapper.style.pointerEvents = 'auto'; // Reabilitar outros canvas
+        wrapper.style.pointerEvents = 'auto';
     }
 }
 
