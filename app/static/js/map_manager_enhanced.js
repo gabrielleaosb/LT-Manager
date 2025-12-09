@@ -502,6 +502,7 @@ function centerCanvas() {
 
 function applyTransform() {
     canvasWrapper.style.transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
+    updateZoomDisplay(); 
 }
 
 function zoom(delta) {
@@ -519,6 +520,14 @@ function zoom(delta) {
     panY = centerY - mouseCanvasY * currentScale;
     
     applyTransform();
+    updateZoomDisplay();
+}
+
+function updateZoomDisplay() {
+    const zoomLevel = document.getElementById('zoomLevel');
+    if (zoomLevel) {
+        zoomLevel.textContent = Math.round(currentScale * 100) + '%';
+    }
 }
 
 canvasWrapper.addEventListener('wheel', (e) => {
@@ -542,17 +551,8 @@ canvasWrapper.addEventListener('wheel', (e) => {
 // ==================
 
 function toggleSidebar() {
-    sidebarCollapsed = !sidebarCollapsed;
     const sidebar = document.querySelector('.tools-sidebar');
-    const toggle = document.querySelector('.sidebar-toggle');
-    
-    if (sidebarCollapsed) {
-        sidebar.classList.add('collapsed');
-        toggle.textContent = '▶';
-    } else {
-        sidebar.classList.remove('collapsed');
-        toggle.textContent = '◀';
-    }
+    sidebar.classList.toggle('collapsed');
 }
 
 // ==================
@@ -4179,13 +4179,27 @@ function updateUndoRedoButtons() {
     }
 }
 
-// Limpar Cache
 function clearLocalCache() {
-    if (confirm('⚠️ Limpar TODOS os dados salvos localmente?\n\nIsso removerá:\n- Estado da sessão\n- Cenas salvas\n- Histórico de ações\n\nOs dados no servidor serão mantidos.')) {
-        PersistenceManager.clearSession(SESSION_ID);
-        showToast('🗑️ Cache local limpo!');
+    if (confirm('🗑️ Limpar cache local?\n\nIsso vai:\n- Limpar flags de sessão\n- Limpar cache de imagens\n- Recarregar a página\n\n⚠️ Os dados no banco NÃO serão afetados')) {
+        // Limpar apenas flags e cache, não os dados do banco
+        const keysToRemove = [];
         
-        // Recarregar página
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            
+            // Remover apenas flags de cena e cache, NÃO dados do banco
+            if (key && (key.includes('rpg_has_scene_') || key.includes('_cache'))) {
+                keysToRemove.push(key);
+            }
+        }
+        
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        
+        // Limpar cache de imagens
+        loadedImages.clear();
+        
+        showToast('🗑️ Cache limpo! Recarregando...');
+        
         setTimeout(() => {
             location.reload();
         }, 1500);

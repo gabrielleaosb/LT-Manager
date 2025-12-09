@@ -100,14 +100,16 @@
 <div class="main-layout">
     <!-- Sidebar -->
     <div class="tools-sidebar">
-        <button class="sidebar-toggle" onclick="toggleSidebar()">◀</button>
         
-        <div class="sidebar-header">Ferramentas</div>
+        <div class="sidebar-header" onclick="toggleSidebar()">
+            <span class="sidebar-header-text">Ferramentas</span>
+            <span class="sidebar-header-icon">🛠️</span>
+        </div>
         
         <div class="sidebar-content">
-            <!-- Work Mode -->
+            <!-- Modo -->
             <div class="tools-section">
-                <h4>Modo de Trabalho</h4>
+                <h4>Modo</h4>
                 <div class="tool-grid">
                     <button class="tool-btn active" onclick="setTool('select')">Selecionar</button>
                     <button class="tool-btn" onclick="setTool('draw')">Desenhar</button>
@@ -117,28 +119,28 @@
             
             <!-- Grid -->
             <div class="tools-section">
-                <h4>Grid do Mapa</h4>
+                <h4>Grid</h4>
                 <div class="grid-controls">
                     <div class="control-row">
                         <label>
                             <input type="checkbox" checked onchange="toggleGrid()">
-                            Exibir Grid
+                            Ativar
                         </label>
                     </div>
                     <div class="control-row">
-                        <label>Tamanho</label>
+                        <label>Tam</label>
                         <input type="range" min="20" max="100" value="50" step="5" onchange="updateGridSize(this.value)">
                         <span class="grid-size-value" id="gridSizeValue">50px</span>
                     </div>
                 </div>
             </div>
             
-            <!-- Drawing -->
+            <!-- Desenho -->
             <div class="tools-section">
-                <h4>Desenho Livre</h4>
+                <h4>Desenho</h4>
                 <div class="grid-controls">
                     <div class="control-row">
-                        <label>Espessura</label>
+                        <label>Linha</label>
                         <input type="range" min="1" max="20" value="3" onchange="setBrushSize(this.value)">
                     </div>
                 </div>
@@ -154,21 +156,21 @@
                     <div class="color-option" style="background: #34495e;" onclick="setDrawingColor('#34495e')"></div>
                     <div class="color-option" style="background: #000000;" onclick="setDrawingColor('#000000')"></div>
                 </div>
-                <button class="action-btn" onclick="clearDrawings()">Limpar Desenhos</button>
+                <button class="action-btn" onclick="clearDrawings()">Limpar</button>
             </div>
             
-            <!-- Add Elements -->
-            <div class="tools-section">
+            <!-- Adicionar -->
+            <div class="tools-section add-elements-section">
                 <h4>Adicionar</h4>
                 <button class="action-btn" onclick="addImage()">+ Imagem</button>
                 <button class="action-btn" onclick="addToken()">+ Token</button>
             </div>
             
-            <!-- Images -->
+            <!-- Imagens -->
             <div class="tools-section">
                 <h4>Imagens</h4>
                 <div class="item-list" id="imageList">
-                    <div class="empty-state">Nenhuma imagem</div>
+                    <div class="empty-state">Vazio</div>
                 </div>
             </div>
             
@@ -176,78 +178,32 @@
             <div class="tools-section">
                 <h4>Tokens</h4>
                 <div class="item-list" id="tokenList">
-                    <div class="empty-state">Nenhum token</div>
+                    <div class="empty-state">Vazio</div>
                 </div>
             </div>
             
             <!-- Fog -->
             <div class="tools-section">
-                <h4>🌫️ Névoa (Fog of War)</h4>
-                
-                <!-- Modos de Pintura -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <button class="tool-btn" id="fogPaintBtn" onclick="toggleFogPaintMode()">
-                        🖌️ Cobrir
-                    </button>
-                    <button class="tool-btn" id="fogEraseBtn" onclick="toggleFogEraseMode()">
-                        ✨ Revelar
-                    </button>
+                <h4>Névoa</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.375rem; margin-bottom: 0.5rem;">
+                    <button class="tool-btn" id="fogPaintBtn" onclick="toggleFogPaintMode()">Cobrir</button>
+                    <button class="tool-btn" id="fogEraseBtn" onclick="toggleFogEraseMode()">Revelar</button>
                 </div>
                 
-                <!-- Aviso -->
-                <div style="background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.3); border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.75rem;">
-                    <p style="color: #ffc107; font-size: 0.75rem; margin: 0; line-height: 1.4;">
-                        <strong>ℹ️ Como funciona:</strong><br>
-                        Você vê a névoa transparente.<br>
-                        Jogadores veem 100% opaco.
-                    </p>
-                </div>
-                
-                <!-- Opacidade do Mestre -->
-                <div class="control-row" style="margin-bottom: 0.75rem;">
-                    <label>
-                        <span style="font-size: 0.75rem;">Sua Opacidade</span>
-                        <small style="display: block; color: var(--text-muted); font-size: 0.65rem; margin-top: 0.25rem;">
-                            (Jogadores sempre 100%)
-                        </small>
-                    </label>
-                    <input type="range" min="0.1" max="1" value="0.5" step="0.05" 
-                        onchange="updateMasterFogOpacity(this.value)">
+                <div class="control-row" style="margin-bottom: 0.5rem;">
+                    <label>Opac</label>
+                    <input type="range" min="0.1" max="1" value="0.5" step="0.05" onchange="updateMasterFogOpacity(this.value)">
                     <span class="grid-size-value" id="masterFogOpacityValue">50%</span>
                 </div>
                 
-                <!-- Forma do Pincel -->
-                <div style="margin-bottom: 0.75rem;">
-                    <label style="color: var(--text-secondary); font-size: 0.75rem; display: block; margin-bottom: 0.5rem;">
-                        Forma do Pincel
-                    </label>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                        <button class="tool-btn fog-shape-btn active" onclick="setFogBrushShape('circle')">
-                            ⭕ Círculo
-                        </button>
-                        <button class="tool-btn fog-shape-btn" onclick="setFogBrushShape('square')">
-                            ⬛ Quadrado
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Tamanho do Pincel -->
-                <div class="control-row" style="margin-bottom: 0.75rem;">
-                    <label>Tamanho</label>
-                    <input type="range" min="20" max="300" value="100" step="10" 
-                        onchange="setFogBrushSize(this.value)">
+                <div class="control-row" style="margin-bottom: 0.5rem;">
+                    <label>Tam</label>
+                    <input type="range" min="20" max="300" value="100" step="10" onchange="setFogBrushSize(this.value)">
                     <span class="grid-size-value" id="fogBrushSizeValue">100px</span>
                 </div>
                 
-                <!-- Ações Rápidas -->
-                <button class="action-btn" onclick="coverAllWithFog()" 
-                        style="margin-bottom: 0.5rem; background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.8));">
-                    🌫️ Cobrir Tudo
-                </button>
-                <button class="action-btn" onclick="clearAllFog()" 
-                        style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1)); border-color: rgba(239, 68, 68, 0.3);">
-                    ✨ Revelar Tudo
-                </button>
+                <button class="action-btn" onclick="coverAllWithFog()" style="margin-bottom: 0.375rem;">Cobrir Tudo</button>
+                <button class="action-btn" onclick="clearAllFog()" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1)); border-color: rgba(239, 68, 68, 0.3);">Revelar Tudo</button>
             </div>
         </div>
     </div>
