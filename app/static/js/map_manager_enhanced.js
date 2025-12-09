@@ -969,6 +969,7 @@ socket.on('grid_settings_sync', (data) => {
 });
 
 
+
 // MAP MANAGER - PARTE 2 - FERRAMENTAS E RENDER
 
 // ==================

@@ -1,35 +1,35 @@
 /* ==========================================
-   SISTEMA DE DADOS - VERSÃO DISCRETA
+   SISTEMA DE DADOS - VERSÃO COMPACTA E POSICIONADA
    ========================================== */
 
 .dice-notification {
     position: fixed;
-    bottom: 120px;
-    right: 20px;
-    width: 320px;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    width: 280px;
     background: linear-gradient(135deg, 
         rgba(15, 23, 42, 0.98) 0%, 
         rgba(30, 41, 59, 0.98) 100%);
     border: 2px solid rgba(99, 102, 241, 0.5);
-    border-radius: 16px;
-    padding: 20px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(20px);
     z-index: 10000;
-    transform: translateX(400px);
     opacity: 0;
     transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     pointer-events: none;
 }
 
 .dice-notification.show {
-    transform: translateX(0);
+    transform: translateX(-50%) translateY(0);
     opacity: 1;
     pointer-events: auto;
 }
 
 .dice-notification.hiding {
-    transform: translateX(400px);
+    transform: translateX(-50%) translateY(100px);
     opacity: 0;
 }
 
@@ -38,46 +38,47 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 15px;
+    margin-bottom: 12px;
 }
 
 .dice-notif-roller {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
 .dice-notif-avatar {
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: linear-gradient(135deg, #6366f1, #8b5cf6);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2rem;
+    font-size: 0.875rem;
+    font-weight: 600;
     border: 2px solid rgba(99, 102, 241, 0.3);
 }
 
 .dice-notif-name {
     color: #f1f5f9;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.8125rem;
 }
 
 .dice-notif-close {
     background: transparent;
     border: none;
     color: #64748b;
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     cursor: pointer;
     padding: 0;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
+    border-radius: 4px;
     transition: all 0.2s;
 }
 
@@ -89,28 +90,28 @@
 /* Resultado */
 .dice-notif-result {
     text-align: center;
-    padding: 20px 0;
+    padding: 12px 0;
 }
 
 .dice-notif-label {
     color: #94a3b8;
-    font-size: 0.75rem;
+    font-size: 0.625rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    margin-bottom: 10px;
+    margin-bottom: 6px;
     font-weight: 600;
 }
 
 .dice-notif-value {
-    font-size: 3.5rem;
+    font-size: 2.5rem;
     font-weight: 900;
     background: linear-gradient(135deg, #10b981, #059669);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     line-height: 1;
-    margin-bottom: 8px;
-    filter: drop-shadow(0 0 20px rgba(16, 185, 129, 0.3));
+    margin-bottom: 6px;
+    filter: drop-shadow(0 0 16px rgba(16, 185, 129, 0.3));
     animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -127,16 +128,16 @@
 
 .dice-notif-formula {
     color: #94a3b8;
-    font-size: 0.9rem;
+    font-size: 0.8125rem;
     font-weight: 500;
 }
 
 /* Ícone do Dado Animado */
 .dice-notif-icon {
     position: absolute;
-    top: 15px;
-    left: 15px;
-    font-size: 2rem;
+    top: 12px;
+    left: 12px;
+    font-size: 1.5rem;
     animation: diceRoll 0.6s ease-in-out;
 }
 
@@ -173,10 +174,10 @@
 
 @keyframes glowPulse {
     0%, 100% {
-        filter: drop-shadow(0 0 20px rgba(251, 191, 36, 0.5));
+        filter: drop-shadow(0 0 16px rgba(251, 191, 36, 0.5));
     }
     50% {
-        filter: drop-shadow(0 0 30px rgba(251, 191, 36, 0.8));
+        filter: drop-shadow(0 0 24px rgba(251, 191, 36, 0.8));
     }
 }
 
@@ -198,15 +199,14 @@
 
 @keyframes shake {
     0%, 100% { transform: translateX(0) scale(1); }
-    25% { transform: translateX(-5px) scale(1.05); }
-    75% { transform: translateX(5px) scale(1.05); }
+    25% { transform: translateX(-4px) scale(1.05); }
+    75% { transform: translateX(4px) scale(1.05); }
 }
 
 /* Responsivo */
 @media (max-width: 768px) {
     .dice-notification {
         width: calc(100% - 40px);
-        right: 20px;
         bottom: 80px;
     }
 }

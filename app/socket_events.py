@@ -782,7 +782,7 @@ def handle_shared_dice_roll(data):
     
     print(f'🎲 [BROADCAST] {roller_name} rolou {formula}: {result}')
     
-    # ✅ BROADCAST para TODA A SALA (incluindo o próprio remetente)
+    # ✅ BROADCAST para TODA A SALA (incluindo o mestre e o próprio remetente)
     emit('dice_rolled_shared', {
         'roller_name': roller_name,
         'dice_type': dice_type,
