@@ -69,7 +69,10 @@ let drawColor = '#9b59b6';
 let brushSize = 3;
 
 const TOKEN_RADIUS = 35;
-let loadedImages = {};
+let loadedImages = new Map();
+
+let selectedItem = null;
+let selectedType = null;
 
 // Grid
 let gridEnabled = true;
@@ -555,6 +558,14 @@ document.getElementById('loginBtn').addEventListener('click', () => {
         player_id: playerId,
         player_name: playerName
     });
+
+    setTimeout(() => {
+        console.log('🔄 [PLAYER] Solicitando cena atual...');
+        socket.emit('request_current_scene', {
+            session_id: SESSION_ID,
+            player_id: playerId
+        });
+    }, 500);
     
     showToast(`Bem-vindo, ${playerName}!`);
 });
@@ -630,20 +641,26 @@ socket.on('token_sync', (data) => {
     console.log('🎯 [JOGADOR] TOKEN SYNC recebido:', {
         timestamp: new Date().toISOString(),
         tokensCount: data.tokens?.length,
-        firstToken: data.tokens?.[0] ? {
-            name: data.tokens[0].name,
-            x: data.tokens[0].x,
-            y: data.tokens[0].y
-        } : null
+        tokens: data.tokens
     });
     
-    tokens = data.tokens || [];
+    if (!data.tokens || data.tokens.length === 0) {
+        console.warn('⚠️ [JOGADOR] Nenhum token recebido');
+        tokens = [];
+        redrawAll();
+        return;
+    }
     
-    // FORÇAR redesenho imediato
+    tokens = data.tokens;
+    console.log('✅ [JOGADOR] Tokens atualizados:', tokens.length);
+    
+    // ✅ Preload e redesenhar
     window.requestAnimationFrame(() => {
         preloadAllImages();
-        redrawAll();
-        console.log('✅ [JOGADOR] Canvas redesenhado após token_sync');
+        setTimeout(() => {
+            redrawAll();
+            console.log('✅ [JOGADOR] Canvas redesenhado');
+        }, 100);
     });
 });
 
@@ -799,6 +816,8 @@ socket.on('scene_activated', (data) => {
         drawings: drawings.length,
         hasFog: !!scene.fog_image
     });
+    loadedImages.clear();
+    console.log('🧹 Cache de imagens limpo');
     
     // ✅ Carregar névoa
     if (scene.fog_image) {
@@ -961,41 +980,69 @@ function preloadAllImages() {
         }
     };
 
-    [...maps, ...entities].forEach(img => {
-        if (img.image && !loadedImages[img.id]) {
-            imagesToLoad++;
-            const i = new Image();
-            i.onload = () => {
-                loadedImages[img.id] = i;
-                checkAllLoaded();
-            };
-            i.onerror = () => {
-                console.error('Erro ao carregar imagem:', img.id);
-                checkAllLoaded();
-            };
-            i.src = img.image;
-        }
-    });
-    
-    tokens.forEach(token => {
-        if (token.image && !loadedImages[token.id]) {
-            imagesToLoad++;
-            const i = new Image();
-            i.onload = () => {
-                loadedImages[token.id] = i;
-                checkAllLoaded();
-            };
-            i.onerror = () => {
-                console.error('Erro ao carregar token:', token.id);
-                checkAllLoaded();
-            };
-            i.src = token.image;
-        }
-    });
+    // ✅ Preload mapas
+    if (maps && Array.isArray(maps)) {
+        maps.forEach(img => {
+            if (img.image && !loadedImages.has(img.id)) {
+                imagesToLoad++;
+                const i = new Image();
+                i.onload = () => {
+                    loadedImages.set(img.id, i);
+                    checkAllLoaded();
+                };
+                i.onerror = () => {
+                    console.error('Erro ao carregar mapa:', img.id);
+                    checkAllLoaded();
+                };
+                i.src = img.image;
+            }
+        });
+    }
 
-    // Se não há imagens para carregar, redesenha imediatamente
+    // ✅ Preload entities
+    if (entities && Array.isArray(entities)) {
+        entities.forEach(img => {
+            if (img.image && !loadedImages.has(img.id)) {
+                imagesToLoad++;
+                const i = new Image();
+                i.onload = () => {
+                    loadedImages.set(img.id, i);
+                    checkAllLoaded();
+                };
+                i.onerror = () => {
+                    console.error('Erro ao carregar entidade:', img.id);
+                    checkAllLoaded();
+                };
+                i.src = img.image;
+            }
+        });
+    }
+    
+    // ✅ Preload tokens
+    if (tokens && Array.isArray(tokens)) {
+        tokens.forEach(token => {
+            if (token.image && !loadedImages.has(token.id)) {
+                imagesToLoad++;
+                const i = new Image();
+                i.onload = () => {
+                    loadedImages.set(token.id, i);
+                    checkAllLoaded();
+                };
+                i.onerror = () => {
+                    console.error('Erro ao carregar token:', token.id);
+                    checkAllLoaded();
+                };
+                i.src = token.image;
+            }
+        });
+    }
+
+    // ✅ Se não há imagens, redesenhar mesmo assim
     if (imagesToLoad === 0) {
+        console.log('ℹ️ Nenhuma imagem para carregar');
         redrawAll();
+    } else {
+        console.log(`📦 Carregando ${imagesToLoad} imagens...`);
     }
 }
 
@@ -1006,133 +1053,129 @@ function preloadAllImages() {
 // ==================
 
 function redrawAll() {
-    // Usar RequestAnimationFrame para sincronizar com o navegador
     CanvasOptimizer.scheduleRedraw(() => {
-        isCurrentlyDrawing = true;
+        isPlayerDrawing = true;
         
         mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        // Desenhar imagens com otimização
-        const allImages = [...maps, ...entities];
-        allImages.forEach(img => {
-            const loadedImg = loadedImages[img.id];
-            
-            if (loadedImg && loadedImg.complete && loadedImg.naturalWidth > 0) {
-                try {
-                    CanvasOptimizer.optimizeImageDraw(
-                        mapCtx, 
-                        loadedImg, 
-                        img.x, 
-                        img.y, 
-                        img.width, 
-                        img.height
-                    );
-                    
-                    // Seleção
-                    if (selectedItem === img && selectedType === 'image') {
-                        mapCtx.strokeStyle = '#ffc107';
-                        mapCtx.lineWidth = 4;
-                        mapCtx.strokeRect(img.x, img.y, img.width, img.height);
-                        
-                        const handleSize = 10;
-                        mapCtx.fillStyle = '#9b59b6';
-                        mapCtx.fillRect(
-                            img.x + img.width - handleSize/2, 
-                            img.y + img.height - handleSize/2, 
-                            handleSize, 
-                            handleSize
+        // ✅ Desenhar mapas
+        if (maps && Array.isArray(maps)) {
+            maps.forEach(img => {
+                const loadedImg = loadedImages.get(img.id);
+                
+                if (loadedImg && loadedImg.complete && loadedImg.naturalWidth > 0) {
+                    try {
+                        CanvasOptimizer.optimizeImageDraw(
+                            mapCtx, 
+                            loadedImg, 
+                            img.x, 
+                            img.y, 
+                            img.width, 
+                            img.height
                         );
+                    } catch (e) {
+                        console.error('Erro ao desenhar mapa:', e);
                     }
-                } catch (e) {
-                    console.error('Erro ao desenhar imagem:', e);
                 }
-            }
-        });
+            });
+        }
         
-        // Desenhar tokens
-        tokens.forEach(token => {
-            const img = loadedImages.get(token.id);
-            
-            if (token.style === 'square' && img && img.complete && img.naturalWidth > 0) {
-                try {
-                    const tokenSize = TOKEN_RADIUS * 1.8;
-                    CanvasOptimizer.optimizeImageDraw(
-                        mapCtx,
-                        img,
-                        token.x - tokenSize/2,
-                        token.y - tokenSize/2,
-                        tokenSize,
-                        tokenSize
-                    );
-                } catch (e) {
-                    console.error('Erro ao desenhar token quadrado:', e);
+        // ✅ Desenhar entidades
+        if (entities && Array.isArray(entities)) {
+            entities.forEach(img => {
+                const loadedImg = loadedImages.get(img.id);
+                
+                if (loadedImg && loadedImg.complete && loadedImg.naturalWidth > 0) {
+                    try {
+                        CanvasOptimizer.optimizeImageDraw(
+                            mapCtx, 
+                            loadedImg, 
+                            img.x, 
+                            img.y, 
+                            img.width, 
+                            img.height
+                        );
+                    } catch (e) {
+                        console.error('Erro ao desenhar entidade:', e);
+                    }
                 }
-            } else if (img && img.complete && img.naturalWidth > 0) {
-                try {
-                    mapCtx.save();
+            });
+        }
+        
+        // ✅ Desenhar tokens
+        if (tokens && Array.isArray(tokens)) {
+            tokens.forEach(token => {
+                const img = loadedImages.get(token.id);
+                
+                if (token.style === 'square' && img && img.complete && img.naturalWidth > 0) {
+                    try {
+                        const tokenSize = TOKEN_RADIUS * 1.8;
+                        CanvasOptimizer.optimizeImageDraw(
+                            mapCtx,
+                            img,
+                            token.x - tokenSize/2,
+                            token.y - tokenSize/2,
+                            tokenSize,
+                            tokenSize
+                        );
+                    } catch (e) {
+                        console.error('Erro ao desenhar token quadrado:', e);
+                    }
+                } else if (img && img.complete && img.naturalWidth > 0) {
+                    try {
+                        mapCtx.save();
+                        mapCtx.beginPath();
+                        mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                        mapCtx.closePath();
+                        mapCtx.clip();
+                        
+                        CanvasOptimizer.optimizeImageDraw(
+                            mapCtx,
+                            img,
+                            token.x - TOKEN_RADIUS,
+                            token.y - TOKEN_RADIUS,
+                            TOKEN_RADIUS * 2,
+                            TOKEN_RADIUS * 2
+                        );
+                        
+                        mapCtx.restore();
+                        
+                        mapCtx.strokeStyle = "#fff";
+                        mapCtx.lineWidth = 2;
+                        mapCtx.beginPath();
+                        mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                        mapCtx.stroke();
+                    } catch (e) {
+                        console.error('Erro ao desenhar token:', e);
+                    }
+                } else if (token.color) {
+                    // Token sem imagem (apenas cor)
+                    mapCtx.fillStyle = token.color;
                     mapCtx.beginPath();
                     mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-                    mapCtx.closePath();
-                    mapCtx.clip();
-                    
-                    CanvasOptimizer.optimizeImageDraw(
-                        mapCtx,
-                        img,
-                        token.x - TOKEN_RADIUS,
-                        token.y - TOKEN_RADIUS,
-                        TOKEN_RADIUS * 2,
-                        TOKEN_RADIUS * 2
-                    );
-                    
-                    mapCtx.restore();
+                    mapCtx.fill();
                     
                     mapCtx.strokeStyle = "#fff";
                     mapCtx.lineWidth = 2;
                     mapCtx.beginPath();
                     mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
                     mapCtx.stroke();
-                } catch (e) {
-                    console.error('Erro ao desenhar token:', e);
                 }
-            } else if (token.color) {
-                mapCtx.fillStyle = token.color;
-                mapCtx.beginPath();
-                mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-                mapCtx.fill();
                 
-                mapCtx.strokeStyle = "#fff";
-                mapCtx.lineWidth = 2;
-                mapCtx.beginPath();
-                mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-                mapCtx.stroke();
-            }
-            
-            // Nome do token
-            mapCtx.fillStyle = "#fff";
-            mapCtx.font = "bold 11px Lato";
-            mapCtx.textAlign = "center";
-            mapCtx.strokeStyle = "#000";
-            mapCtx.lineWidth = 2.5;
-            
-            const nameY = token.style === 'square' ? token.y + TOKEN_RADIUS * 1.8 / 2 + 15 : token.y + TOKEN_RADIUS + 15;
-            mapCtx.strokeText(token.name, token.x, nameY);
-            mapCtx.fillText(token.name, token.x, nameY);
-
-            if (selectedItem === token && selectedType === 'token') {
-                mapCtx.strokeStyle = "#ffc107";
-                mapCtx.lineWidth = 4;
-                mapCtx.beginPath();
-                if (token.style === 'square') {
-                    const tokenSize = TOKEN_RADIUS * 1.8;
-                    mapCtx.strokeRect(token.x - tokenSize/2 - 5, token.y - tokenSize/2 - 5, tokenSize + 10, tokenSize + 10);
-                } else {
-                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS + 5, 0, Math.PI * 2);
-                    mapCtx.stroke();
-                }
-            }
-        });
+                // Nome do token
+                mapCtx.fillStyle = "#fff";
+                mapCtx.font = "bold 11px Lato";
+                mapCtx.textAlign = "center";
+                mapCtx.strokeStyle = "#000";
+                mapCtx.lineWidth = 2.5;
+                
+                const nameY = token.style === 'square' ? token.y + TOKEN_RADIUS * 1.8 / 2 + 15 : token.y + TOKEN_RADIUS + 15;
+                mapCtx.strokeText(token.name, token.x, nameY);
+                mapCtx.fillText(token.name, token.x, nameY);
+            });
+        }
         
-        isCurrentlyDrawing = false;
+        isPlayerDrawing = false;
     });
 }
 
@@ -1847,14 +1890,31 @@ function showToast(msg) {
 }
 
 // ========== INIT ==========
-setTimeout(() => {
-    currentScale = 0.5; 
+function initializePlayerView() {
+    console.log('🎬 [PLAYER] Inicializando visualização...');
+    
+    // Configurar canvas
+    currentScale = 0.5;
     centerCanvas();
-    console.log('[PLAYER] Canvas centralizado. Pan:', panX, panY, 'Scale:', currentScale);
-}, 100);
+    drawGrid();
+    
+    // Limpar tudo
+    mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    console.log('✅ [PLAYER] View inicializada');
+}
+
+// ✅ Aguardar DOM e scripts carregarem
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(initializePlayerView, 200);
+    });
+} else {
+    setTimeout(initializePlayerView, 200);
+}
 
 window.addEventListener('resize', () => {
     centerCanvas();
 });
-
-drawGrid();

@@ -68,9 +68,15 @@
             </div>
         </div>     
         <!-- Danger -->
-        <button class="btn btn-danger btn-icon" onclick="clearLocalCache()" data-tooltip="Limpar Cache">
-            <span>🗑</span>
-        </button>
+        <div class="header-group">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 0.5rem;">
+                <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">BD:</span>
+                <span id="storageSize" style="font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--primary-light); font-size: 0.75rem;">-</span>
+            </span>
+            <button class="btn btn-danger btn-icon" onclick="clearSessionData()" data-tooltip="Deletar Sessão">
+                <span>🗑</span>
+            </button>
+        </div>
     </div>
 </header>
 
@@ -541,7 +547,7 @@
 <script src="{{ url_for('static', filename='js/canvas_optimizer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/image_compressor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/persistence.js') }}"></script>
-<script defer src="{{ url_for('static', filename='js/map_manager_enhanced.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map_manager_enhanced.js') }}"></script>
 
 </body>
 </html>

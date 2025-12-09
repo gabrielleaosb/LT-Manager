@@ -119,6 +119,10 @@ const MAX_HISTORY = 50;
 
 // Scene Manager
 let currentSceneId = null;  // ✅ ADICIONADO
+let hasCreatedScene = false;
+let sceneCreationOverlay = null;
+let overlayInitialized = false;
+let systemInitialized = false
 
 // Sistema de buffer para desenho suave
 let drawingBuffer = null;
@@ -315,21 +319,6 @@ function updateDiceVisibilityLabel() {
 // ==========================================
 
 console.log('🔍 SESSION_ID atual:', SESSION_ID);
-console.log('🔍 Verificando localStorage para:', SESSION_ID);
-
-const savedState = localStorage.getItem('rpg_session_state_' + SESSION_ID);
-if (savedState) {
-    console.log('✅ DADOS ENCONTRADOS no localStorage');
-    const parsed = JSON.parse(savedState);
-    console.log('📊 Dados salvos:', {
-        images: parsed.images?.length || 0,
-        tokens: parsed.tokens?.length || 0,
-        drawings: parsed.drawings?.length || 0,
-        timestamp: new Date(parsed.timestamp).toLocaleString()
-    });
-} else {
-    console.log('❌ NENHUM DADO no localStorage para esta sessão');
-}
 
 // ==========================================
 // AUTO-SAVE INTELIGENTE - OTIMIZADO
@@ -340,16 +329,19 @@ let isSaving = false;
 let changesMade = false;
 let lastChangeTime = 0;
 
+// ✅ Flag para evitar carregamento duplo
+let hasLoadedInitialState = false;
+
 /**
- * Marcar que houve mudanças e agendar auto-save
+ * Marcar que houve mudanças
  */
 function markChanges() {
     changesMade = true;
     lastChangeTime = Date.now();
     
-    // Agendar auto-save para 5 segundos após última mudança
+    // Agendar auto-save para 5s após última mudança
     PerformanceFix.scheduleAutoSave(() => {
-        if (changesMade) {
+        if (changesMade && !isSaving) {
             saveCurrentState();
             changesMade = false;
         }
@@ -369,7 +361,7 @@ function startAutoSave() {
         const timeSinceLastChange = Date.now() - lastChangeTime;
         
         // Se houve mudanças e já passou mais de 30s
-        if (changesMade && timeSinceLastChange > 30000) {
+        if (changesMade && timeSinceLastChange > 30000 && !isSaving) {
             console.log('💾 Auto-save periódico (30s sem mudanças)');
             saveCurrentState();
             changesMade = false;
@@ -380,7 +372,7 @@ function startAutoSave() {
 }
 
 /**
- * Salvar estado atual no banco
+ * ✅ Salvar estado atual no banco (COM PROTEÇÃO)
  */
 async function saveCurrentState() {
     if (!SESSION_ID || isSaving) {
@@ -388,19 +380,19 @@ async function saveCurrentState() {
     }
     
     isSaving = true;
-    console.log('💾 Salvando estado atual...');
+    console.log('💾 [STATE] Salvando estado atual...');
     
     try {
-        // ✅ Comprimir fog antes de salvar (reduz de 5MB para ~500KB)
+        // ✅ Comprimir fog
         const compressedFog = PerformanceFix.compressFog(fogCanvas);
         
-        // Montar estado COMPLETO
+        // ✅ Montar estado COMPLETO
         const state = {
             images: images,
             tokens: tokens,
             drawings: drawings,
-            fogImage: compressedFog, // ← Usar fog comprimida
-            scenes: scenes,
+            fogImage: compressedFog,
+            scenes: scenes, // ✅ SEMPRE incluir cenas
             grid_settings: {
                 enabled: gridEnabled,
                 size: gridSize,
@@ -410,18 +402,18 @@ async function saveCurrentState() {
             timestamp: Date.now()
         };
         
-        // Salvar no banco
+        // ✅ Salvar no banco COM LOCK
         const success = await PersistenceManager.saveSession(SESSION_ID, state);
         
         if (success) {
-            console.log('✅ Estado salvo com sucesso');
+            console.log('✅ [STATE] Estado salvo com sucesso');
         } else {
-            console.error('❌ Erro ao salvar no banco');
+            console.error('❌ [STATE] Erro ao salvar no banco');
             showToast('⚠️ Erro ao salvar');
         }
         
     } catch (error) {
-        console.error('❌ Erro ao salvar:', error);
+        console.error('❌ [STATE] Exceção ao salvar:', error);
         showToast('❌ Erro ao salvar estado');
     } finally {
         isSaving = false;
@@ -429,22 +421,32 @@ async function saveCurrentState() {
 }
 
 /**
- * Carregar estado salvo
+ * ✅ Carregar estado salvo (COM PROTEÇÃO CONTRA DUPLICAÇÃO)
  */
 async function loadSavedState() {
     if (!SESSION_ID) return false;
     
-    console.log('📂 Carregando estado salvo...');
+    // ✅ Evitar carregamento duplo
+    if (hasLoadedInitialState) {
+        console.warn('⚠️ Estado já foi carregado - ignorando');
+        return false;
+    }
+    
+    console.log('📂 [STATE] Carregando estado salvo...');
     
     try {
+        // ✅ Carregar com retry automático
         const savedData = await PersistenceManager.loadSession(SESSION_ID);
         
         if (!savedData) {
-            console.log('ℹ️ Sem dados salvos');
+            console.log('ℹ️ [STATE] Sem dados salvos');
             return false;
         }
         
-        // Restaurar estado
+        // ✅ Marcar como carregado ANTES de aplicar
+        hasLoadedInitialState = true;
+        
+        // ✅ Restaurar estado
         images = savedData.images || [];
         tokens = savedData.tokens || [];
         drawings = savedData.drawings || [];
@@ -461,7 +463,7 @@ async function loadSavedState() {
             loadFogState(savedData.fogImage);
         }
         
-        // Renderizar
+        // ✅ Renderizar
         preloadAllImages();
         renderImageList();
         renderTokenList();
@@ -475,16 +477,21 @@ async function loadSavedState() {
         
         showToast('✅ Sessão restaurada!');
         
-        // Verificar se tem cenas
+        // ✅ Atualizar flag de cena
         if (scenes && scenes.length > 0) {
             hasCreatedScene = true;
-            localStorage.setItem('rpg_has_scene_' + SESSION_ID, 'true');
+        }
+
+        if (savedData.scenes && savedData.scenes.length > 0) {
+            hasCreatedScene = true;
+            overlayInitialized = true;
+            console.log('✅ Cenas carregadas:', savedData.scenes.length);
         }
         
         return true;
         
     } catch (error) {
-        console.error('❌ Erro ao carregar:', error);
+        console.error('❌ [STATE] Erro ao carregar:', error);
         return false;
     }
 }
@@ -690,13 +697,14 @@ function preloadAllImages() {
 }
 
 // ==================
-// WEBSOCKET EVENTS - CORRIGIDO COM REDRAW SEMPRE
+// WEBSOCKET EVENTS 
 // ==================
 
 socket.on('connect', () => {
     console.log('✅ Conectado ao servidor');
    
     SharedDiceSystem.init();
+    
     loadSavedState().then(wasRestored => {
         if (wasRestored) {
             console.log('♻️ Estado restaurado');
@@ -705,58 +713,119 @@ socket.on('connect', () => {
         socket.emit('join_session', { session_id: SESSION_ID });
         startAutoSave();
 
+        // ✅ Aguardar um pouco mais para garantir que tudo carregou
         setTimeout(() => {
-            initializeSceneSystem();
-        }, 1500);
+            if (typeof initializeSceneSystem === 'function') {
+                initializeSceneSystem();
+            } else {
+                console.error('❌ initializeSceneSystem não está definido');
+            }
+        }, 2000); // Aumentado de 1500 para 2000ms
+    }).catch(error => {
+        console.error('❌ Erro ao carregar estado:', error);
+        socket.emit('join_session', { session_id: SESSION_ID });
     });
 });
 
 socket.on('session_state', (data) => {
-    console.log('📦 Estado da sessão recebido do servidor:', data);
+    console.log('📦 Estado inicial do servidor recebido');
     
-    // ✅ CORRIGIDO: Usar await com async
+    // ✅ NÃO carregar dados vazios do servidor se já temos dados salvos
     (async () => {
-        const localState = await PersistenceManager.loadSession(SESSION_ID);
+        const savedData = await PersistenceManager.loadSession(SESSION_ID);
         
-        if (localState && localState.images && localState.images.length > 0) {
-            console.log('⚠️ Já temos dados locais, ignorando estado vazio do servidor');
+        if (savedData && (savedData.scenes?.length > 0 || savedData.images?.length > 0)) {
+            console.log('✅ Dados do banco têm prioridade - ignorando servidor');
+            
+            // Restaurar do banco
+            images = savedData.images || [];
+            tokens = savedData.tokens || [];
+            drawings = savedData.drawings || [];
+            scenes = savedData.scenes || [];
+            
+            if (savedData.grid_settings) {
+                gridEnabled = savedData.grid_settings.enabled;
+                gridSize = savedData.grid_settings.size;
+                gridColor = savedData.grid_settings.color;
+                gridLineWidth = savedData.grid_settings.lineWidth;
+            }
+            
+            if (savedData.fogImage) {
+                loadFogState(savedData.fogImage);
+            }
+            
+            preloadAllImages();
+            renderImageList();
+            renderTokenList();
+            renderScenesList();
+            drawGrid();
+            
+            setTimeout(() => {
+                redrawAll();
+                redrawDrawings();
+            }, 200);
+            
+            if (scenes.length > 0) {
+                hasCreatedScene = true;
+                overlayInitialized = true;
+            }
+            
             return;
         }
         
-        // Se não tem dados locais, usar dados do servidor
+        // Se não tem dados salvos, usar do servidor
+        console.log('ℹ️ Sem dados salvos - usando servidor');
         maps = data.maps || [];
         entities = data.entities || [];
         images = [...maps, ...entities];
-        
         tokens = data.tokens || [];
         drawings = data.drawings || [];
-        
         scenes = data.scenes || [];
-        renderScenesList();
-        console.log('🎬 Cenas carregadas:', scenes.length);
         
         preloadAllImages();
         drawGrid();
         renderImageList();
         renderTokenList();
+        renderScenesList();
         
         setTimeout(() => {
             redrawAll();
             redrawDrawings();
         }, 100);
         
-        // ✅ Verificar cenas para o sistema obrigatório
         if (scenes && scenes.length > 0) {
-            console.log('✅ Cenas encontradas no servidor:', scenes.length);
             hasCreatedScene = true;
-            localStorage.setItem('rpg_has_scene_' + SESSION_ID, 'true');
-            
-            if (sceneCreationOverlay) {
-                sceneCreationOverlay.remove();
-                sceneCreationOverlay = null;
-            }
+            overlayInitialized = true;
         }
     })();
+});
+
+socket.on('scenes_sync', (data) => {
+    console.log('🎬 Sincronização de cenas recebida:', data);
+    
+    // ✅ Atualizar apenas se não conflitar com estado local
+    if (data.scenes && Array.isArray(data.scenes)) {
+        // ✅ Merge inteligente: preservar cenas locais novas
+        const serverSceneIds = new Set(data.scenes.map(s => s.id));
+        const localOnlyScenes = scenes.filter(s => !serverSceneIds.has(s.id));
+        
+        scenes = [...data.scenes, ...localOnlyScenes];
+        renderScenesList();
+        markChanges(); // ✅ Salvar merge
+        
+        console.log(`✅ Cenas mescladas: ${data.scenes.length} servidor + ${localOnlyScenes.length} local`);
+    }
+});
+
+socket.on('scene_switched', (data) => {
+    console.log('🎬 Cena trocada no servidor:', data);
+    
+    // ✅ Atualizar apenas variáveis de controle
+    currentSceneId = data.scene_id;
+    currentScene = data.scene;
+    
+    // ✅ NÃO sobrescrever array de cenas
+    console.log('✅ Cena ativa atualizada:', currentSceneId);
 });
 
 socket.on('players_list', (data) => {
@@ -847,20 +916,6 @@ socket.on('fog_state_sync', (data) => {
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         markChanges();
     }
-});
-
-socket.on('scenes_sync', (data) => {
-    console.log('🎬 Sincronização de cenas recebida:', data);
-    scenes = data.scenes || [];
-    renderScenesList();
-    markChanges();
-    console.log('🎬 Total de cenas após sync:', scenes.length);
-});
-
-socket.on('scene_switched', (data) => {
-    console.log('🎬 Cena trocada:', data);
-    currentSceneId = data.scene_id;
-    currentScene = data.scene;
 });
 
 // Inicializar buffer
@@ -3621,51 +3676,79 @@ function createNewScene() {
     // ✅ Marcar como tendo cena criada
     if (!hasCreatedScene) {
         hasCreatedScene = true;
-        localStorage.setItem('rpg_has_scene_' + SESSION_ID, 'true');
         console.log('✅ Primeira cena criada pelo usuário');
     }
     
     showToast(`Cena "${name}" criada!`);
 }
 
-function saveCurrentScene() {
-    if (!currentSceneId) {
-        console.log('⚠️ Nenhuma cena ativa para salvar');
+/**
+ * ✅ Salvar cena atual (COM PROTEÇÃO)
+ */
+async function saveCurrentState() {
+    if (!SESSION_ID || isSaving) {
         return;
     }
     
-    const scene = scenes.find(s => s.id === currentSceneId);
-    if (!scene) {
-        console.log('❌ Cena não encontrada:', currentSceneId);
-        return;
+    isSaving = true;
+    console.log('💾 Salvando estado atual no banco...');
+    
+    try {
+        // ✅ Comprimir fog ANTES de salvar
+        const compressedFog = PerformanceFix.compressFog(fogCanvas);
+        
+        const state = {
+            images: images,
+            tokens: tokens,
+            drawings: drawings,
+            fogImage: compressedFog, // Já comprimido
+            scenes: scenes,
+            grid_settings: {
+                enabled: gridEnabled,
+                size: gridSize,
+                color: gridColor,
+                lineWidth: gridLineWidth
+            }
+        };
+        
+        const success = await PersistenceManager.saveSession(SESSION_ID, state);
+        
+        if (success) {
+            console.log('✅ Estado salvo no banco');
+            updateStorageIndicator(); // Atualizar indicador visual
+        } else {
+            console.error('❌ Erro ao salvar no banco');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro ao salvar:', error);
+    } finally {
+        isSaving = false;
     }
-    
-    const mapsOnly = images.filter(img => img.id.startsWith('map_'));
-    const entitiesOnly = images.filter(img => !img.id.startsWith('map_'));
-    
-    scene.maps = JSON.parse(JSON.stringify(mapsOnly));
-    scene.entities = JSON.parse(JSON.stringify(entitiesOnly));
-    scene.tokens = JSON.parse(JSON.stringify(tokens));
-    scene.drawings = JSON.parse(JSON.stringify(drawings));
-    scene.fog_image = fogCanvas.toDataURL();
-    
-    console.log('💾 Cena salva:', {
-        scene_id: scene.id,
-        maps: scene.maps.length,
-        entities: scene.entities.length,
-        tokens: scene.tokens.length,
-        has_fog: !!scene.fog_image
-    });
-    
-    socket.emit('scene_update', {
-        session_id: SESSION_ID,
-        scene: scene
-    });
-    
-    showToast(`💾 Cena "${scene.name}" salva`);
-    markChanges();
 }
 
+// ✅ NOVA FUNÇÃO - Mostrar tamanho no header
+async function updateStorageIndicator() {
+    try {
+        if (typeof PersistenceManager === 'undefined') {
+            console.warn('⚠️ PersistenceManager ainda não carregado');
+            return;
+        }
+        
+        const sizeMB = await PersistenceManager.getSessionSize(SESSION_ID);
+        const indicator = document.getElementById('storageSize');
+        
+        if (indicator) {
+            indicator.textContent = sizeMB.toFixed(1) + ' MB';
+        }
+    } catch (error) {
+        console.error('❌ Erro ao atualizar indicador:', error);
+    }
+}
+
+/**
+ * ✅ Trocar para outra cena (COM PROTEÇÃO)
+ */
 function switchToScene(sceneId) {
     const scene = scenes.find(s => s.id === sceneId);
     if (!scene) {
@@ -3676,12 +3759,12 @@ function switchToScene(sceneId) {
     console.log('🎬 Trocando para cena:', scene.name);
     
     // ✅ SALVAR cena atual ANTES de trocar
-    if (currentSceneId) {
+    if (currentSceneId && currentSceneId !== sceneId) {
         saveCurrentScene();
         
-        // ✅ NOVO: Salvar histórico da cena atual
+        // ✅ Salvar histórico da cena atual
         if (sceneHistories[currentSceneId]) {
-            console.log(`📚 Histórico da cena ${currentSceneId.slice(0,8)}: ${sceneHistories[currentSceneId].history.length} estados`);
+            console.log(`📚 Histórico preservado: ${sceneHistories[currentSceneId].history.length} estados`);
         }
     }
     
@@ -3696,7 +3779,7 @@ function switchToScene(sceneId) {
     
     currentSceneId = sceneId;
     
-    // ✅ NOVO: Inicializar histórico da nova cena se não existir
+    // ✅ Inicializar histórico da nova cena
     if (!sceneHistories[sceneId]) {
         sceneHistories[sceneId] = {
             history: [],
@@ -3728,7 +3811,7 @@ function switchToScene(sceneId) {
     renderImageList();
     renderTokenList();
     
-    // ✅ ATUALIZAR botões undo/redo
+    // ✅ Atualizar botões undo/redo
     updateUndoRedoButtons();
     
     setTimeout(() => {
@@ -3736,7 +3819,7 @@ function switchToScene(sceneId) {
         redrawDrawings();
     }, 150);
     
-    // ✅ SINCRONIZAR com servidor
+    // ✅ Sincronizar com servidor
     socket.emit('scene_switch', {
         session_id: SESSION_ID,
         scene_id: sceneId,
@@ -3746,7 +3829,7 @@ function switchToScene(sceneId) {
     renderScenesList();
     showToast(`Cena ativada: ${scene.name}`);
     closeSceneManager();
-    markChanges();
+    markChanges(); // ✅ Acionar auto-save
 }
 
 function deleteScene(sceneId) {
@@ -3920,29 +4003,6 @@ function closeSceneManager() {
 function closeSceneVisibilityModal() {
     document.getElementById('sceneVisibilityModal').classList.remove('show');
 }
-
-
-setInterval(() => {
-    if (currentSceneId) {
-    saveCurrentScene();
-    console.log('🔄 Auto-save da cena');
-    }
-}, 10000);
-
-socket.on('scenes_sync', (data) => {
-console.log('🎬 Sincronização de cenas recebida:', data);
-if (data.scenes && Array.isArray(data.scenes)) {
-    scenes = data.scenes;
-    renderScenesList();
-}
-});
-socket.on('scene_switched', (data) => {
-console.log('🎬 Outro cliente trocou de cena:', data);
-const scene = scenes.find(s => s.id === data.scene_id);
-if (scene && data.scene) {
-    Object.assign(scene, data.scene);
-}
-});
 
 // ==================
 // SISTEMA DE UNDO/REDO
@@ -4180,30 +4240,18 @@ function updateUndoRedoButtons() {
     }
 }
 
-function clearLocalCache() {
-    if (confirm('🗑️ Limpar cache local?\n\nIsso vai:\n- Limpar flags de sessão\n- Limpar cache de imagens\n- Recarregar a página\n\n⚠️ Os dados no banco NÃO serão afetados')) {
-        // Limpar apenas flags e cache, não os dados do banco
-        const keysToRemove = [];
-        
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            
-            // Remover apenas flags de cena e cache, NÃO dados do banco
-            if (key && (key.includes('rpg_has_scene_') || key.includes('_cache'))) {
-                keysToRemove.push(key);
+function clearSessionData() {
+    if (confirm('🗑️ Deletar TODOS os dados desta sessão?\n\n⚠️ Esta ação é IRREVERSÍVEL!')) {
+        PersistenceManager.deleteSession(SESSION_ID).then(success => {
+            if (success) {
+                showToast('✅ Dados deletados!');
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                showToast('❌ Erro ao deletar');
             }
-        }
-        
-        keysToRemove.forEach(key => localStorage.removeItem(key));
-        
-        // Limpar cache de imagens
-        loadedImages.clear();
-        
-        showToast('🗑️ Cache limpo! Recarregando...');
-        
-        setTimeout(() => {
-            location.reload();
-        }, 1500);
+        });
     }
 }
 
@@ -4258,26 +4306,17 @@ window.addEventListener('beforeunload', (e) => {
 // SISTEMA OBRIGATÓRIO DE CRIAÇÃO DE CENA
 // ==========================================
 
-let hasCreatedScene = false;
-let sceneCreationOverlay = null;
-let overlayInitialized = false;
-
 function showSceneCreationOverlay() {
-    // ✅ Verificar se já foi inicializado
-    if (overlayInitialized) {
-        console.log('⚠️ Overlay já inicializado - ignorando');
+    // ✅ Prevenir múltiplas exibições
+    if (overlayInitialized || sceneCreationOverlay) {
+        console.log('⚠️ Overlay já existe - ignorando');
         return;
     }
     
     console.log('🚨 Mostrando overlay obrigatório de criação de cena');
     overlayInitialized = true;
     
-    // Remover overlay antigo se existir
-    if (sceneCreationOverlay) {
-        sceneCreationOverlay.remove();
-    }
-    
-    // Criar overlay minimalista
+    // Criar overlay
     sceneCreationOverlay = document.createElement('div');
     sceneCreationOverlay.id = 'sceneCreationOverlay';
     sceneCreationOverlay.style.cssText = `
@@ -4303,7 +4342,6 @@ function showSceneCreationOverlay() {
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         ">
-            <!-- Ícone -->
             <div style="
                 width: 80px;
                 height: 80px;
@@ -4320,19 +4358,16 @@ function showSceneCreationOverlay() {
                 🎬
             </div>
             
-            <!-- Título -->
             <h1 style="
                 color: #f1f5f9;
                 font-size: 1.75rem;
                 font-weight: 600;
                 text-align: center;
                 margin: 0 0 12px 0;
-                letter-spacing: -0.02em;
             ">
                 Criar Primeira Cena
             </h1>
             
-            <!-- Descrição -->
             <p style="
                 color: #94a3b8;
                 font-size: 0.9375rem;
@@ -4344,7 +4379,6 @@ function showSceneCreationOverlay() {
                 Crie uma cena para começar a usar o Map Manager.
             </p>
             
-            <!-- Botão -->
             <button id="createFirstSceneBtn" style="
                 width: 100%;
                 padding: 16px;
@@ -4355,15 +4389,12 @@ function showSceneCreationOverlay() {
                 font-size: 1rem;
                 font-weight: 600;
                 cursor: pointer;
-                transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+                transition: all 0.2s;
                 box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
-                position: relative;
-                overflow: hidden;
             ">
-                <span style="position: relative; z-index: 1;">Criar Cena</span>
+                Criar Cena
             </button>
             
-            <!-- Dica -->
             <p style="
                 color: #64748b;
                 font-size: 0.8125rem;
@@ -4371,50 +4402,9 @@ function showSceneCreationOverlay() {
                 margin: 16px 0 0 0;
                 font-style: italic;
             ">
-                💡 Exemplo: "Mapa buxa de Vitor Cabral"
+                💡 Exemplo: "Caverna do Dragão"
             </p>
         </div>
-        
-        <style>
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-            
-            @keyframes slideUp {
-                from {
-                    opacity: 0;
-                    transform: translateY(20px);
-                }
-                to {
-                    opacity: 1;
-                    transform: translateY(0);
-                }
-            }
-            
-            #createFirstSceneBtn:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 24px rgba(99, 102, 241, 0.6);
-                background: linear-gradient(135deg, #818cf8, #6366f1);
-            }
-            
-            #createFirstSceneBtn:active {
-                transform: translateY(0);
-            }
-            
-            #createFirstSceneBtn::before {
-                content: '';
-                position: absolute;
-                inset: 0;
-                background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-                transform: translateX(-100%);
-                transition: transform 0.6s;
-            }
-            
-            #createFirstSceneBtn:hover::before {
-                transform: translateX(100%);
-            }
-        </style>
     `;
     
     document.body.appendChild(sceneCreationOverlay);
@@ -4460,7 +4450,6 @@ function promptCreateFirstScene() {
         scene: newScene
     });
     
-    // ✅ ATIVAR NO SERVIDOR
     socket.emit('scene_switch', {
         session_id: SESSION_ID,
         scene_id: newScene.id,
@@ -4470,7 +4459,6 @@ function promptCreateFirstScene() {
     renderScenesList();
     
     hasCreatedScene = true;
-    localStorage.setItem('rpg_has_scene_' + SESSION_ID, 'true');
     
     // Remover overlay
     if (sceneCreationOverlay) {
@@ -4479,83 +4467,62 @@ function promptCreateFirstScene() {
             if (sceneCreationOverlay) {
                 sceneCreationOverlay.remove();
                 sceneCreationOverlay = null;
-                overlayInitialized = false;
             }
         }, 300);
     }
     
     showToast(`✅ Cena "${sceneName.trim()}" criada e ativada!`);
+    markChanges(); // ✅ Salvar imediatamente
     console.log('🎉 Primeira cena ativa:', newScene.id);
 }
 
-// Adicionar animação de fadeOut
-style.textContent = `
-    @keyframes fadeOut {
-        from {
-            opacity: 1;
-            transform: scale(1);
-        }
-        to {
-            opacity: 0;
-            transform: scale(0.95);
-        }
-    }
-`;
-document.head.appendChild(style);
 
 // ==========================================
 // VERIFICAÇÃO INICIAL - SIMPLIFICADA
 // ==========================================
 
 function checkIfSceneExists() {
-    console.log('🔍 Verificando se já existe cena criada...');
+    console.log('🔍 Verificando cenas no banco...');
     
-    // ✅ CORRIGIDO: Aguardar scenes carregar
-    return new Promise((resolve) => {
-        const checkScenes = () => {
-            const hasSceneFlag = localStorage.getItem('rpg_has_scene_' + SESSION_ID);
-            const hasScenesInMemory = scenes && scenes.length > 0;
+    return new Promise(async (resolve) => {
+        try {
+            // ✅ Carregar do BANCO, não do localStorage
+            const savedData = await PersistenceManager.loadSession(SESSION_ID);
             
-            if (hasSceneFlag === 'true' || hasScenesInMemory) {
-                console.log('✅ Cena já existe - permitindo acesso');
+            if (savedData && savedData.scenes && savedData.scenes.length > 0) {
+                console.log('✅ Cenas encontradas no banco:', savedData.scenes.length);
+                scenes = savedData.scenes;
                 hasCreatedScene = true;
                 overlayInitialized = true;
                 resolve(true);
             } else {
-                console.log('❌ Nenhuma cena encontrada - bloqueando acesso');
+                console.log('❌ Nenhuma cena no banco');
                 hasCreatedScene = false;
                 resolve(false);
             }
-        };
-        
-        // Se scenes já está populado, verificar imediatamente
-        if (scenes && scenes.length > 0) {
-            checkScenes();
-        } else {
-            // Aguardar um pouco para scenes carregar
-            setTimeout(checkScenes, 800);
+        } catch (error) {
+            console.error('❌ Erro ao verificar cenas:', error);
+            resolve(false);
         }
     });
 }
 
+/**
+ * ✅ Inicializar sistema de cenas (APENAS UMA VEZ)
+ */
 async function initializeSceneSystem() {
     console.log('🎬 Inicializando sistema de cenas...');
     
-    if (overlayInitialized) {
+    // ✅ Verificar se já foi inicializado
+    if (typeof systemInitialized !== 'undefined' && systemInitialized) {
         console.log('⚠️ Sistema já inicializado - ignorando');
         return;
     }
     
-    const exists = await checkIfSceneExists();
-    
-    if (!exists) {
-        console.log('🚨 Mostrando overlay obrigatório');
-        showSceneCreationOverlay();
-    } else {
-        console.log('✅ Sistema de cenas OK');
-        overlayInitialized = true;
+    if (typeof overlayInitialized !== 'undefined' && overlayInitialized) {
+        console.log('⚠️ Overlay já inicializado - ignorando');
+        return;
     }
-}
 
 // ==========================================
 // BLOQUEAR AÇÕES ATÉ CRIAR CENA
@@ -4587,8 +4554,6 @@ window.addToken = function() {
 // EXECUTAR NA INICIALIZAÇÃO - ÚNICA VEZ
 // ==========================================
 
-let systemInitialized = false; // ✅ NOVO - Prevenir múltiplas inicializações
-
 // ✅ Método único de inicialização
 function initializeOnce() {
     if (systemInitialized) {
@@ -4596,20 +4561,14 @@ function initializeOnce() {
         return;
     }
     
-    systemInitialized = true;
     console.log('🎬 Inicializando sistema pela primeira vez...');
     
     // Aguardar um momento para garantir que tudo carregou
     setTimeout(() => {
         initializeSceneSystem();
-    }, 800);
+    }, 1000);
 }
 
-// DOMContentLoaded - Inicializar apenas uma vez
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('📄 DOM pronto');
-    initializeOnce();
-});
 
 // Socket conectado - Backup (só executa se ainda não inicializou)
 socket.on('connect', () => {
@@ -4627,6 +4586,7 @@ socket.on('connect', () => {
 // ==========================================
 // RECEBER ROLAGENS COMPARTILHADAS
 // ==========================================
+
 socket.on('dice_rolled_shared', (data) => {
     console.log('🎲 Dado rolado:', data);
     SharedDiceSystem.show(data);
@@ -4642,10 +4602,7 @@ socket.on('session_state', (data) => {
         scenes = data.scenes;
         hasCreatedScene = true;
         overlayInitialized = true;
-        
-        // Salvar flag no localStorage
-        localStorage.setItem('rpg_has_scene_' + SESSION_ID, 'true');
-        
+
         // Remover overlay se estiver aberto
         if (sceneCreationOverlay) {
             sceneCreationOverlay.style.animation = 'fadeOut 0.3s ease';
@@ -4658,3 +4615,16 @@ socket.on('session_state', (data) => {
         }
     }
 });
+
+// ✅ Atualizar indicador quando tudo estiver carregado
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        updateStorageIndicator();
+        
+        // Atualizar a cada 30 segundos
+        setInterval(() => {
+            updateStorageIndicator();
+        }, 30000);
+    }, 2000);
+});
+}

@@ -132,6 +132,31 @@ const PersistenceManager = {
             console.error('❌ Erro ao listar:', e);
             return [];
         }
+    },
+    
+    async getSessionSize(sessionId) {
+        try {
+            const response = await fetch(`${this.API_BASE}/session/load/${sessionId}`);
+            
+            if (!response.ok) {
+                return 0;
+            }
+            
+            const result = await response.json();
+            
+            if (result.status === 'success' && result.data) {
+                // Calcular tamanho aproximado em MB
+                const jsonStr = JSON.stringify(result.data);
+                const bytes = new Blob([jsonStr]).size;
+                return bytes / (1024 * 1024);
+            }
+            
+            return 0;
+            
+        } catch (e) {
+            console.error('❌ Erro ao calcular tamanho:', e);
+            return 0;
+        }
     }
 };
 

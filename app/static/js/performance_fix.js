@@ -130,7 +130,11 @@ const PerformanceFix = {
         
         this.debouncedAutoSave = setTimeout(() => {
             console.log('💾 Auto-save executando...');
-            callback();
+            try {
+                callback();
+            } catch (error) {
+                console.error('❌ Erro no auto-save:', error);
+            }
         }, delay);
     }
 };
