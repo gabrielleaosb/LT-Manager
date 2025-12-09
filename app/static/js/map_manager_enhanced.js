@@ -339,13 +339,83 @@ function markChanges() {
     changesMade = true;
     lastChangeTime = Date.now();
     
-    // Agendar auto-save para 5s após última mudança
+    // ✅ AGENDAR auto-save SEM fog
     PerformanceFix.scheduleAutoSave(() => {
         if (changesMade && !isSaving) {
-            saveCurrentState();
+            saveCurrentStateWithoutFog();
             changesMade = false;
         }
     }, 5000);
+}
+
+async function saveCurrentStateWithoutFog() {
+    if (!SESSION_ID || isSaving) {
+        return;
+    }
+    
+    isSaving = true;
+    console.log('💾 [AUTO-SAVE] Salvando (sem fog global)...');
+    
+    try {
+        if (hasCreatedScene && scenes.length > 0) {
+            console.log('🎬 Auto-save de cenas');
+            
+            // ✅ Salvar cena atual (COM fog da cena)
+            if (currentSceneId) {
+                saveCurrentScene();
+            }
+            
+            // ✅ Salvar APENAS cenas (sem fog global)
+            const state = {
+                scenes: JSON.parse(JSON.stringify(scenes)),
+                grid_settings: {
+                    enabled: gridEnabled,
+                    size: gridSize,
+                    color: gridColor,
+                    lineWidth: gridLineWidth
+                },
+                timestamp: Date.now()
+            };
+            
+            const success = await PersistenceManager.saveSession(SESSION_ID, state);
+            
+            if (success) {
+                console.log('✅ [AUTO-SAVE] Cenas salvas');
+                updateStorageIndicator();
+            }
+            
+        } else {
+            // Sistema legado (com fog)
+            const compressedFog = PerformanceFix.compressFog(fogCanvas);
+            
+            const state = {
+                images: images,
+                tokens: tokens,
+                drawings: drawings,
+                fogImage: compressedFog,
+                scenes: [],
+                grid_settings: {
+                    enabled: gridEnabled,
+                    size: gridSize,
+                    color: gridColor,
+                    lineWidth: gridLineWidth
+                },
+                timestamp: Date.now()
+            };
+            
+            const success = await PersistenceManager.saveSession(SESSION_ID, state);
+            
+            if (success) {
+                console.log('✅ [AUTO-SAVE] Estado legado salvo');
+                updateStorageIndicator();
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ [AUTO-SAVE] Erro:', error);
+    } finally {
+        isSaving = false;
+    }
 }
 
 /**
@@ -383,33 +453,66 @@ async function saveCurrentState() {
     console.log('💾 [STATE] Salvando estado atual...');
     
     try {
-        // ✅ Comprimir fog
-        const compressedFog = PerformanceFix.compressFog(fogCanvas);
-        
-        // ✅ Montar estado COMPLETO
-        const state = {
-            images: images,
-            tokens: tokens,
-            drawings: drawings,
-            fogImage: compressedFog,
-            scenes: scenes, // ✅ SEMPRE incluir cenas
-            grid_settings: {
-                enabled: gridEnabled,
-                size: gridSize,
-                color: gridColor,
-                lineWidth: gridLineWidth
-            },
-            timestamp: Date.now()
-        };
-        
-        // ✅ Salvar no banco COM LOCK
-        const success = await PersistenceManager.saveSession(SESSION_ID, state);
-        
-        if (success) {
-            console.log('✅ [STATE] Estado salvo com sucesso');
+        // ✅ VERIFICAR SE ESTAMOS USANDO SISTEMA DE CENAS
+        if (hasCreatedScene && scenes.length > 0) {
+            console.log('🎬 Salvando sistema de cenas');
+            
+            // ✅ Salvar cena atual primeiro (se houver)
+            if (currentSceneId) {
+                saveCurrentScene();
+            }
+            
+            // ✅ Salvar APENAS cenas e grid (SEM FOG GLOBAL)
+            const state = {
+                scenes: JSON.parse(JSON.stringify(scenes)), // Deep copy
+                grid_settings: {
+                    enabled: gridEnabled,
+                    size: gridSize,
+                    color: gridColor,
+                    lineWidth: gridLineWidth
+                },
+                // ✅ NÃO INCLUIR: images, tokens, drawings, fogImage
+                timestamp: Date.now()
+            };
+            
+            const success = await PersistenceManager.saveSession(SESSION_ID, state);
+            
+            if (success) {
+                console.log('✅ [STATE] Cenas salvas com sucesso');
+                updateStorageIndicator();
+            } else {
+                console.error('❌ [STATE] Erro ao salvar no banco');
+            }
+            
         } else {
-            console.error('❌ [STATE] Erro ao salvar no banco');
-            showToast('⚠️ Erro ao salvar');
+            console.log('📦 Salvando sistema legado (sem cenas)');
+            
+            // Sistema antigo continua igual
+            const compressedFog = PerformanceFix.compressFog(fogCanvas);
+            
+            const state = {
+                images: images,
+                tokens: tokens,
+                drawings: drawings,
+                fogImage: compressedFog,
+                scenes: [],
+                grid_settings: {
+                    enabled: gridEnabled,
+                    size: gridSize,
+                    color: gridColor,
+                    lineWidth: gridLineWidth
+                },
+                timestamp: Date.now()
+            };
+            
+            const success = await PersistenceManager.saveSession(SESSION_ID, state);
+            
+            if (success) {
+                console.log('✅ [STATE] Estado salvo com sucesso');
+                updateStorageIndicator();
+            } else {
+                console.error('❌ [STATE] Erro ao salvar no banco');
+            }
         }
         
     } catch (error) {
@@ -435,7 +538,6 @@ async function loadSavedState() {
     console.log('📂 [STATE] Carregando estado salvo...');
     
     try {
-        // ✅ Carregar com retry automático
         const savedData = await PersistenceManager.loadSession(SESSION_ID);
         
         if (!savedData) {
@@ -446,49 +548,81 @@ async function loadSavedState() {
         // ✅ Marcar como carregado ANTES de aplicar
         hasLoadedInitialState = true;
         
-        // ✅ Restaurar estado
-        images = savedData.images || [];
-        tokens = savedData.tokens || [];
-        drawings = savedData.drawings || [];
-        scenes = savedData.scenes || [];
-        
-        if (savedData.grid_settings) {
-            gridEnabled = savedData.grid_settings.enabled;
-            gridSize = savedData.grid_settings.size;
-            gridColor = savedData.grid_settings.color;
-            gridLineWidth = savedData.grid_settings.lineWidth;
-        }
-        
-        if (savedData.fogImage) {
-            loadFogState(savedData.fogImage);
-        }
-        
-        // ✅ Renderizar
-        preloadAllImages();
-        renderImageList();
-        renderTokenList();
-        renderScenesList();
-        drawGrid();
-        
-        setTimeout(() => {
-            redrawAll();
-            redrawDrawings();
-        }, 200);
-        
-        showToast('✅ Sessão restaurada!');
-        
-        // ✅ Atualizar flag de cena
-        if (scenes && scenes.length > 0) {
-            hasCreatedScene = true;
-        }
-
+        // ✅ VERIFICAR SE HÁ CENAS SALVAS
         if (savedData.scenes && savedData.scenes.length > 0) {
+            console.log('🎬 Sistema de cenas detectado - modo SCENE');
+            
+            // ✅ Carregar APENAS as cenas (não carregar dados globais)
+            scenes = savedData.scenes;
+            
+            // ✅ Grid settings
+            if (savedData.grid_settings) {
+                gridEnabled = savedData.grid_settings.enabled;
+                gridSize = savedData.grid_settings.size;
+                gridColor = savedData.grid_settings.color;
+                gridLineWidth = savedData.grid_settings.lineWidth;
+            }
+            
+            // ✅ NÃO carregar images/tokens/drawings/fog globais
+            // Eles vêm da cena ativa
+            
+            drawGrid();
+            renderScenesList();
+            
+            // ✅ Marcar que já tem cenas criadas
             hasCreatedScene = true;
             overlayInitialized = true;
-            console.log('✅ Cenas carregadas:', savedData.scenes.length);
+            
+            console.log('✅ Cenas carregadas:', scenes.length);
+            
+            // ✅ ATIVAR ÚLTIMA CENA USADA (se houver)
+            if (scenes.length > 0) {
+                // Pegar a última cena (mais recente)
+                const lastScene = scenes[scenes.length - 1];
+                
+                console.log('🎬 Ativando última cena:', lastScene.name);
+                
+                // Pequeno delay para garantir que tudo carregou
+                setTimeout(() => {
+                    switchToScene(lastScene.id);
+                }, 500);
+            }
+            
+            showToast('✅ Sessão restaurada!');
+            return true;
+            
+        } else {
+            console.log('📦 Sistema legado detectado - carregando dados globais');
+            
+            // ✅ Sistema antigo (sem cenas) - carregar normalmente
+            images = savedData.images || [];
+            tokens = savedData.tokens || [];
+            drawings = savedData.drawings || [];
+            
+            if (savedData.grid_settings) {
+                gridEnabled = savedData.grid_settings.enabled;
+                gridSize = savedData.grid_settings.size;
+                gridColor = savedData.grid_settings.color;
+                gridLineWidth = savedData.grid_settings.lineWidth;
+            }
+            
+            if (savedData.fogImage) {
+                loadFogState(savedData.fogImage);
+            }
+            
+            preloadAllImages();
+            renderImageList();
+            renderTokenList();
+            drawGrid();
+            
+            setTimeout(() => {
+                redrawAll();
+                redrawDrawings();
+            }, 200);
+            
+            showToast('✅ Sessão restaurada!');
+            return true;
         }
-        
-        return true;
         
     } catch (error) {
         console.error('❌ [STATE] Erro ao carregar:', error);
@@ -737,39 +871,7 @@ socket.on('session_state', (data) => {
         if (savedData && (savedData.scenes?.length > 0 || savedData.images?.length > 0)) {
             console.log('✅ Dados do banco têm prioridade - ignorando servidor');
             
-            // Restaurar do banco
-            images = savedData.images || [];
-            tokens = savedData.tokens || [];
-            drawings = savedData.drawings || [];
-            scenes = savedData.scenes || [];
-            
-            if (savedData.grid_settings) {
-                gridEnabled = savedData.grid_settings.enabled;
-                gridSize = savedData.grid_settings.size;
-                gridColor = savedData.grid_settings.color;
-                gridLineWidth = savedData.grid_settings.lineWidth;
-            }
-            
-            if (savedData.fogImage) {
-                loadFogState(savedData.fogImage);
-            }
-            
-            preloadAllImages();
-            renderImageList();
-            renderTokenList();
-            renderScenesList();
-            drawGrid();
-            
-            setTimeout(() => {
-                redrawAll();
-                redrawDrawings();
-            }, 200);
-            
-            if (scenes.length > 0) {
-                hasCreatedScene = true;
-                overlayInitialized = true;
-            }
-            
+            // ✅ NÃO fazer nada - o loadSavedState já cuidou disso
             return;
         }
         
@@ -848,7 +950,15 @@ socket.on('player_left', (data) => {
 });
 
 socket.on('maps_sync', (data) => {
-    console.log('📍 MAPS SYNC recebido:', data);
+    console.log('📍 MAPS SYNC recebido');
+    
+    // ✅ IGNORAR se estamos usando sistema de cenas
+    if (hasCreatedScene && scenes.length > 0) {
+        console.log('⚠️ Sistema de cenas ativo - ignorando maps_sync');
+        return;
+    }
+    
+    // Sistema legado
     const maps = data.maps || [];
     const entities = images.filter(img => !img.id.startsWith('map_'));
     images = [...maps, ...entities];
@@ -856,11 +966,18 @@ socket.on('maps_sync', (data) => {
     renderImageList();
     redrawAll();
     markChanges();
-    console.log('✅ Maps sync completo - fog preservado');
 });
 
 socket.on('entities_sync', (data) => {
-    console.log('🎭 ENTITIES SYNC recebido:', data);
+    console.log('🎭 ENTITIES SYNC recebido');
+    
+    // ✅ IGNORAR se estamos usando sistema de cenas
+    if (hasCreatedScene && scenes.length > 0) {
+        console.log('⚠️ Sistema de cenas ativo - ignorando entities_sync');
+        return;
+    }
+    
+    // Sistema legado
     const entities = data.entities || [];
     const maps = images.filter(img => img.id.startsWith('map_'));
     images = [...maps, ...entities];
@@ -868,7 +985,6 @@ socket.on('entities_sync', (data) => {
     renderImageList();
     redrawAll();
     markChanges();
-    console.log('✅ Entities sync completo - fog preservado');
 });
 
 socket.on('token_sync', (data) => {
@@ -2200,10 +2316,20 @@ function syncFogToServer() {
     fogSyncTimeout = setTimeout(() => {
         const fogCanvas = document.getElementById('fogCanvas');
         
+        console.log('🌫️ Sincronizando fog com servidor');
+        
         PerformanceFix.syncFogThrottled(
             SESSION_ID,
             fogCanvas.toDataURL('image/png')
         );
+        
+        // ✅ NÃO chamar markChanges() aqui para evitar auto-save
+        // markChanges(); ❌ REMOVIDO
+        
+        // ✅ Salvar diretamente apenas a cena (sem acionar auto-save global)
+        if (hasCreatedScene && currentSceneId) {
+            saveCurrentScene();
+        }
     }, 500);
 }
 
@@ -2212,24 +2338,26 @@ function syncFogToServer() {
  */
 function loadFogState(imageData) {
     if (!imageData) {
-        const fogCanvas = document.getElementById('fogCanvas');
-        const fogCtx = fogCanvas.getContext('2d');
+        console.log('✨ Sem fog para carregar - limpando');
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         return;
     }
     
+    console.log('🌫️ Carregando fog state...');
+    
     const img = new Image();
     img.onload = () => {
-        const fogCanvas = document.getElementById('fogCanvas');
-        const fogCtx = fogCanvas.getContext('2d');
-        
+        // ✅ LIMPAR antes de desenhar novo
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        console.log('✅ Fog carregado, aplicando ao canvas');
         fogCtx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        console.log('✅ Névoa carregada');
+        console.log('✅ Fog aplicado');
     };
     img.onerror = () => {
-        console.error('❌ Erro ao carregar névoa');
+        console.error('❌ Erro ao carregar fog');
+        fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     };
     img.src = imageData;
 }
@@ -2366,7 +2494,7 @@ function addImage() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = async (e) => {  // ✅ ASYNC
+    input.onchange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         
@@ -2376,22 +2504,20 @@ function addImage() {
         showToast('🔄 Carregando e comprimindo imagem...');
         
         const reader = new FileReader();
-        reader.onload = async (ev) => {  // ✅ ASYNC
+        reader.onload = async (ev) => {
             const img = new Image();
-            img.onload = async () => {  // ✅ ASYNC
+            img.onload = async () => {
                 try {
-                    // ✅ COMPRIMIR IMAGEM ANTES DE SALVAR
                     const originalBase64 = ev.target.result;
                     console.log('📦 Comprimindo imagem...');
                     
                     const compressedBase64 = await ImageCompressor.compress(
                         originalBase64,
-                        1920,  // Max width
-                        1920,  // Max height
-                        0.85   // Qualidade 85%
+                        1920,
+                        1920,
+                        0.85
                     );
                     
-                    // Calcular dimensões proporcionais para o canvas
                     let width = 400;
                     let height = 400;
                     
@@ -2408,26 +2534,38 @@ function addImage() {
                         y: CANVAS_HEIGHT / 2 - height / 2,
                         width: width,
                         height: height,
-                        image: compressedBase64  // ✅ USAR IMAGEM COMPRIMIDA
+                        image: compressedBase64
                     };
                     
-                    // Criar nova imagem para carregar a comprimida
                     const compressedImg = new Image();
                     compressedImg.onload = () => {
                         loadedImages.set(newImage.id, compressedImg);
                         images.push(newImage);
                         
-                        socket.emit('add_entity', {
-                            session_id: SESSION_ID,
-                            entity: newImage
+                        console.log('🖼️ Imagem adicionada:', {
+                            id: newImage.id,
+                            name: newImage.name,
+                            totalImages: images.length,
+                            currentSceneId: currentSceneId,
+                            sceneSystem: hasCreatedScene
                         });
+                        
+                        // ✅ APENAS emitir se NÃO estiver usando sistema de cenas
+                        if (!hasCreatedScene || scenes.length === 0) {
+                            socket.emit('add_entity', {
+                                session_id: SESSION_ID,
+                                entity: newImage
+                            });
+                            console.log('📤 Emit add_entity (sistema legado)');
+                        } else {
+                            console.log('🎬 Sistema de cenas - sem emit (salva na cena)');
+                        }
                         
                         redrawAll();
                         renderImageList();
-                        showToast(`✅ Imagem "${name}" adicionada e comprimida!`);
+                        showToast(`✅ Imagem "${name}" adicionada!`);
                         saveState('Adicionar Imagem');
                         markChanges();
-                        
                     };
                     compressedImg.onerror = () => {
                         showToast('❌ Erro ao carregar imagem comprimida');
@@ -3641,17 +3779,21 @@ document.addEventListener('keyup', (e) => {
 // ==========================================
 
 function createEmptyScene(name) {
-    return {
+    const scene = {
         id: `scene_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: name,
         created_at: Date.now(),
-        maps: [],
-        entities: [],
-        tokens: [],
-        drawings: [],
-        fog_image: null,
+        maps: [],          
+        entities: [],       
+        tokens: [],       
+        drawings: [],       
+        fog_image: null,    
         visible_to_players: []
     };
+    
+    console.log('📦 Cena vazia criada:', scene.id);
+    
+    return scene;
 }
 
 function createNewScene() {
@@ -3663,12 +3805,27 @@ function createNewScene() {
     
     console.log('🎬 Criando cena:', name.trim());
     
+    // ✅ SALVAR cena atual ANTES de criar nova
+    if (currentSceneId) {
+        console.log('💾 Salvando cena atual antes de criar nova');
+        saveCurrentScene();
+    }
+    
     const newScene = createEmptyScene(name.trim());
+    
+    // ✅ VERIFICAR se não está copiando referências
+    console.log('🔍 Nova cena criada:', {
+        id: newScene.id,
+        maps: newScene.maps?.length || 0,
+        tokens: newScene.tokens?.length || 0,
+        entities: newScene.entities?.length || 0
+    });
+    
     scenes.push(newScene);
     
     socket.emit('scene_create', {
         session_id: SESSION_ID,
-        scene: newScene
+        scene: JSON.parse(JSON.stringify(newScene)) // Deep copy
     });
     
     renderScenesList();
@@ -3680,51 +3837,7 @@ function createNewScene() {
     }
     
     showToast(`Cena "${name}" criada!`);
-}
-
-/**
- * ✅ Salvar cena atual (COM PROTEÇÃO)
- */
-async function saveCurrentState() {
-    if (!SESSION_ID || isSaving) {
-        return;
-    }
-    
-    isSaving = true;
-    console.log('💾 Salvando estado atual no banco...');
-    
-    try {
-        // ✅ Comprimir fog ANTES de salvar
-        const compressedFog = PerformanceFix.compressFog(fogCanvas);
-        
-        const state = {
-            images: images,
-            tokens: tokens,
-            drawings: drawings,
-            fogImage: compressedFog, // Já comprimido
-            scenes: scenes,
-            grid_settings: {
-                enabled: gridEnabled,
-                size: gridSize,
-                color: gridColor,
-                lineWidth: gridLineWidth
-            }
-        };
-        
-        const success = await PersistenceManager.saveSession(SESSION_ID, state);
-        
-        if (success) {
-            console.log('✅ Estado salvo no banco');
-            updateStorageIndicator(); // Atualizar indicador visual
-        } else {
-            console.error('❌ Erro ao salvar no banco');
-        }
-        
-    } catch (error) {
-        console.error('❌ Erro ao salvar:', error);
-    } finally {
-        isSaving = false;
-    }
+    markChanges();
 }
 
 // ✅ NOVA FUNÇÃO - Mostrar tamanho no header
@@ -3747,6 +3860,81 @@ async function updateStorageIndicator() {
 }
 
 /**
+ * ✅ Salvar cena atual antes de trocar
+ */
+
+function saveCurrentScene() {
+    if (!currentSceneId) {
+        console.log('⚠️ Nenhuma cena ativa para salvar');
+        return;
+    }
+    
+    console.log('💾 Salvando cena atual:', currentSceneId);
+    
+    // Encontrar a cena atual
+    const currentScene = scenes.find(s => s.id === currentSceneId);
+    
+    if (!currentScene) {
+        console.error('❌ Cena atual não encontrada');
+        return;
+    }
+    
+    // ✅ Comprimir fog antes de salvar
+    const compressedFog = PerformanceFix.compressFog(fogCanvas);
+    
+    // ✅ CORRIGIDO: Salvar DEEP COPY dos arrays atuais
+    currentScene.maps = JSON.parse(JSON.stringify(
+        images.filter(img => img.id && img.id.startsWith('map_'))
+    ));
+    
+    currentScene.entities = JSON.parse(JSON.stringify(
+        images.filter(img => img.id && !img.id.startsWith('map_'))
+    ));
+    
+    currentScene.tokens = JSON.parse(JSON.stringify(tokens));
+    currentScene.drawings = JSON.parse(JSON.stringify(drawings));
+    currentScene.fog_image = compressedFog;
+    
+    console.log('✅ Cena salva:', {
+        id: currentScene.id,
+        name: currentScene.name,
+        maps: currentScene.maps.length,
+        entities: currentScene.entities.length,
+        tokens: currentScene.tokens.length,
+        drawings: currentScene.drawings.length,
+        hasFog: !!currentScene.fog_image
+    });
+    
+    // ✅ Sincronizar com servidor
+    socket.emit('scene_update', {
+        session_id: SESSION_ID,
+        scene: JSON.parse(JSON.stringify(currentScene)) // Deep copy para servidor
+    });
+    
+    // ✅ Salvar no banco
+    markChanges();
+}
+
+/**
+ * ✅ Atualizar indicador visual de cena ativa
+ */
+function updateActiveSceneIndicator(sceneName) {
+    const indicator = document.getElementById('activeSceneIndicator');
+    const nameEl = document.getElementById('activeSceneName');
+    
+    if (indicator && nameEl) {
+        if (sceneName) {
+            indicator.style.display = 'flex';
+            indicator.style.alignItems = 'center';
+            indicator.style.gap = '0.5rem';
+            nameEl.textContent = sceneName;
+        } else {
+            indicator.style.display = 'none';
+        }
+    }
+}
+
+/**
  * ✅ Trocar para outra cena (COM PROTEÇÃO)
  */
 function switchToScene(sceneId) {
@@ -3762,21 +3950,30 @@ function switchToScene(sceneId) {
     if (currentSceneId && currentSceneId !== sceneId) {
         saveCurrentScene();
         
-        // ✅ Salvar histórico da cena atual
         if (sceneHistories[currentSceneId]) {
             console.log(`📚 Histórico preservado: ${sceneHistories[currentSceneId].history.length} estados`);
         }
     }
     
-    // ✅ LIMPAR TUDO
+    // ✅ LIMPAR COMPLETAMENTE todos os arrays
+    images = null;
+    tokens = null;
+    drawings = null;
     images = [];
     tokens = [];
     drawings = [];
     
+    // ✅ Limpar cache de imagens
+    loadedImages.clear();
+    
+    // ✅ LIMPAR CANVAS
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
+    console.log('🧹 Canvas e arrays limpos');
+    
+    // ✅ Atualizar ID da cena ativa
     currentSceneId = sceneId;
     
     // ✅ Inicializar histórico da nova cena
@@ -3790,13 +3987,23 @@ function switchToScene(sceneId) {
         console.log(`📚 Histórico carregado: ${sceneHistories[sceneId].history.length} estados`);
     }
     
-    // ✅ CARREGAR dados da cena (DEEP COPY)
-    images = JSON.parse(JSON.stringify([
-        ...(scene.maps || []),
-        ...(scene.entities || [])
-    ]));
-    tokens = JSON.parse(JSON.stringify(scene.tokens || []));
-    drawings = JSON.parse(JSON.stringify(scene.drawings || []));
+    // ✅ CARREGAR dados da cena (DEEP COPY FORÇADO)
+    const sceneMaps = scene.maps || [];
+    const sceneEntities = scene.entities || [];
+    const sceneTokens = scene.tokens || [];
+    const sceneDrawings = scene.drawings || [];
+    
+    // ✅ CRIAR NOVOS ARRAYS (não usar spread que mantém referências)
+    images = JSON.parse(JSON.stringify([...sceneMaps, ...sceneEntities]));
+    tokens = JSON.parse(JSON.stringify(sceneTokens));
+    drawings = JSON.parse(JSON.stringify(sceneDrawings));
+    
+    console.log('📦 Conteúdo carregado:', {
+        images: images.length,
+        tokens: tokens.length,
+        drawings: drawings.length,
+        hasFog: !!scene.fog_image
+    });
     
     // ✅ CARREGAR FOG da cena
     if (scene.fog_image) {
@@ -3807,11 +4014,10 @@ function switchToScene(sceneId) {
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
     
+    // ✅ Preload e renderizar
     preloadAllImages();
     renderImageList();
     renderTokenList();
-    
-    // ✅ Atualizar botões undo/redo
     updateUndoRedoButtons();
     
     setTimeout(() => {
@@ -3823,13 +4029,14 @@ function switchToScene(sceneId) {
     socket.emit('scene_switch', {
         session_id: SESSION_ID,
         scene_id: sceneId,
-        scene: scene
+        scene: JSON.parse(JSON.stringify(scene)) // Deep copy
     });
     
     renderScenesList();
     showToast(`Cena ativada: ${scene.name}`);
+    updateActiveSceneIndicator(scene.name);
     closeSceneManager();
-    markChanges(); // ✅ Acionar auto-save
+    markChanges();
 }
 
 function deleteScene(sceneId) {

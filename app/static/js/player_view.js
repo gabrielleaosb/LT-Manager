@@ -597,7 +597,7 @@ socket.on('disconnect', () => {
 socket.on('session_state', (data) => {
     console.log('📦 Estado da sessão recebido:', data);
     
-    loadedImages = {};
+    loadedImages.clear()
     
     maps = data.maps || [];
     entities = data.entities || [];
@@ -752,13 +752,11 @@ socket.on('scene_activated', (data) => {
     
     const scene = data.scene;
     
-    // ✅ VERIFICAR se playerId está definido
     if (!playerId) {
         console.error('❌ [PLAYER] playerId não definido ainda');
         return;
     }
     
-    // ✅ VERIFICAR permissão
     const visiblePlayers = scene.visible_to_players || [];
     const hasPermission = visiblePlayers.includes(playerId);
     
@@ -768,16 +766,14 @@ socket.on('scene_activated', (data) => {
         hasPermission: hasPermission
     });
     
-    // ✅ SE NÃO TEM PERMISSÃO - Bloquear
     if (!hasPermission) {
         console.log('🚫 [PLAYER] SEM permissão - bloqueando acesso');
         
-        // Limpar tudo
         maps = [];
         entities = [];
         tokens = [];
         drawings = [];
-        loadedImages = {};
+        loadedImages.clear(); // ✅ CORRIGIDO
         
         mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -788,22 +784,19 @@ socket.on('scene_activated', (data) => {
         return;
     }
     
-    // ✅ TEM PERMISSÃO - Carregar conteúdo
     console.log('✅ [PLAYER] COM permissão - carregando cena');
     hideBlockedScreen();
     
-    // Limpar estado anterior
     maps = [];
     entities = [];
     tokens = [];
     drawings = [];
-    loadedImages = {};
+    loadedImages.clear(); // ✅ CORRIGIDO
     
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // ✅ Carregar dados da cena (DEEP COPY para evitar referências)
     maps = JSON.parse(JSON.stringify(scene.maps || []));
     entities = JSON.parse(JSON.stringify(scene.entities || []));
     tokens = JSON.parse(JSON.stringify(scene.tokens || []));
@@ -816,10 +809,9 @@ socket.on('scene_activated', (data) => {
         drawings: drawings.length,
         hasFog: !!scene.fog_image
     });
-    loadedImages.clear();
+    
     console.log('🧹 Cache de imagens limpo');
     
-    // ✅ Carregar névoa
     if (scene.fog_image) {
         console.log('🌫️ [PLAYER] Carregando névoa da cena');
         loadFogStatePlayer(scene.fog_image);
@@ -828,7 +820,6 @@ socket.on('scene_activated', (data) => {
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
     
-    // ✅ Renderizar
     preloadAllImages();
     
     setTimeout(() => {
@@ -843,18 +834,16 @@ socket.on('scene_activated', (data) => {
 socket.on('scene_blocked', (data) => {
     console.log('🚫 [PLAYER] Acesso bloqueado à cena:', data.scene_name);
     
-    // ✅ Limpar tudo
     maps = [];
     entities = [];
     tokens = [];
     drawings = [];
-    loadedImages = {};
+    loadedImages.clear(); // ✅ CORRIGIDO
     
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // ✅ Mostrar tela de bloqueio
     showBlockedScreen(data.scene_name);
     showToast('🚫 Você não tem acesso a esta cena');
 });
@@ -867,7 +856,7 @@ socket.on('no_active_scene', () => {
     entities = [];
     tokens = [];
     drawings = [];
-    loadedImages = {};
+    loadedImages.clear();
     
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
