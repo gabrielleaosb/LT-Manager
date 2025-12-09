@@ -5,13 +5,13 @@
 const PerformanceFix = {
     // Controles de taxa
     lastFogSync: 0,
-    fogSyncInterval: 1000, // Enviar fog apenas 1x por segundo
+    fogSyncInterval: 1000,
     
     lastTokenSync: 0,
-    tokenSyncInterval: 100, // 10 FPS para tokens
+    tokenSyncInterval: 100,
     
     lastRedraw: 0,
-    redrawInterval: 16, // 60 FPS máximo
+    redrawInterval: 16,
     
     pendingFogSync: false,
     pendingTokenSync: false,
@@ -21,13 +21,22 @@ const PerformanceFix = {
     tokenMoves: [],
     
     /**
+     * ✅ CORRIGIDO - NÃO COMPRIMIR MAIS O FOG
+     * Compressão estava causando artefatos visuais
+     */
+    compressFog(fogCanvas) {
+        // ✅ RETORNAR IMAGEM ORIGINAL SEM COMPRESSÃO
+        // Qualidade máxima para evitar artefatos
+        return fogCanvas.toDataURL('image/png');
+    },
+    
+    /**
      * Throttle para fog - Envia apenas 1x por segundo
      */
     syncFogThrottled(sessionId, fogImage) {
         const now = performance.now();
         
         if (now - this.lastFogSync < this.fogSyncInterval) {
-            // Guardar para enviar depois
             if (!this.pendingFogSync) {
                 this.pendingFogSync = true;
                 setTimeout(() => {
@@ -61,7 +70,6 @@ const PerformanceFix = {
         const now = performance.now();
         
         if (now - this.lastTokenSync < this.tokenSyncInterval) {
-            // Guardar para enviar depois
             this.tokenMoves = tokens;
             
             if (!this.pendingTokenSync) {
@@ -95,29 +103,13 @@ const PerformanceFix = {
         const now = performance.now();
         
         if (now - this.lastRedraw < this.redrawInterval) {
-            return; // Ignorar se chamou muito rápido
+            return;
         }
         
         requestAnimationFrame(() => {
             callback();
             this.lastRedraw = performance.now();
         });
-    },
-    
-    /**
-     * Comprimir fog antes de salvar (reduz de 5MB para ~500KB)
-     */
-    compressFog(fogCanvas) {
-        // Criar canvas menor
-        const compressed = document.createElement('canvas');
-        compressed.width = fogCanvas.width / 2; // Metade do tamanho
-        compressed.height = fogCanvas.height / 2;
-        
-        const ctx = compressed.getContext('2d');
-        ctx.drawImage(fogCanvas, 0, 0, compressed.width, compressed.height);
-        
-        // Retornar com qualidade reduzida
-        return compressed.toDataURL('image/jpeg', 0.7); // 70% qualidade
     },
     
     /**

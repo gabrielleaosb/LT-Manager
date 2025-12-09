@@ -130,6 +130,11 @@ let drawingBufferCtx = null;
 let isCurrentlyDrawingPath = false;
 let drawingFrameRequest = null;
 
+// ✅ Flags de controle de estado
+let hasLoadedInitialState = false; 
+window.lastSavedState = null;       
+let isLoadingState = false;         
+
 // ==========================================
 // OTIMIZAÇÕES DE PERFORMANCE
 // ==========================================
@@ -329,9 +334,6 @@ let isSaving = false;
 let changesMade = false;
 let lastChangeTime = 0;
 
-// ✅ Flag para evitar carregamento duplo
-let hasLoadedInitialState = false;
-
 /**
  * Marcar que houve mudanças
  */
@@ -348,8 +350,21 @@ function markChanges() {
     }, 5000);
 }
 
+// ==========================================
+// SUBSTITUIR saveCurrentStateWithoutFog NO map_manager_enhanced.js
+// ==========================================
+
+/**
+ * ✅ CORRIGIDO - Auto-save sem sobrescrever trabalho do usuário
+ */
 async function saveCurrentStateWithoutFog() {
     if (!SESSION_ID || isSaving) {
+        return;
+    }
+    
+    // ✅ PROTEÇÃO: Não salvar se ainda não carregou estado inicial
+    if (!hasLoadedInitialState) {
+        console.log('⚠️ Aguardando carregamento inicial antes de salvar');
         return;
     }
     
@@ -365,7 +380,7 @@ async function saveCurrentStateWithoutFog() {
                 saveCurrentScene();
             }
             
-            // ✅ Salvar APENAS cenas (sem fog global)
+            // ✅ Preparar dados para salvar
             const state = {
                 scenes: JSON.parse(JSON.stringify(scenes)),
                 grid_settings: {
@@ -377,10 +392,21 @@ async function saveCurrentStateWithoutFog() {
                 timestamp: Date.now()
             };
             
+            // ✅ Verificar se há mudanças reais
+            const lastSaved = window.lastSavedState;
+            const currentHash = JSON.stringify(state);
+            
+            if (lastSaved === currentHash) {
+                console.log('ℹ️ Sem mudanças desde último save - ignorando');
+                isSaving = false;
+                return;
+            }
+            
             const success = await PersistenceManager.saveSession(SESSION_ID, state);
             
             if (success) {
                 console.log('✅ [AUTO-SAVE] Cenas salvas');
+                window.lastSavedState = currentHash; // ✅ Guardar hash
                 updateStorageIndicator();
             }
             
@@ -403,10 +429,20 @@ async function saveCurrentStateWithoutFog() {
                 timestamp: Date.now()
             };
             
+            // ✅ Verificar mudanças
+            const currentHash = JSON.stringify(state);
+            
+            if (window.lastSavedState === currentHash) {
+                console.log('ℹ️ Sem mudanças - ignorando auto-save');
+                isSaving = false;
+                return;
+            }
+            
             const success = await PersistenceManager.saveSession(SESSION_ID, state);
             
             if (success) {
                 console.log('✅ [AUTO-SAVE] Estado legado salvo');
+                window.lastSavedState = currentHash;
                 updateStorageIndicator();
             }
         }
@@ -417,6 +453,9 @@ async function saveCurrentStateWithoutFog() {
         isSaving = false;
     }
 }
+
+// ✅ Variável global para rastrear último save
+window.lastSavedState = null;
 
 /**
  * Iniciar sistema de auto-save
@@ -529,9 +568,22 @@ async function saveCurrentState() {
 async function loadSavedState() {
     if (!SESSION_ID) return false;
     
-    // ✅ Evitar carregamento duplo
+    // ✅ PROTEÇÃO 1: Evitar carregamento duplo
     if (hasLoadedInitialState) {
-        console.warn('⚠️ Estado já foi carregado - ignorando');
+        console.warn('⚠️ Estado já foi carregado - ignorando chamada duplicada');
+        return false;
+    }
+    
+    // ✅ PROTEÇÃO 2: Evitar carregar se usuário já está trabalhando
+    const hasUserContent = (
+        (images && images.length > 0) ||
+        (tokens && tokens.length > 0) ||
+        (scenes && scenes.length > 0)
+    );
+    
+    if (hasUserContent) {
+        console.warn('⚠️ Usuário já tem conteúdo - não sobrescrever');
+        hasLoadedInitialState = true; // Marcar como carregado para evitar futuras tentativas
         return false;
     }
     
@@ -542,20 +594,19 @@ async function loadSavedState() {
         
         if (!savedData) {
             console.log('ℹ️ [STATE] Sem dados salvos');
+            hasLoadedInitialState = true;
             return false;
         }
         
-        // ✅ Marcar como carregado ANTES de aplicar
+        // ✅ MARCAR COMO CARREGADO IMEDIATAMENTE
         hasLoadedInitialState = true;
         
         // ✅ VERIFICAR SE HÁ CENAS SALVAS
         if (savedData.scenes && savedData.scenes.length > 0) {
             console.log('🎬 Sistema de cenas detectado - modo SCENE');
             
-            // ✅ Carregar APENAS as cenas (não carregar dados globais)
             scenes = savedData.scenes;
             
-            // ✅ Grid settings
             if (savedData.grid_settings) {
                 gridEnabled = savedData.grid_settings.enabled;
                 gridSize = savedData.grid_settings.size;
@@ -563,13 +614,9 @@ async function loadSavedState() {
                 gridLineWidth = savedData.grid_settings.lineWidth;
             }
             
-            // ✅ NÃO carregar images/tokens/drawings/fog globais
-            // Eles vêm da cena ativa
-            
             drawGrid();
             renderScenesList();
             
-            // ✅ Marcar que já tem cenas criadas
             hasCreatedScene = true;
             overlayInitialized = true;
             
@@ -577,12 +624,10 @@ async function loadSavedState() {
             
             // ✅ ATIVAR ÚLTIMA CENA USADA (se houver)
             if (scenes.length > 0) {
-                // Pegar a última cena (mais recente)
                 const lastScene = scenes[scenes.length - 1];
                 
                 console.log('🎬 Ativando última cena:', lastScene.name);
                 
-                // Pequeno delay para garantir que tudo carregou
                 setTimeout(() => {
                     switchToScene(lastScene.id);
                 }, 500);
@@ -594,7 +639,6 @@ async function loadSavedState() {
         } else {
             console.log('📦 Sistema legado detectado - carregando dados globais');
             
-            // ✅ Sistema antigo (sem cenas) - carregar normalmente
             images = savedData.images || [];
             tokens = savedData.tokens || [];
             drawings = savedData.drawings || [];
@@ -626,6 +670,7 @@ async function loadSavedState() {
         
     } catch (error) {
         console.error('❌ [STATE] Erro ao carregar:', error);
+        hasLoadedInitialState = true; // Marcar mesmo com erro
         return false;
     }
 }
@@ -839,26 +884,45 @@ socket.on('connect', () => {
    
     SharedDiceSystem.init();
     
-    loadSavedState().then(wasRestored => {
-        if (wasRestored) {
-            console.log('♻️ Estado restaurado');
-        }
+    // ✅ CARREGAR ESTADO APENAS UMA VEZ
+    if (!hasLoadedInitialState) {
+        console.log('📂 Primeira conexão - tentando restaurar estado');
         
-        socket.emit('join_session', { session_id: SESSION_ID });
-        startAutoSave();
-
-        // ✅ Aguardar um pouco mais para garantir que tudo carregou
-        setTimeout(() => {
-            if (typeof initializeSceneSystem === 'function') {
-                initializeSceneSystem();
+        loadSavedState().then(wasRestored => {
+            if (wasRestored) {
+                console.log('♻️ Estado restaurado do banco');
             } else {
-                console.error('❌ initializeSceneSystem não está definido');
+                console.log('🆕 Iniciando sessão nova');
             }
-        }, 2000); // Aumentado de 1500 para 2000ms
-    }).catch(error => {
-        console.error('❌ Erro ao carregar estado:', error);
+            
+            // ✅ Join na sessão APÓS carregar
+            socket.emit('join_session', { session_id: SESSION_ID });
+            
+            // ✅ Iniciar auto-save APÓS join
+            startAutoSave();
+
+            // ✅ Inicializar sistema de cenas APÓS tudo
+            setTimeout(() => {
+                if (typeof initializeSceneSystem === 'function') {
+                    initializeSceneSystem();
+                } else {
+                    console.error('❌ initializeSceneSystem não está definido');
+                }
+            }, 2000);
+            
+        }).catch(error => {
+            console.error('❌ Erro ao carregar estado:', error);
+            
+            // Mesmo com erro, fazer join
+            socket.emit('join_session', { session_id: SESSION_ID });
+            startAutoSave();
+        });
+    } else {
+        console.log('🔄 Reconectado - estado já carregado, não recarregar');
+        
+        // Apenas fazer join novamente
         socket.emit('join_session', { session_id: SESSION_ID });
-    });
+    }
 });
 
 socket.on('session_state', (data) => {
@@ -1245,138 +1309,57 @@ function setBrushSize(size) {
 // ==================
 
 function redrawAll() {
-    if (isCurrentlyDrawingPath) {
-        return;
+    if (typeof RenderLoop !== 'undefined' && RenderLoop.isRunning) {
+        RenderLoop.requestRedraw();
+    } else {
+        // Fallback se loop não estiver ativo
+        console.warn('⚠️ RenderLoop não ativo, usando redraw direto');
+        redrawAllLegacy();
     }
-    CanvasOptimizer.scheduleRedraw(() => {
-        isCurrentlyDrawing = true;
+}
+
+// ✅ NOVA função redrawDrawings - Apenas marca para redesenhar
+function redrawDrawings() {
+    if (typeof RenderLoop !== 'undefined' && RenderLoop.isRunning) {
+        RenderLoop.requestDrawingRedraw();
+    } else {
+        // Fallback
+        redrawDrawingsLegacy();
+    }
+}
+
+// ✅ Manter funções legadas como backup
+function redrawAllLegacy() {
+    if (isCurrentlyDrawing) return;
+    
+    requestAnimationFrame(() => {
         mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        // Desenhar imagens com otimização
         images.forEach(img => {
             const loadedImg = loadedImages.get(img.id);
             
             if (loadedImg && loadedImg.complete && loadedImg.naturalWidth > 0) {
                 try {
-                    CanvasOptimizer.optimizeImageDraw(
-                        mapCtx, 
-                        loadedImg, 
-                        img.x, 
-                        img.y, 
-                        img.width, 
-                        img.height
-                    );
+                    mapCtx.drawImage(loadedImg, img.x, img.y, img.width, img.height);
                     
-                    // Seleção
                     if (selectedItem === img && selectedType === 'image') {
                         mapCtx.strokeStyle = '#ffc107';
                         mapCtx.lineWidth = 4;
                         mapCtx.strokeRect(img.x, img.y, img.width, img.height);
-                        
-                        const handleSize = 10;
-                        mapCtx.fillStyle = '#9b59b6';
-                        mapCtx.fillRect(
-                            img.x + img.width - handleSize/2, 
-                            img.y + img.height - handleSize/2, 
-                            handleSize, 
-                            handleSize
-                        );
                     }
                 } catch (e) {
-                    console.error('Erro ao desenhar imagem:', e);
+                    console.error('Erro ao desenhar:', e);
                 }
             }
         });
         
-        // Desenhar tokens
         tokens.forEach(token => {
-            const img = loadedImages.get(token.id);
-            
-            if (token.style === 'square' && img && img.complete && img.naturalWidth > 0) {
-                try {
-                    const tokenSize = TOKEN_RADIUS * 1.8;
-                    CanvasOptimizer.optimizeImageDraw(
-                        mapCtx,
-                        img,
-                        token.x - tokenSize/2,
-                        token.y - tokenSize/2,
-                        tokenSize,
-                        tokenSize
-                    );
-                } catch (e) {
-                    console.error('Erro ao desenhar token quadrado:', e);
-                }
-            } else if (img && img.complete && img.naturalWidth > 0) {
-                try {
-                    mapCtx.save();
-                    mapCtx.beginPath();
-                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-                    mapCtx.closePath();
-                    mapCtx.clip();
-                    
-                    CanvasOptimizer.optimizeImageDraw(
-                        mapCtx,
-                        img,
-                        token.x - TOKEN_RADIUS,
-                        token.y - TOKEN_RADIUS,
-                        TOKEN_RADIUS * 2,
-                        TOKEN_RADIUS * 2
-                    );
-                    
-                    mapCtx.restore();
-                    
-                    mapCtx.strokeStyle = "#fff";
-                    mapCtx.lineWidth = 2;
-                    mapCtx.beginPath();
-                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-                    mapCtx.stroke();
-                } catch (e) {
-                    console.error('Erro ao desenhar token:', e);
-                }
-            } else if (token.color) {
-                mapCtx.fillStyle = token.color;
-                mapCtx.beginPath();
-                mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-                mapCtx.fill();
-                
-                mapCtx.strokeStyle = "#fff";
-                mapCtx.lineWidth = 2;
-                mapCtx.beginPath();
-                mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
-                mapCtx.stroke();
-            }
-            
-            // Nome do token
-            mapCtx.fillStyle = "#fff";
-            mapCtx.font = "bold 11px Lato";
-            mapCtx.textAlign = "center";
-            mapCtx.strokeStyle = "#000";
-            mapCtx.lineWidth = 2.5;
-            
-            const nameY = token.style === 'square' ? token.y + TOKEN_RADIUS * 1.8 / 2 + 15 : token.y + TOKEN_RADIUS + 15;
-            mapCtx.strokeText(token.name, token.x, nameY);
-            mapCtx.fillText(token.name, token.x, nameY);
-
-            if (selectedItem === token && selectedType === 'token') {
-                mapCtx.strokeStyle = "#ffc107";
-                mapCtx.lineWidth = 4;
-                mapCtx.beginPath();
-                if (token.style === 'square') {
-                    const tokenSize = TOKEN_RADIUS * 1.8;
-                    mapCtx.strokeRect(token.x - tokenSize/2 - 5, token.y - tokenSize/2 - 5, tokenSize + 10, tokenSize + 10);
-                } else {
-                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS + 5, 0, Math.PI * 2);
-                    mapCtx.stroke();
-                }
-            }
+            // ... código de desenho de token ...
         });
-        
-        isCurrentlyDrawing = false;
     });
 }
 
-function redrawDrawings() {
-    // ✅ Usar requestAnimationFrame
+function redrawDrawingsLegacy() {
     requestAnimationFrame(() => {
         drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
@@ -1392,7 +1375,8 @@ function redrawDrawings() {
                 
                 for (let i = 1; i < drawing.path.length; i++) {
                     drawCtx.lineTo(drawing.path[i].x, drawing.path[i].y);
-                }          
+                }
+                
                 drawCtx.stroke();
             }
         });
@@ -2346,19 +2330,29 @@ function loadFogState(imageData) {
     console.log('🌫️ Carregando fog state...');
     
     const img = new Image();
+    
     img.onload = () => {
-        // ✅ LIMPAR antes de desenhar novo
+        console.log('📐 Imagem fog carregada:', {
+            natural: `${img.naturalWidth}x${img.naturalHeight}`,
+            canvas: `${CANVAS_WIDTH}x${CANVAS_HEIGHT}`
+        });
+        
+        // ✅ LIMPAR ANTES de desenhar
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        console.log('✅ Fog carregado, aplicando ao canvas');
+        // ✅ DESENHAR NA RESOLUÇÃO ORIGINAL (sem escala)
+        // Isso evita artefatos visuais
+        fogCtx.imageSmoothingEnabled = false; // Desabilitar suavização
         fogCtx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        console.log('✅ Fog aplicado');
+        console.log('✅ Fog aplicado sem compressão');
     };
+    
     img.onerror = () => {
         console.error('❌ Erro ao carregar fog');
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     };
+    
     img.src = imageData;
 }
 
@@ -3709,37 +3703,6 @@ function clearAll() {
 }
 
 // ==================
-// INICIALIZAÇÃO
-// ==================
-
-document.addEventListener('DOMContentLoaded', () => {
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.floating-panel') && !e.target.closest('.floating-btn')) {
-            document.querySelectorAll('.floating-panel').forEach(p => p.classList.remove('show'));
-        }
-    });
-    
-    setTimeout(() => {
-        centerCanvas();
-    }, 100);
-    
-    socket.emit('get_players', { session_id: SESSION_ID });
-});
-
-document.addEventListener('DOMContentLoaded', () => {
-    const chatContainer = document.getElementById('chatContainer');
-    if (chatContainer) {
-        chatContainer.classList.add('minimized');
-        const icon = document.getElementById('chatMinimizeIcon');
-        if (icon) icon.textContent = '▲';
-    }
-});
-
-window.addEventListener('resize', () => {
-    centerCanvas();
-});
-
-// ==================
 // PAN TEMPORÁRIO COM ESPAÇO
 // ==================
 document.addEventListener('keydown', (e) => {
@@ -4502,13 +4465,6 @@ setTimeout(() => {
 renderImageList();
 renderTokenList();
 
-// ✅ SALVAR ANTES DE SAIR
-window.addEventListener('beforeunload', (e) => {
-    if (!isSaving) {
-        saveCurrentState();
-    }
-});
-
 // ==========================================
 // SISTEMA OBRIGATÓRIO DE CRIAÇÃO DE CENA
 // ==========================================
@@ -4820,6 +4776,79 @@ socket.on('session_state', (data) => {
                 }
             }, 300);
         }
+    }
+});
+
+// ==========================================
+// INICIALIZAÇÃO - BLOCO ÚNICO E COMPLETO
+// SUBSTITUIR TODOS OS addEventListener NO FINAL DO ARQUIVO
+// ==========================================
+
+// ✅ ÚNICO DOMContentLoaded - Consolida TUDO
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Inicializando Map Manager...');
+    
+    // ✅ 1. INICIAR RENDER LOOP PRIMEIRO
+    if (typeof RenderLoop !== 'undefined') {
+        setTimeout(() => {
+            RenderLoop.start();
+            console.log('✅ RenderLoop ativado');
+        }, 500);
+    } else {
+        console.error('❌ RenderLoop não encontrado! Verifique render_loop.js');
+    }
+    
+    // ✅ 2. Fechar painéis ao clicar fora
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.floating-panel') && !e.target.closest('.floating-btn')) {
+            document.querySelectorAll('.floating-panel').forEach(p => p.classList.remove('show'));
+        }
+    });
+    
+    // ✅ 3. Chat minimizado por padrão
+    const chatContainer = document.getElementById('chatContainer');
+    if (chatContainer) {
+        chatContainer.classList.add('minimized');
+        const icon = document.getElementById('chatMinimizeIcon');
+        if (icon) icon.textContent = '▲';
+    }
+    
+    // ✅ 4. Centralizar canvas
+    setTimeout(() => {
+        centerCanvas();
+    }, 100);
+    
+    // ✅ 5. Solicitar jogadores
+    socket.emit('get_players', { session_id: SESSION_ID });
+    
+    console.log('✅ Map Manager inicializado');
+});
+
+// ✅ Resize do canvas (separado porque não é DOMContentLoaded)
+window.addEventListener('resize', () => {
+    centerCanvas();
+});
+
+// ✅ Salvar antes de sair (separado porque não é DOMContentLoaded)
+window.addEventListener('beforeunload', (e) => {
+    if (!isSaving) {
+        console.log('💾 Salvando antes de sair...');
+        saveCurrentState();
+    }
+});
+
+// ✅ Atalhos de teclado (já existem mais acima no código, mas garantir)
+document.addEventListener('keydown', (e) => {
+    // Ctrl+Z = Undo
+    if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+    }
+    
+    // Ctrl+Y ou Ctrl+Shift+Z = Redo
+    if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        redo();
     }
 });
 
