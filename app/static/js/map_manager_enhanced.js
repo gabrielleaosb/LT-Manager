@@ -2473,12 +2473,6 @@ function initializeFogCanvas() {
     console.log('✅ FogCanvas configurado com event listeners');
 }
 
-// ✅ Chamar inicialização quando DOM carregar
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-        initializeFogCanvas();
-    }, 500);
-});
 
 // ==================
 // ADICIONAR IMAGEM
@@ -3110,17 +3104,6 @@ function sendChatMessage() {
     
     input.value = '';
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-    const conversationInput = document.getElementById('conversationInput');
-    if (conversationInput) {
-        conversationInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendChatMessage();
-            }
-        });
-    }
-});
 
 // ==========================================
 // MONITOR DE CONVERSAS - SOMENTE LEITURA
@@ -4440,28 +4423,6 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// ==========================================
-// INICIALIZAÇÃO
-// ==========================================
-
-document.addEventListener('DOMContentLoaded', () => {
-    // Definir ferramenta padrão
-    currentTool = 'select';
-    
-    // Ativar botão visualmente
-    const selectBtn = document.querySelector('.tool-btn');
-    if (selectBtn) {
-        selectBtn.classList.add('active');
-    }
-    
-    console.log('✅ Ferramenta padrão: select');
-});
-
-setTimeout(() => {
-    drawGrid();
-    console.log('✅ Grid desenhado');
-}, 500);
-
 renderImageList();
 renderTokenList();
 
@@ -4686,6 +4647,7 @@ async function initializeSceneSystem() {
         console.log('⚠️ Overlay já inicializado - ignorando');
         return;
     }
+}
 
 // ==========================================
 // BLOQUEAR AÇÕES ATÉ CRIAR CENA
@@ -4780,32 +4742,46 @@ socket.on('session_state', (data) => {
 });
 
 // ==========================================
-// INICIALIZAÇÃO - BLOCO ÚNICO E COMPLETO
-// SUBSTITUIR TODOS OS addEventListener NO FINAL DO ARQUIVO
+// 🚀 INICIALIZAÇÃO COMPLETA - BLOCO ÚNICO
 // ==========================================
 
-// ✅ ÚNICO DOMContentLoaded - Consolida TUDO
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando Map Manager...');
+    console.log('🚀 [INIT] Map Manager iniciando...');
     
-    // ✅ 1. INICIAR RENDER LOOP PRIMEIRO
+    // ✅ 1. DEFINIR FERRAMENTA PADRÃO
+    currentTool = 'select';
+    const selectBtn = document.querySelector('.tool-btn');
+    if (selectBtn) {
+        selectBtn.classList.add('active');
+    }
+    console.log('✅ [INIT] Ferramenta padrão: select');
+    
+    // ✅ 2. INICIALIZAR FOG CANVAS
+    setTimeout(() => {
+        initializeFogCanvas();
+    }, 500);
+    
+    // ✅ 3. INICIAR RENDER LOOP
     if (typeof RenderLoop !== 'undefined') {
         setTimeout(() => {
             RenderLoop.start();
-            console.log('✅ RenderLoop ativado');
-        }, 500);
+            console.log('✅ [INIT] RenderLoop ativado');
+        }, 600);
     } else {
-        console.error('❌ RenderLoop não encontrado! Verifique render_loop.js');
+        console.error('❌ [INIT] RenderLoop não encontrado!');
     }
     
-    // ✅ 2. Fechar painéis ao clicar fora
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.floating-panel') && !e.target.closest('.floating-btn')) {
-            document.querySelectorAll('.floating-panel').forEach(p => p.classList.remove('show'));
-        }
-    });
+    // ✅ 4. DESENHAR GRID INICIAL
+    setTimeout(() => {
+        drawGrid();
+        console.log('✅ [INIT] Grid desenhado');
+    }, 700);
     
-    // ✅ 3. Chat minimizado por padrão
+    // ✅ 5. RENDERIZAR LISTAS INICIAIS
+    renderImageList();
+    renderTokenList();
+    
+    // ✅ 6. CHAT - Configuração inicial
     const chatContainer = document.getElementById('chatContainer');
     if (chatContainer) {
         chatContainer.classList.add('minimized');
@@ -4813,31 +4789,62 @@ document.addEventListener('DOMContentLoaded', () => {
         if (icon) icon.textContent = '▲';
     }
     
-    // ✅ 4. Centralizar canvas
+    // ✅ 7. CHAT - Event listener do input
+    const conversationInput = document.getElementById('conversationInput');
+    if (conversationInput) {
+        conversationInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+    }
+    
+    // ✅ 8. FECHAR PAINÉIS AO CLICAR FORA
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.floating-panel') && !e.target.closest('.floating-btn')) {
+            document.querySelectorAll('.floating-panel').forEach(p => p.classList.remove('show'));
+        }
+    });
+    
+    // ✅ 9. CENTRALIZAR CANVAS
     setTimeout(() => {
         centerCanvas();
-    }, 100);
+    }, 800);
     
-    // ✅ 5. Solicitar jogadores
+    // ✅ 10. SOLICITAR JOGADORES
     socket.emit('get_players', { session_id: SESSION_ID });
     
-    console.log('✅ Map Manager inicializado');
+    // ✅ 11. ATUALIZAR INDICADOR DE STORAGE (após tudo carregar)
+    setTimeout(() => {
+        updateStorageIndicator();
+        
+        // Atualizar a cada 30 segundos
+        setInterval(() => {
+            updateStorageIndicator();
+        }, 30000);
+    }, 2000);
+    
+    console.log('✅ [INIT] Map Manager inicializado completamente');
 });
 
-// ✅ Resize do canvas (separado porque não é DOMContentLoaded)
+// ==========================================
+// 🔧 EVENT LISTENERS GLOBAIS (FORA DO DOM)
+// ==========================================
+
+// ✅ RESIZE - Recentralizar canvas
 window.addEventListener('resize', () => {
     centerCanvas();
 });
 
-// ✅ Salvar antes de sair (separado porque não é DOMContentLoaded)
+// ✅ BEFOREUNLOAD - Salvar antes de sair
 window.addEventListener('beforeunload', (e) => {
-    if (!isSaving) {
-        console.log('💾 Salvando antes de sair...');
+    if (!isSaving && hasCreatedScene) {
+        console.log('💾 [EXIT] Salvando antes de sair...');
         saveCurrentState();
     }
 });
 
-// ✅ Atalhos de teclado (já existem mais acima no código, mas garantir)
+// ✅ ATALHOS DE TECLADO GLOBAIS
 document.addEventListener('keydown', (e) => {
     // Ctrl+Z = Undo
     if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
@@ -4850,17 +4857,54 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         redo();
     }
+    
+    // SPACE - Pan temporário (início)
+    if (e.code === 'Space' && !spacePressed) {
+        e.preventDefault();
+        spacePressed = true;
+        
+        const indicator = document.getElementById('panIndicator');
+        if (indicator) {
+            indicator.style.display = 'flex';
+        }
+        
+        if (!tempPanning) {
+            canvasWrapper.style.cursor = 'grab';
+        }
+    }
 });
 
-// ✅ Atualizar indicador quando tudo estiver carregado
-window.addEventListener('load', () => {
-    setTimeout(() => {
-        updateStorageIndicator();
+document.addEventListener('keyup', (e) => {
+    // SPACE - Pan temporário (fim)
+    if (e.code === 'Space') {
+        e.preventDefault();
+        spacePressed = false;
+        tempPanning = false;
         
-        // Atualizar a cada 30 segundos
-        setInterval(() => {
-            updateStorageIndicator();
-        }, 30000);
-    }, 2000);
+        const indicator = document.getElementById('panIndicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+        
+        // Restaurar cursor baseado na ferramenta ativa
+        if (window.fogState && (window.fogState.paintMode || window.fogState.eraseMode)) {
+            canvasWrapper.style.cursor = 'crosshair';
+        } else if (currentTool === 'draw') {
+            canvasWrapper.style.cursor = 'crosshair';
+        } else if (currentTool === 'erase') {
+            canvasWrapper.style.cursor = 'not-allowed';
+        } else if (currentTool === 'pan') {
+            canvasWrapper.style.cursor = 'grab';
+        } else {
+            canvasWrapper.style.cursor = 'default';
+        }
+    }
+    
+    // ESC - Fechar monitores e modais
+    if (e.key === 'Escape') {
+        const monitorModal = document.getElementById('conversationsMonitor');
+        if (monitorModal && monitorModal.classList.contains('show')) {
+            closeConversationsMonitor();
+        }
+    }
 });
-}
