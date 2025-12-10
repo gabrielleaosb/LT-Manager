@@ -227,11 +227,18 @@ def handle_add_entity(data):
     entity_data = data.get('entity')
     
     init_session(session_id)
+    
+    # ✅ ADICIONAR ao servidor (para compatibilidade)
     active_sessions[session_id]['entities'].append(entity_data)
     
-    emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, 
-         room=session_id, include_self=True)
-    print(f'🎭 Entidade adicionada - broadcasting para sessão {session_id}')
+    # ✅ BROADCAST apenas para o MESTRE (players recebem via cena)
+    master_socket = active_sessions[session_id].get('master_socket')
+    if master_socket:
+        emit('entities_sync', {
+            'entities': active_sessions[session_id]['entities']
+        }, room=master_socket)
+    
+    print('🎭 Entidade adicionada - enviado apenas para mestre')
 
 @socketio.on('update_entity')
 def handle_update_entity(data):
@@ -241,14 +248,58 @@ def handle_update_entity(data):
     
     init_session(session_id)
     
+    # ✅ Atualizar no servidor
     for i, e in enumerate(active_sessions[session_id]['entities']):
         if e['id'] == entity_id:
             active_sessions[session_id]['entities'][i] = entity_data
             break
     
-    emit('entities_sync', {'entities': active_sessions[session_id]['entities']}, 
-         room=session_id, include_self=True)
-    print(f'🎭 Entidade atualizada - broadcasting para sessão {session_id}')
+    # ✅ BROADCAST INDIVIDUAL apenas para quem vê a cena ativa
+    session_data = active_sessions[session_id]
+    active_scene_id = session_data.get('active_scene_id')
+    
+    if not active_scene_id:
+        print('⚠️ Sem cena ativa - update ignorado para players')
+        return
+    
+    # Encontrar cena ativa
+    scenes = session_data.get('scenes', [])
+    active_scene = next((s for s in scenes if s.get('id') == active_scene_id), None)
+    
+    if not active_scene:
+        print('⚠️ Cena ativa não encontrada')
+        return
+    
+    # ✅ Verificar se a entidade pertence à cena ativa
+    scene_entities = active_scene.get('entities', [])
+    entity_in_scene = any(e.get('id') == entity_id for e in scene_entities)
+    
+    if not entity_in_scene:
+        print(f'ℹ️ Entity {entity_id} não pertence à cena ativa - não broadcast')
+        return
+    
+    # ✅ Enviar apenas para jogadores que veem a cena
+    visible_players = active_scene.get('visible_to_players', [])
+    
+    for player_id in visible_players:
+        player_data = session_data.get('players', {}).get(player_id)
+        if player_data:
+            player_socket = player_data.get('socket_id')
+            if player_socket:
+                emit('entity_updated', {
+                    'entity_id': entity_id,
+                    'entity': entity_data
+                }, room=player_socket)
+    
+    # ✅ Enviar para o mestre também
+    master_socket = session_data.get('master_socket')
+    if master_socket:
+        emit('entity_updated', {
+            'entity_id': entity_id,
+            'entity': entity_data
+        }, room=master_socket)
+    
+    print(f'🎭 Entity {entity_id} atualizada - broadcast para {len(visible_players)} jogadores')
 
 @socketio.on('delete_entity')
 def handle_delete_entity(data):
@@ -720,7 +771,7 @@ def handle_scene_switch(data):
     
     print(f'🎬 Trocando para cena: {scene.get("name")}')
     
-    # ✅ ENVIAR PARA TODOS OS JOGADORES
+    # ✅ ENVIAR PARA CADA JOGADOR INDIVIDUALMENTE
     session_data = active_sessions[session_id]
     
     for player_id, player_data in session_data.get('players', {}).items():
@@ -735,25 +786,16 @@ def handle_scene_switch(data):
         print(f'  👤 {player_id} - Visível: {is_visible}')
         
         if is_visible:
-            # ✅ Enviar cena completa COM fog
+            # ✅ TEM PERMISSÃO - Enviar cena COMPLETA
             emit('scene_activated', {
                 'scene_id': scene_id,
                 'scene': scene
             }, room=player_socket)
         else:
-            # ✅ Enviar cena vazia
-            emit('scene_activated', {
+            # ❌ SEM PERMISSÃO - Bloquear
+            emit('scene_blocked', {
                 'scene_id': scene_id,
-                'scene': {
-                    'id': scene_id,
-                    'name': scene.get('name'),
-                    'maps': [],
-                    'entities': [],
-                    'tokens': [],
-                    'drawings': [],
-                    'fog_image': None,
-                    'visible_to_players': []
-                }
+                'scene_name': scene.get('name')
             }, room=player_socket)
     
     # ✅ Notificar mestre

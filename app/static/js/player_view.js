@@ -624,16 +624,44 @@ socket.on('permissions_updated', (data) => {
 
 // SINCRONIZAÇÃO EM TEMPO REAL - CORRIGIDO
 socket.on('maps_sync', (data) => {
-    console.log('📍 MAPS SYNC recebido:', data);
-    maps = data.maps || [];
-    preloadAllImages();
-    redrawAll();
+    console.log('📍 [PLAYER] MAPS SYNC recebido:', data.maps?.length || 0, 'mapas');
+    
+    // ✅ Só atualizar se não estiver vazio OU for sync inicial
+    if (data.maps && data.maps.length >= 0) {
+        maps = data.maps;
+        preloadAllImages();
+        redrawAll();
+    } else {
+        console.warn('⚠️ [PLAYER] Maps sync vazio ignorado');
+    }
 });
 
 socket.on('entities_sync', (data) => {
-    console.log('🎭 ENTITIES SYNC recebido:', data);
-    entities = data.entities || [];
-    preloadAllImages();
+    console.log('🎭 [PLAYER] ENTITIES SYNC recebido:', data.entities?.length || 0, 'entities');
+    
+    // ✅ Só atualizar se não estiver vazio OU for sync inicial
+    if (data.entities && data.entities.length >= 0) {
+        entities = data.entities;
+        preloadAllImages();
+        redrawAll();
+    } else {
+        console.warn('⚠️ [PLAYER] Entities sync vazio ignorado');
+    }
+});
+
+socket.on('entity_updated', (data) => {
+    console.log('🎭 [PLAYER] Entity atualizada:', data.entity_id);
+    
+    const entityIndex = entities.findIndex(e => e.id === data.entity_id);
+    
+    if (entityIndex !== -1) {
+        entities[entityIndex] = data.entity;
+        console.log('✅ [PLAYER] Entity atualizada localmente');
+    } else {
+        entities.push(data.entity);
+        console.log('✅ [PLAYER] Nova entity adicionada');
+    }
+    
     redrawAll();
 });
 
@@ -769,11 +797,12 @@ socket.on('scene_activated', (data) => {
     if (!hasPermission) {
         console.log('🚫 [PLAYER] SEM permissão - bloqueando acesso');
         
+        // ✅ LIMPAR TUDO
         maps = [];
         entities = [];
         tokens = [];
         drawings = [];
-        loadedImages.clear(); // ✅ CORRIGIDO
+        loadedImages.clear();
         
         mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -787,22 +816,28 @@ socket.on('scene_activated', (data) => {
     console.log('✅ [PLAYER] COM permissão - carregando cena');
     hideBlockedScreen();
     
+    // ✅ LIMPAR COMPLETAMENTE antes de carregar nova cena
+    console.log('🧹 [PLAYER] Limpando estado anterior...');
+    
     maps = [];
     entities = [];
     tokens = [];
     drawings = [];
-    loadedImages.clear(); // ✅ CORRIGIDO
+    loadedImages.clear();
     
     mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
+    console.log('✅ [PLAYER] Estado limpo');
+    
+    // ✅ CARREGAR NOVA CENA (deep copy)
     maps = JSON.parse(JSON.stringify(scene.maps || []));
     entities = JSON.parse(JSON.stringify(scene.entities || []));
     tokens = JSON.parse(JSON.stringify(scene.tokens || []));
     drawings = JSON.parse(JSON.stringify(scene.drawings || []));
     
-    console.log('📦 Conteúdo carregado:', {
+    console.log('📦 [PLAYER] Conteúdo carregado:', {
         maps: maps.length,
         entities: entities.length,
         tokens: tokens.length,
@@ -810,8 +845,7 @@ socket.on('scene_activated', (data) => {
         hasFog: !!scene.fog_image
     });
     
-    console.log('🧹 Cache de imagens limpo');
-    
+    // ✅ FOG
     if (scene.fog_image) {
         console.log('🌫️ [PLAYER] Carregando névoa da cena');
         loadFogStatePlayer(scene.fog_image);
@@ -820,6 +854,7 @@ socket.on('scene_activated', (data) => {
         fogCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
     
+    // ✅ PRELOAD e RENDER
     preloadAllImages();
     
     setTimeout(() => {
@@ -1271,6 +1306,7 @@ canvasWrapper.addEventListener('mousemove', (e) => {
 });
 
 canvasWrapper.addEventListener('mouseup', () => {
+    // ✅ PLAYER APENAS MOVE TOKENS (não resize imagens)
     if (draggingToken) {
         const tokensCopy = JSON.parse(JSON.stringify(tokens));
         

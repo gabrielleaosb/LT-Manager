@@ -122,7 +122,7 @@ let currentSceneId = null;  // ✅ ADICIONADO
 let hasCreatedScene = false;
 let sceneCreationOverlay = null;
 let overlayInitialized = false;
-let systemInitialized = false
+window.systemInitialized = false;
 
 // Sistema de buffer para desenho suave
 let drawingBuffer = null;
@@ -156,6 +156,13 @@ const debouncedMapUpdate = CanvasOptimizer.debounce((mapId, mapData) => {
 }, 150);
 
 const debouncedEntityUpdate = CanvasOptimizer.debounce((entityId, entityData) => {
+    console.log('📤 [MESTRE] Enviando update_entity:', {
+        entityId: entityId,
+        name: entityData.name,
+        x: entityData.x,
+        y: entityData.y
+    });
+    
     socket.emit('update_entity', {
         session_id: SESSION_ID,
         entity_id: entityId,
@@ -1051,6 +1058,23 @@ socket.on('entities_sync', (data) => {
     markChanges();
 });
 
+socket.on('entity_updated', (data) => {
+    console.log('🎭 [MESTRE] Entity atualizada:', data.entity_id);
+    
+    const entityIndex = images.findIndex(img => img.id === data.entity_id);
+    
+    if (entityIndex !== -1) {
+        const oldImg = images[entityIndex];
+        images[entityIndex] = {
+            ...data.entity,
+            image: oldImg.image 
+        };
+        
+        console.log('✅ [MESTRE] Entity atualizada localmente');
+        redrawAll();
+    }
+});
+
 socket.on('token_sync', (data) => {
     console.log('🎯 [MESTRE] TOKEN SYNC recebido:', {
         timestamp: new Date().toISOString(),
@@ -1309,13 +1333,7 @@ function setBrushSize(size) {
 // ==================
 
 function redrawAll() {
-    if (typeof RenderLoop !== 'undefined' && RenderLoop.isRunning) {
-        RenderLoop.requestRedraw();
-    } else {
-        // Fallback se loop não estiver ativo
-        console.warn('⚠️ RenderLoop não ativo, usando redraw direto');
-        redrawAllLegacy();
-    }
+    redrawAllLegacy();
 }
 
 // ✅ NOVA função redrawDrawings - Apenas marca para redesenhar
@@ -1333,29 +1351,117 @@ function redrawAllLegacy() {
     if (isCurrentlyDrawing) return;
     
     requestAnimationFrame(() => {
+        // ✅ Limpar canvas
         mapCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
+        console.log('🎨 [REDRAW] Redesenhando:', {
+            images: images.length,
+            tokens: tokens.length,
+            loadedImages: loadedImages.size
+        });
+        
+        // ✅ DESENHAR IMAGENS
         images.forEach(img => {
             const loadedImg = loadedImages.get(img.id);
+            
+            console.log('🖼️ Processando imagem:', {
+                id: img.id,
+                name: img.name,
+                hasLoaded: !!loadedImg,
+                isComplete: loadedImg?.complete,
+                naturalWidth: loadedImg?.naturalWidth
+            });
             
             if (loadedImg && loadedImg.complete && loadedImg.naturalWidth > 0) {
                 try {
                     mapCtx.drawImage(loadedImg, img.x, img.y, img.width, img.height);
                     
+                    // Seleção
                     if (selectedItem === img && selectedType === 'image') {
                         mapCtx.strokeStyle = '#ffc107';
                         mapCtx.lineWidth = 4;
                         mapCtx.strokeRect(img.x, img.y, img.width, img.height);
                     }
+                    
+                    console.log('✅ Imagem desenhada:', img.name);
                 } catch (e) {
-                    console.error('Erro ao desenhar:', e);
+                    console.error('❌ Erro ao desenhar imagem:', img.name, e);
                 }
+            } else {
+                console.warn('⚠️ Imagem não carregada:', img.name);
             }
         });
         
+        // ✅ DESENHAR TOKENS
         tokens.forEach(token => {
-            // ... código de desenho de token ...
+            const img = loadedImages.get(token.id);
+            
+            if (token.style === 'square' && img && img.complete && img.naturalWidth > 0) {
+                try {
+                    const tokenSize = TOKEN_RADIUS * 1.8;
+                    mapCtx.drawImage(
+                        img,
+                        token.x - tokenSize/2,
+                        token.y - tokenSize/2,
+                        tokenSize,
+                        tokenSize
+                    );
+                } catch (e) {
+                    console.error('❌ Erro ao desenhar token quadrado:', e);
+                }
+            } else if (img && img.complete && img.naturalWidth > 0) {
+                try {
+                    mapCtx.save();
+                    mapCtx.beginPath();
+                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                    mapCtx.closePath();
+                    mapCtx.clip();
+                    
+                    mapCtx.drawImage(
+                        img,
+                        token.x - TOKEN_RADIUS,
+                        token.y - TOKEN_RADIUS,
+                        TOKEN_RADIUS * 2,
+                        TOKEN_RADIUS * 2
+                    );
+                    
+                    mapCtx.restore();
+                    
+                    mapCtx.strokeStyle = "#fff";
+                    mapCtx.lineWidth = 2;
+                    mapCtx.beginPath();
+                    mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                    mapCtx.stroke();
+                } catch (e) {
+                    console.error('❌ Erro ao desenhar token:', e);
+                }
+            } else if (token.color) {
+                // Token sem imagem (apenas cor)
+                mapCtx.fillStyle = token.color;
+                mapCtx.beginPath();
+                mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                mapCtx.fill();
+                
+                mapCtx.strokeStyle = "#fff";
+                mapCtx.lineWidth = 2;
+                mapCtx.beginPath();
+                mapCtx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+                mapCtx.stroke();
+            }
+            
+            // Nome do token
+            mapCtx.fillStyle = "#fff";
+            mapCtx.font = "bold 11px Lato";
+            mapCtx.textAlign = "center";
+            mapCtx.strokeStyle = "#000";
+            mapCtx.lineWidth = 2.5;
+            
+            const nameY = token.style === 'square' ? token.y + TOKEN_RADIUS * 1.8 / 2 + 15 : token.y + TOKEN_RADIUS + 15;
+            mapCtx.strokeText(token.name, token.x, nameY);
+            mapCtx.fillText(token.name, token.x, nameY);
         });
+        
+        console.log('✅ [REDRAW] Completo');
     });
 }
 
@@ -2537,27 +2643,37 @@ function addImage() {
                             currentSceneId: currentSceneId,
                             sceneSystem: hasCreatedScene
                         });
+
+                        setTimeout(() => {
+                            console.log('🔄 Forçando redesenho após adicionar imagem');
+                            redrawAllLegacy();
+                        }, 100);
                         
-                        // ✅ APENAS emitir se NÃO estiver usando sistema de cenas
-                        if (!hasCreatedScene || scenes.length === 0) {
-                            socket.emit('add_entity', {
-                                session_id: SESSION_ID,
-                                entity: newImage
-                            });
-                            console.log('📤 Emit add_entity (sistema legado)');
-                        } else {
-                            console.log('🎬 Sistema de cenas - sem emit (salva na cena)');
-                        }
+                        socket.emit('add_entity', {
+                            session_id: SESSION_ID,
+                            entity: newImage
+                        });
+                        console.log('📤 Emit add_entity enviado');
                         
+                        // ✅ Renderizar imediatamente
                         redrawAll();
                         renderImageList();
                         showToast(`✅ Imagem "${name}" adicionada!`);
+                        
+                        // ✅ Salvar estado para undo/redo
                         saveState('Adicionar Imagem');
+                        
+                        // ✅ Marcar mudanças para auto-save
                         markChanges();
+                        
+                        console.log('✅ Imagem processada e sincronizada com sucesso');
                     };
+                    
                     compressedImg.onerror = () => {
                         showToast('❌ Erro ao carregar imagem comprimida');
+                        console.error('❌ Erro ao carregar imagem comprimida');
                     };
+                    
                     compressedImg.src = compressedBase64;
                     
                 } catch (error) {
@@ -2568,12 +2684,20 @@ function addImage() {
             
             img.onerror = () => {
                 showToast('❌ Erro ao carregar imagem');
+                console.error('❌ Erro ao carregar imagem original');
             };
             
             img.src = ev.target.result;
         };
+        
+        reader.onerror = () => {
+            showToast('❌ Erro ao ler arquivo');
+            console.error('❌ Erro ao ler arquivo');
+        };
+        
         reader.readAsDataURL(file);
     };
+    
     input.click();
 }
 
@@ -4637,15 +4761,52 @@ function checkIfSceneExists() {
 async function initializeSceneSystem() {
     console.log('🎬 Inicializando sistema de cenas...');
     
-    // ✅ Verificar se já foi inicializado
-    if (typeof systemInitialized !== 'undefined' && systemInitialized) {
+    // ✅ MARCAR como inicializado IMEDIATAMENTE
+    if (window.systemInitialized) {
         console.log('⚠️ Sistema já inicializado - ignorando');
         return;
     }
+    window.systemInitialized = true;
     
-    if (typeof overlayInitialized !== 'undefined' && overlayInitialized) {
-        console.log('⚠️ Overlay já inicializado - ignorando');
-        return;
+    console.log('📂 Verificando cenas no banco...');
+    
+    try {
+        const savedData = await PersistenceManager.loadSession(SESSION_ID);
+        
+        if (savedData && savedData.scenes && savedData.scenes.length > 0) {
+            console.log('✅ Cenas encontradas:', savedData.scenes.length);
+            scenes = savedData.scenes;
+            hasCreatedScene = true;
+            overlayInitialized = true;
+            renderScenesList();
+            
+            // Ativar última cena
+            if (scenes.length > 0) {
+                const lastScene = scenes[scenes.length - 1];
+                console.log('🎬 Ativando última cena:', lastScene.name);
+                setTimeout(() => {
+                    switchToScene(lastScene.id);
+                }, 500);
+            }
+        } else {
+            console.log('❌ Nenhuma cena encontrada - mostrar overlay');
+            hasCreatedScene = false;
+            overlayInitialized = false;
+            
+            // ✅ MOSTRAR OVERLAY OBRIGATÓRIO
+            setTimeout(() => {
+                showSceneCreationOverlay();
+            }, 1000);
+        }
+    } catch (error) {
+        console.error('❌ Erro ao verificar cenas:', error);
+        hasCreatedScene = false;
+        overlayInitialized = false;
+        
+        // ✅ MOSTRAR OVERLAY mesmo com erro
+        setTimeout(() => {
+            showSceneCreationOverlay();
+        }, 1000);
     }
 }
 
@@ -4679,31 +4840,16 @@ window.addToken = function() {
 // EXECUTAR NA INICIALIZAÇÃO - ÚNICA VEZ
 // ==========================================
 
-// ✅ Método único de inicialização
-function initializeOnce() {
-    if (systemInitialized) {
-        console.log('⚠️ Sistema já foi inicializado - ignorando');
-        return;
-    }
-    
-    console.log('🎬 Inicializando sistema pela primeira vez...');
-    
-    // Aguardar um momento para garantir que tudo carregou
-    setTimeout(() => {
-        initializeSceneSystem();
-    }, 1000);
-}
 
-
-// Socket conectado - Backup (só executa se ainda não inicializou)
+// Socket conectado
 socket.on('connect', () => {
     console.log('🔌 Socket conectado');
     
-    // Só tenta inicializar se ainda não foi feito
-    if (!systemInitialized && !overlayInitialized) {
-        console.log('🔄 Tentando inicializar via socket...');
+    // ✅ Inicializar sistema de cenas APENAS UMA VEZ
+    if (!window.systemInitialized) {
+        console.log('🎬 Primeira conexão - inicializando sistema');
         setTimeout(() => {
-            initializeOnce();
+            initializeSceneSystem();
         }, 1200);
     }
 });
@@ -4748,40 +4894,33 @@ socket.on('session_state', (data) => {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 [INIT] Map Manager iniciando...');
     
-    // ✅ 1. DEFINIR FERRAMENTA PADRÃO
+    // ✅ 1. FERRAMENTA PADRÃO
     currentTool = 'select';
     const selectBtn = document.querySelector('.tool-btn');
-    if (selectBtn) {
-        selectBtn.classList.add('active');
-    }
-    console.log('✅ [INIT] Ferramenta padrão: select');
+    if (selectBtn) selectBtn.classList.add('active');
     
-    // ✅ 2. INICIALIZAR FOG CANVAS
-    setTimeout(() => {
-        initializeFogCanvas();
-    }, 500);
+    // ✅ 2. FOG CANVAS
+    setTimeout(() => initializeFogCanvas(), 500);
     
-    // ✅ 3. INICIAR RENDER LOOP
-    if (typeof RenderLoop !== 'undefined') {
-        setTimeout(() => {
-            RenderLoop.start();
-            console.log('✅ [INIT] RenderLoop ativado');
-        }, 600);
-    } else {
-        console.error('❌ [INIT] RenderLoop não encontrado!');
-    }
+    // ✅ 3. RENDER LOOP
+   // if (typeof RenderLoop !== 'undefined') {
+       // setTimeout(() => {
+       //     RenderLoop.start();
+      //      console.log('✅ [INIT] RenderLoop ativado');
+     //   }, 600);
+    //}
     
-    // ✅ 4. DESENHAR GRID INICIAL
+    // ✅ 4. GRID
     setTimeout(() => {
         drawGrid();
         console.log('✅ [INIT] Grid desenhado');
     }, 700);
     
-    // ✅ 5. RENDERIZAR LISTAS INICIAIS
+    // ✅ 5. LISTAS
     renderImageList();
     renderTokenList();
     
-    // ✅ 6. CHAT - Configuração inicial
+    // ✅ 6. CHAT
     const chatContainer = document.getElementById('chatContainer');
     if (chatContainer) {
         chatContainer.classList.add('minimized');
@@ -4789,42 +4928,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (icon) icon.textContent = '▲';
     }
     
-    // ✅ 7. CHAT - Event listener do input
     const conversationInput = document.getElementById('conversationInput');
     if (conversationInput) {
         conversationInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendChatMessage();
-            }
+            if (e.key === 'Enter') sendChatMessage();
         });
     }
     
-    // ✅ 8. FECHAR PAINÉIS AO CLICAR FORA
+    // ✅ 7. FECHAR PAINÉIS AO CLICAR FORA
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.floating-panel') && !e.target.closest('.floating-btn')) {
             document.querySelectorAll('.floating-panel').forEach(p => p.classList.remove('show'));
         }
     });
     
-    // ✅ 9. CENTRALIZAR CANVAS
-    setTimeout(() => {
-        centerCanvas();
-    }, 800);
+    // ✅ 8. CENTRALIZAR CANVAS
+    setTimeout(() => centerCanvas(), 800);
     
-    // ✅ 10. SOLICITAR JOGADORES
+    // ✅ 9. SOLICITAR JOGADORES
     socket.emit('get_players', { session_id: SESSION_ID });
     
-    // ✅ 11. ATUALIZAR INDICADOR DE STORAGE (após tudo carregar)
+    // ✅ 10. STORAGE INDICATOR
     setTimeout(() => {
         updateStorageIndicator();
-        
-        // Atualizar a cada 30 segundos
-        setInterval(() => {
-            updateStorageIndicator();
-        }, 30000);
+        setInterval(() => updateStorageIndicator(), 30000);
     }, 2000);
     
-    console.log('✅ [INIT] Map Manager inicializado completamente');
+    console.log('✅ [INIT] Map Manager inicializado');
 });
 
 // ==========================================
