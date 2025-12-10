@@ -110,7 +110,6 @@ let sidebarCollapsed = false;
 // Pan temporário com espaço
 let middleMousePressed = false;
 let tempPanning = false;
-let spacePressed = false;  // ✅ ADICIONADO
 
 // Undo/Redo
 let sceneHistories = {}; 
@@ -726,8 +725,8 @@ function updateZoomDisplay() {
 canvasWrapper.addEventListener('wheel', (e) => {
     e.preventDefault();
     
-    if (window.fogState && (window.fogState.paintMode || window.fogState.eraseMode)) {
-        // Pan vertical com scroll
+    // ✅ SCROLL DO MOUSE (botão do meio pressionado) = PAN
+    if (middleMousePressed) {
         const panSpeed = 2;
         panY -= e.deltaY * panSpeed;
         panX -= e.deltaX * panSpeed;
@@ -735,6 +734,16 @@ canvasWrapper.addEventListener('wheel', (e) => {
         return;
     }
     
+    // ✅ FOG ATIVO = PAN também
+    if (window.fogState && (window.fogState.paintMode || window.fogState.eraseMode)) {
+        const panSpeed = 2;
+        panY -= e.deltaY * panSpeed;
+        panX -= e.deltaX * panSpeed;
+        applyTransform();
+        return;
+    }
+    
+    // ✅ SCROLL NORMAL = ZOOM
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
     zoom(delta);
 });
@@ -2859,47 +2868,6 @@ function deleteSelected() {
     showToast('Item removido!');
 }
 
-document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && !spacePressed) {
-        e.preventDefault();
-        spacePressed = true;
-        
-        const indicator = document.getElementById('panIndicator');
-        if (indicator) {
-            indicator.style.display = 'flex';
-        }
-        
-        if (!tempPanning) {
-            canvasWrapper.style.cursor = 'grab';
-        }
-    }
-});
-
-document.addEventListener('keyup', (e) => {
-    if (e.code === 'Space') {
-        e.preventDefault();
-        spacePressed = false;
-        tempPanning = false;
-        
-        const indicator = document.getElementById('panIndicator');
-        if (indicator) {
-            indicator.style.display = 'none';
-        }
-        
-        if (fogDrawingMode) {
-            canvasWrapper.style.cursor = 'crosshair';
-        } else if (currentTool === 'draw') {
-            canvasWrapper.style.cursor = 'crosshair';
-        } else if (currentTool === 'erase') {
-            canvasWrapper.style.cursor = 'not-allowed';
-        } else if (currentTool === 'pan') {
-            canvasWrapper.style.cursor = 'grab';
-        } else {
-            canvasWrapper.style.cursor = 'default';
-        }
-    }
-});
-
 // ==================
 // RENDERIZAR LISTAS
 // ==================
@@ -3808,41 +3776,6 @@ function clearAll() {
     socket.emit('clear_drawings', { session_id: SESSION_ID });
     showToast('Tudo limpo!');
 }
-
-// ==================
-// PAN TEMPORÁRIO COM ESPAÇO
-// ==================
-document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && !spacePressed) {
-        e.preventDefault();
-        spacePressed = true;
-        
-        if (!tempPanning) {
-            canvasWrapper.style.cursor = 'grab';
-        }
-    }
-});
-
-document.addEventListener('keyup', (e) => {
-    if (e.code === 'Space') {
-        e.preventDefault();
-        spacePressed = false;
-        tempPanning = false;
-        
-        // Restaurar cursor baseado na ferramenta ativa
-        if (fogDrawingMode) {
-            canvasWrapper.style.cursor = 'crosshair';
-        } else if (currentTool === 'draw') {
-            canvasWrapper.style.cursor = 'crosshair';
-        } else if (currentTool === 'erase') {
-            canvasWrapper.style.cursor = 'not-allowed';
-        } else if (currentTool === 'pan') {
-            canvasWrapper.style.cursor = 'grab';
-        } else {
-            canvasWrapper.style.cursor = 'default';
-        }
-    }
-});
 
 // ==========================================
 // SISTEMA DE CENAS REESTRUTURADO
@@ -4987,28 +4920,12 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         redo();
     }
-    
-    // SPACE - Pan temporário (início)
-    if (e.code === 'Space' && !spacePressed) {
-        e.preventDefault();
-        spacePressed = true;
-        
-        const indicator = document.getElementById('panIndicator');
-        if (indicator) {
-            indicator.style.display = 'flex';
-        }
-        
-        if (!tempPanning) {
-            canvasWrapper.style.cursor = 'grab';
-        }
-    }
 });
 
 document.addEventListener('keyup', (e) => {
     // SPACE - Pan temporário (fim)
     if (e.code === 'Space') {
         e.preventDefault();
-        spacePressed = false;
         tempPanning = false;
         
         const indicator = document.getElementById('panIndicator');

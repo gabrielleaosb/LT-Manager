@@ -308,6 +308,26 @@ function zoom(delta) {
 
 canvasWrapper.addEventListener('wheel', (e) => {
     e.preventDefault();
+    
+    // ✅ SCROLL DO MOUSE (botão do meio pressionado) = PAN
+    if (middleMousePressed) {
+        const panSpeed = 2;
+        panY -= e.deltaY * panSpeed;
+        panX -= e.deltaX * panSpeed;
+        applyTransform();
+        return;
+    }
+    
+    // ✅ MODO DESENHO ativo = PAN também
+    if (permissions.draw && (drawTool === 'draw' || drawTool === 'erase')) {
+        const panSpeed = 2;
+        panY -= e.deltaY * panSpeed;
+        panX -= e.deltaX * panSpeed;
+        applyTransform();
+        return;
+    }
+    
+    // ✅ SCROLL NORMAL = ZOOM
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
     zoom(delta);
 });
@@ -650,19 +670,42 @@ socket.on('entities_sync', (data) => {
 });
 
 socket.on('entity_updated', (data) => {
-    console.log('🎭 [PLAYER] Entity atualizada:', data.entity_id);
+    console.log('🎭 [PLAYER] Entity recebida:', {
+        id: data.entity_id,
+        name: data.entity?.name,
+        hasImage: !!data.entity?.image
+    });
     
     const entityIndex = entities.findIndex(e => e.id === data.entity_id);
     
     if (entityIndex !== -1) {
+        // ✅ Atualizar entity existente
         entities[entityIndex] = data.entity;
-        console.log('✅ [PLAYER] Entity atualizada localmente');
+        console.log('✅ [PLAYER] Entity atualizada');
     } else {
+        // ✅ Adicionar nova entity
         entities.push(data.entity);
         console.log('✅ [PLAYER] Nova entity adicionada');
     }
     
-    redrawAll();
+    // ✅ PRELOAD da imagem antes de redesenhar
+    if (data.entity?.image && !loadedImages.has(data.entity.id)) {
+        console.log('📦 [PLAYER] Carregando imagem da entity...');
+        
+        const img = new Image();
+        img.onload = () => {
+            loadedImages.set(data.entity.id, img);
+            console.log('✅ [PLAYER] Imagem carregada');
+            redrawAll();
+        };
+        img.onerror = () => {
+            console.error('❌ [PLAYER] Erro ao carregar imagem');
+            redrawAll();
+        };
+        img.src = data.entity.image;
+    } else {
+        redrawAll();
+    }
 });
 
 socket.on('token_sync', (data) => {
@@ -1250,6 +1293,16 @@ function findTokenAt(x, y) {
 canvasWrapper.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
     
+    if (e.button === 1) {
+        e.preventDefault();
+        middleMousePressed = true;
+        isPanning = true;
+        startPanX = e.clientX - panX;
+        startPanY = e.clientY - panY;
+        canvasWrapper.style.cursor = 'grabbing';
+        return;
+    }
+
     // Se está em modo desenho, não fazer nada aqui
     if (permissions.draw && (drawTool === 'draw' || drawTool === 'erase')) {
         return;
@@ -1306,7 +1359,14 @@ canvasWrapper.addEventListener('mousemove', (e) => {
 });
 
 canvasWrapper.addEventListener('mouseup', () => {
-    // ✅ PLAYER APENAS MOVE TOKENS (não resize imagens)
+    
+    if (e.button === 1) {
+        middleMousePressed = false;
+        isPanning = false;
+        canvasWrapper.style.cursor = 'default';
+        return;
+    }
+
     if (draggingToken) {
         const tokensCopy = JSON.parse(JSON.stringify(tokens));
         

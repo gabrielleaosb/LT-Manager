@@ -227,18 +227,57 @@ def handle_add_entity(data):
     entity_data = data.get('entity')
     
     init_session(session_id)
+    session_data = active_sessions[session_id]
     
-    # ✅ ADICIONAR ao servidor (para compatibilidade)
-    active_sessions[session_id]['entities'].append(entity_data)
+    # ✅ ADICIONAR ao servidor
+    session_data['entities'].append(entity_data)
     
-    # ✅ BROADCAST apenas para o MESTRE (players recebem via cena)
-    master_socket = active_sessions[session_id].get('master_socket')
-    if master_socket:
+    # ✅ VERIFICAR se há cena ativa
+    active_scene_id = session_data.get('active_scene_id')
+    
+    if active_scene_id:
+        # 🎬 MODO CENAS: Adicionar à cena ativa
+        scenes = session_data.get('scenes', [])
+        active_scene = next((s for s in scenes if s.get('id') == active_scene_id), None)
+        
+        if active_scene:
+            # Adicionar à cena
+            if 'entities' not in active_scene:
+                active_scene['entities'] = []
+            active_scene['entities'].append(entity_data)
+            
+            print(f'🎬 Entity adicionada à cena ativa: {active_scene.get("name")}')
+            
+            # ✅ BROADCAST para jogadores com permissão
+            visible_players = active_scene.get('visible_to_players', [])
+            
+            for player_id in visible_players:
+                player_data = session_data.get('players', {}).get(player_id)
+                if player_data:
+                    player_socket = player_data.get('socket_id')
+                    if player_socket:
+                        emit('entity_updated', {
+                            'entity_id': entity_data['id'],
+                            'entity': entity_data
+                        }, room=player_socket)
+            
+            # ✅ BROADCAST para o mestre
+            master_socket = session_data.get('master_socket')
+            if master_socket:
+                emit('entity_updated', {
+                    'entity_id': entity_data['id'],
+                    'entity': entity_data
+                }, room=master_socket)
+            
+            print(f'✅ Entity broadcast para {len(visible_players)} jogadores')
+        else:
+            print('⚠️ Cena ativa não encontrada')
+    else:
+        # 📦 MODO LEGADO: Broadcast para todos
+        print('📦 Modo legado - broadcast para toda sala')
         emit('entities_sync', {
-            'entities': active_sessions[session_id]['entities']
-        }, room=master_socket)
-    
-    print('🎭 Entidade adicionada - enviado apenas para mestre')
+            'entities': session_data['entities']
+        }, room=session_id, include_self=True)
 
 @socketio.on('update_entity')
 def handle_update_entity(data):
