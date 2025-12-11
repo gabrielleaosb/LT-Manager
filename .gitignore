@@ -31,11 +31,6 @@ data/
 *.db-shm
 *.db-wal
 
-# Ngrok config
-ngrok.yml
-.ngrok2/
-ngrok-*.log
-
 # Logs
 *.log
 logs/
